@@ -1,0 +1,12 @@
+{
+  "name": "twm-monitor-root",
+  "private": true,
+  "engines": {
+    "node": "20.x"
+  },
+  "scripts": {
+    "postinstall": "npm --prefix true-webhook ci",
+    "build": "npm --prefix true-webhook run build",
+    "start": "npm --prefix true-webhook run start:railway"
+  }
+}
