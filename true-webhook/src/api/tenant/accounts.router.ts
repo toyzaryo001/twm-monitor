@@ -54,7 +54,7 @@ tenantAccountsRouter.get('/:id', async (req, res, next) => {
         const prisma = req.tenantContext!.prisma;
 
         const account = await prisma.account.findUnique({
-            where: { id: req.params.id },
+            where: { id: req.params.id as string },
             include: { telegramConfig: true },
         });
 
@@ -111,7 +111,7 @@ tenantAccountsRouter.put('/:id', requireTenantAdmin, async (req, res, next) => {
         const body = updateAccountSchema.parse(req.body);
 
         const existing = await prisma.account.findUnique({
-            where: { id: req.params.id },
+            where: { id: req.params.id as string },
             include: { telegramConfig: true },
         });
 
@@ -120,7 +120,7 @@ tenantAccountsRouter.put('/:id', requireTenantAdmin, async (req, res, next) => {
         }
 
         const account = await prisma.account.update({
-            where: { id: req.params.id },
+            where: { id: req.params.id as string },
             data: {
                 name: body.name,
                 isActive: body.isActive,
@@ -165,7 +165,7 @@ tenantAccountsRouter.delete('/:id', requireTenantAdmin, async (req, res, next) =
     try {
         const prisma = req.tenantContext!.prisma;
 
-        await prisma.account.delete({ where: { id: req.params.id } });
+        await prisma.account.delete({ where: { id: req.params.id as string } });
 
         return res.status(204).send();
     } catch (err) {
