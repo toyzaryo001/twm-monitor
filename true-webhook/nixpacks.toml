@@ -2,8 +2,7 @@
 cmds = ["npm ci"]
 
 [phases.build]
-cmds = ["npx prisma generate --config=prisma/master/prisma.config.ts", "npx prisma generate --config=prisma/tenant/prisma.config.ts", "npm run build"]
+cmds = ["npx prisma generate --config=prisma/prisma.config.ts", "npm run build"]
 
 [start]
 cmd = "npm run start:railway"
-

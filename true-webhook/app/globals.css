@@ -1,234 +1,336 @@
-@import "tailwindcss";
-
 :root {
-  --color-primary: #6366f1;
-  --color-primary-dark: #4f46e5;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-  --color-bg: #0f172a;
-  --color-bg-secondary: #1e293b;
-  --color-bg-tertiary: #334155;
-  --color-text: #f8fafc;
-  --color-text-secondary: #94a3b8;
-  --color-border: #334155;
+    --bg-primary: #0a0a0f;
+    --bg-secondary: #12121a;
+    --bg-card: #1a1a25;
+    --bg-hover: #242432;
+    --text-primary: #ffffff;
+    --text-secondary: #a0a0b0;
+    --text-muted: #6b6b80;
+    --accent: #6366f1;
+    --accent-hover: #818cf8;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --error: #ef4444;
+    --border: #2a2a3a;
+    --radius: 12px;
 }
 
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html,
 body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: var(--color-bg);
-  color: var(--color-text);
-  min-height: 100vh;
+    height: 100%;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
 }
 
-/* Clean Modern Input Styles */
-.input {
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: 0.5rem;
-  padding: 0.75rem 1rem;
-  color: var(--color-text);
-  transition: all 0.2s ease;
-  width: 100%;
-}
-.input:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+/* Layout */
+.layout {
+    display: flex;
+    min-height: 100vh;
 }
 
-.input-error {
-  border-color: var(--color-danger);
+.sidebar {
+    width: 260px;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border);
+    padding: 24px 16px;
+    display: flex;
+    flex-direction: column;
 }
 
-/* Button Styles */
+.sidebar-logo {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 32px;
+    padding: 0 12px;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: all 0.2s;
+    margin-bottom: 4px;
+}
+
+.nav-item:hover,
+.nav-item.active {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.nav-item.active {
+    background: var(--accent);
+    color: white;
+}
+
+.main-content {
+    flex: 1;
+    padding: 32px;
+    overflow-y: auto;
+}
+
+/* Cards */
+.card {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 24px;
+    border: 1px solid var(--border);
+}
+
+.card-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 16px;
+}
+
+/* Stats */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 32px;
+}
+
+.stat-card {
+    background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-secondary) 100%);
+    border-radius: var(--radius);
+    padding: 24px;
+    border: 1px solid var(--border);
+}
+
+.stat-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.stat-label {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+/* Buttons */
 .btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  border-radius: 0.5rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  cursor: pointer;
-  border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 24px;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
-  color: white;
+    background: var(--accent);
+    color: white;
 }
+
 .btn-primary:hover {
-  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
-  transform: translateY(-1px);
+    background: var(--accent-hover);
 }
 
 .btn-secondary {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text);
-}
-.btn-secondary:hover {
-  background: var(--color-border);
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
 }
 
 .btn-danger {
-  background: var(--color-danger);
-  color: white;
-}
-.btn-danger:hover {
-  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
+    background: var(--error);
+    color: white;
 }
 
-/* Card Styles */
-.card {
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: 1rem;
-  padding: 1.5rem;
+/* Forms */
+.form-group {
+    margin-bottom: 20px;
 }
 
-.card-hover {
-  transition: all 0.2s ease;
-}
-.card-hover:hover {
-  border-color: var(--color-primary);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+.form-label {
+    display: block;
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
 }
 
-/* Badge Styles */
+.form-input {
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+/* Table */
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th,
+.table td {
+    padding: 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.table th {
+    font-size: 12px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.table tr:hover td {
+    background: var(--bg-hover);
+}
+
+/* Badge */
 .badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.25rem 0.75rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 500;
+    display: inline-flex;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
 }
 
 .badge-success {
-  background: rgba(16, 185, 129, 0.2);
-  color: var(--color-success);
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--success);
 }
 
 .badge-warning {
-  background: rgba(245, 158, 11, 0.2);
-  color: var(--color-warning);
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--warning);
 }
 
-.badge-danger {
-  background: rgba(239, 68, 68, 0.2);
-  color: var(--color-danger);
+.badge-error {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--error);
 }
 
-/* Table Styles */
-.table {
-  width: 100%;
-  border-collapse: collapse;
-}
-.table th {
-  text-align: left;
-  padding: 1rem;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  border-bottom: 1px solid var(--color-border);
-}
-.table td {
-  padding: 1rem;
-  border-bottom: 1px solid var(--color-border);
-}
-.table tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
-}
-
-/* Sidebar Styles */
-.sidebar {
-  background: var(--color-bg-secondary);
-  border-right: 1px solid var(--color-border);
-  width: 260px;
-  min-height: 100vh;
-}
-
-.sidebar-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  color: var(--color-text-secondary);
-  border-radius: 0.5rem;
-  margin: 0.25rem 0.5rem;
-  transition: all 0.2s ease;
-}
-.sidebar-item:hover {
-  color: var(--color-text);
-  background: rgba(255, 255, 255, 0.05);
-}
-.sidebar-item.active {
-  color: var(--color-text);
-  background: var(--color-primary);
-}
-
-/* Stat Card */
-.stat-card {
-  background: linear-gradient(135deg, var(--color-bg-secondary), var(--color-bg-tertiary));
-  border: 1px solid var(--color-border);
-  border-radius: 1rem;
-  padding: 1.5rem;
-}
-.stat-value {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--color-text);
-}
-.stat-label {
-  font-size: 0.875rem;
-  color: var(--color-text-secondary);
-}
-
-/* Modal Styles */
+/* Modal */
 .modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-}
-.modal-content {
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: 1rem;
-  padding: 2rem;
-  max-width: 500px;
-  width: 90%;
-  max-height: 90vh;
-  overflow-y: auto;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
 }
 
-/* Loading Spinner */
+.modal {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 32px;
+    width: 90%;
+    max-width: 500px;
+    border: 1px solid var(--border);
+}
+
+.modal-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 24px;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 24px;
+}
+
+/* Login Page */
+.login-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--bg-primary) 0%, #1a1a2e 100%);
+}
+
+.login-card {
+    width: 100%;
+    max-width: 400px;
+    padding: 40px;
+}
+
+.login-title {
+    font-size: 28px;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.login-subtitle {
+    text-align: center;
+    color: var(--text-secondary);
+    margin-bottom: 32px;
+}
+
+/* Page header */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+}
+
+.page-title {
+    font-size: 28px;
+    font-weight: 700;
+}
+
+/* Empty state */
+.empty-state {
+    text-align: center;
+    padding: 48px;
+    color: var(--text-secondary);
+}
+
+/* Loading */
+.loading {
+    display: flex;
+    justify-content: center;
+    padding: 48px;
+}
+
 .spinner {
-  width: 24px;
-  height: 24px;
-  border: 3px solid var(--color-border);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* Form Group */
-.form-group {
-  margin-bottom: 1.25rem;
-}
-.form-label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--color-text-secondary);
+    to {
+        transform: rotate(360deg);
+    }
 }

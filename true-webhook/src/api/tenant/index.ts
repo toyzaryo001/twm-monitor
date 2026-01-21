@@ -1,47 +1,41 @@
-// Tenant API Router - combines all tenant-scoped routes
-import { Router } from 'express';
+import { Router } from "express";
+import accountsRouter from "./accounts";
+import { requireAuth, requireNetworkAccess } from "../../middleware/auth";
+import { prisma } from "../../lib/prisma";
 
-import { tenantAccountsRouter } from './accounts.router';
-import { tenantTelegramRouter } from './telegram.router';
+const router = Router({ mergeParams: true });
 
-export const tenantRouter = Router({ mergeParams: true });
+router.use(requireAuth, requireNetworkAccess);
 
 // Accounts management
-tenantRouter.use('/accounts', tenantAccountsRouter);
+router.use("/accounts", accountsRouter);
 
-// Telegram integration
-tenantRouter.use('/telegram', tenantTelegramRouter);
-
-// Tenant dashboard stats
-tenantRouter.get('/stats', async (req, res, next) => {
+// Dashboard stats
+router.get("/stats", async (req, res, next) => {
     try {
-        // Note: tenant context should be loaded by parent route
-        if (!req.tenantContext) {
-            return res.status(400).json({ ok: false, error: 'TENANT_CONTEXT_REQUIRED' });
+        const network = await prisma.network.findUnique({
+            where: { prefix: req.params.prefix as string },
+        });
+
+        if (!network) {
+            return res.status(404).json({ ok: false, error: "NETWORK_NOT_FOUND" });
         }
 
-        const prisma = req.tenantContext.prisma;
-
-        const [accountCount, activeAccounts, notificationCount] = await Promise.all([
-            prisma.account.count(),
-            prisma.account.count({ where: { isActive: true } }),
-            prisma.notificationLog.count(),
+        const [accountCount, activeAccounts] = await Promise.all([
+            prisma.account.count({ where: { networkId: network.id } }),
+            prisma.account.count({ where: { networkId: network.id, isActive: true } }),
         ]);
 
-        return res.status(200).json({
+        return res.json({
             ok: true,
             data: {
-                tenant: {
-                    id: req.tenantContext.id,
-                    name: req.tenantContext.name,
-                    prefix: req.tenantContext.prefix,
-                },
-                accountCount,
-                activeAccounts,
-                notificationCount,
+                network: { id: network.id, name: network.name, prefix: network.prefix },
+                stats: { total: accountCount, active: activeAccounts },
             },
         });
     } catch (err) {
         next(err);
     }
 });
+
+export default router;

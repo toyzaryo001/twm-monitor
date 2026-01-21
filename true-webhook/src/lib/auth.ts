@@ -1,75 +1,39 @@
-// Auth utilities for JWT authentication
-import crypto from 'crypto';
+import crypto from "crypto";
 
-// JWT Secret - should be set in environment
-const JWT_SECRET = process.env.JWT_SECRET || 'twm-monitor-secret-change-in-production';
-const JWT_EXPIRES_IN = 60 * 60 * 24; // 24 hours in seconds
-const REFRESH_EXPIRES_IN = 60 * 60 * 24 * 7; // 7 days
+const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-in-production";
+const TOKEN_EXPIRY = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-// Simple JWT implementation (no external deps needed)
-interface JWTPayload {
-    sub: string;        // User ID
+interface TokenPayload {
+    userId: string;
     email: string;
     role: string;
-    tenantId?: string;
-    prefix?: string;
-    iat: number;
-    exp: number;
+    networkId?: string | null;
 }
 
-function base64UrlEncode(str: string): string {
-    return Buffer.from(str)
-        .toString('base64')
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=/g, '');
+// Simple JWT implementation
+export function signToken(payload: TokenPayload): string {
+    const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+    const exp = Date.now() + TOKEN_EXPIRY;
+    const body = Buffer.from(JSON.stringify({ ...payload, exp })).toString("base64url");
+    const signature = crypto
+        .createHmac("sha256", JWT_SECRET)
+        .update(`${header}.${body}`)
+        .digest("base64url");
+    return `${header}.${body}.${signature}`;
 }
 
-function base64UrlDecode(str: string): string {
-    str = str.replace(/-/g, '+').replace(/_/g, '/');
-    while (str.length % 4) str += '=';
-    return Buffer.from(str, 'base64').toString('utf-8');
-}
-
-function hmacSign(data: string, secret: string): string {
-    return base64UrlEncode(
-        crypto.createHmac('sha256', secret).update(data).digest('base64')
-    );
-}
-
-export function signJWT(payload: Omit<JWTPayload, 'iat' | 'exp'>, expiresIn = JWT_EXPIRES_IN): string {
-    const header = { alg: 'HS256', typ: 'JWT' };
-    const now = Math.floor(Date.now() / 1000);
-
-    const fullPayload: JWTPayload = {
-        ...payload,
-        iat: now,
-        exp: now + expiresIn,
-    };
-
-    const headerB64 = base64UrlEncode(JSON.stringify(header));
-    const payloadB64 = base64UrlEncode(JSON.stringify(fullPayload));
-    const signature = hmacSign(`${headerB64}.${payloadB64}`, JWT_SECRET);
-
-    return `${headerB64}.${payloadB64}.${signature}`;
-}
-
-export function verifyJWT(token: string): JWTPayload | null {
+export function verifyToken(token: string): TokenPayload | null {
     try {
-        const parts = token.split('.');
-        if (parts.length !== 3) return null;
-
-        const [headerB64, payloadB64, signature] = parts;
-        const expectedSig = hmacSign(`${headerB64}.${payloadB64}`, JWT_SECRET);
+        const [header, body, signature] = token.split(".");
+        const expectedSig = crypto
+            .createHmac("sha256", JWT_SECRET)
+            .update(`${header}.${body}`)
+            .digest("base64url");
 
         if (signature !== expectedSig) return null;
 
-        const payload: JWTPayload = JSON.parse(base64UrlDecode(payloadB64));
-
-        // Check expiration
-        if (payload.exp < Math.floor(Date.now() / 1000)) {
-            return null;
-        }
+        const payload = JSON.parse(Buffer.from(body, "base64url").toString());
+        if (payload.exp < Date.now()) return null;
 
         return payload;
     } catch {
@@ -77,23 +41,19 @@ export function verifyJWT(token: string): JWTPayload | null {
     }
 }
 
-export function generateRefreshToken(): string {
-    return crypto.randomBytes(32).toString('hex');
-}
-
-// Password hashing using crypto (no bcrypt needed)
+// Password hashing
 export async function hashPassword(password: string): Promise<string> {
-    const salt = crypto.randomBytes(16).toString('hex');
-    const hash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
+    const salt = crypto.randomBytes(16).toString("hex");
+    const hash = crypto.scryptSync(password, salt, 64).toString("hex");
     return `${salt}:${hash}`;
 }
 
-export async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
-    const [salt, hash] = storedHash.split(':');
-    if (!salt || !hash) return false;
-
-    const computedHash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
-    return hash === computedHash;
+export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+    const [salt, hash] = stored.split(":");
+    const testHash = crypto.scryptSync(password, salt, 64).toString("hex");
+    return hash === testHash;
 }
 
-export { JWT_EXPIRES_IN, REFRESH_EXPIRES_IN };
+export function generateSecret(length = 32): string {
+    return crypto.randomBytes(length).toString("hex");
+}

@@ -1,46 +1,46 @@
-// Master API Router - combines all master routes
-import { Router } from 'express';
+import { Router } from "express";
+import authRouter from "./auth";
+import networksRouter from "./networks";
+import usersRouter from "./users";
+import { requireAuth, requireMaster } from "../../middleware/auth";
+import { prisma } from "../../lib/prisma";
 
-import { masterAuthRouter } from './auth.router';
-import { masterTenantsRouter } from './tenants.router';
-import { masterUsersRouter } from './users.router';
-import { masterSettingsRouter } from './settings.router';
+const router = Router();
 
-export const masterRouter = Router();
+// Auth routes (no auth required)
+router.use("/auth", authRouter);
 
-// Auth routes (login, setup, etc.)
-masterRouter.use('/auth', masterAuthRouter);
+// Networks management
+router.use("/networks", networksRouter);
 
-// Tenant management
-masterRouter.use('/tenants', masterTenantsRouter);
+// Users management
+router.use("/users", usersRouter);
 
-// User management
-masterRouter.use('/users', masterUsersRouter);
-
-// Settings
-masterRouter.use('/settings', masterSettingsRouter);
-
-// Master overview/stats endpoint
-masterRouter.get('/overview', async (req, res, next) => {
+// Dashboard overview
+router.get("/overview", requireAuth, requireMaster, async (req, res, next) => {
     try {
-        const { getMasterPrisma } = await import('../../lib/prisma-master');
-        const prisma = getMasterPrisma();
-
-        const [tenantCount, userCount, activeTenants] = await Promise.all([
-            prisma.tenant.count(),
+        const [networkCount, userCount, accountCount] = await Promise.all([
+            prisma.network.count(),
             prisma.user.count(),
-            prisma.tenant.count({ where: { isActive: true } }),
+            prisma.account.count(),
         ]);
 
-        return res.status(200).json({
+        const recentNetworks = await prisma.network.findMany({
+            take: 5,
+            orderBy: { createdAt: "desc" },
+            include: { _count: { select: { accounts: true } } },
+        });
+
+        return res.json({
             ok: true,
             data: {
-                tenantCount,
-                activeTenants,
-                userCount,
+                stats: { networks: networkCount, users: userCount, accounts: accountCount },
+                recentNetworks,
             },
         });
     } catch (err) {
         next(err);
     }
 });
+
+export default router;

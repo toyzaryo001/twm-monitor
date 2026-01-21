@@ -1,40 +1,24 @@
-'use client';
+"use client";
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
-export default function HomePage() {
-  const router = useRouter();
+export default function Home() {
+    const router = useRouter();
 
-  useEffect(() => {
-    // Check if user is logged in
-    const token = localStorage.getItem('twm_token');
-    const user = localStorage.getItem('twm_user');
-
-    if (token && user) {
-      try {
-        const userData = JSON.parse(user);
-        if (userData.role === 'MASTER') {
-          router.push('/master/dashboard');
-        } else if (userData.prefix) {
-          router.push(`/${userData.prefix}/dashboard`);
+    useEffect(() => {
+        // Check for token and redirect appropriately
+        const token = localStorage.getItem("token");
+        if (token) {
+            router.push("/master/dashboard");
         } else {
-          router.push('/master/login');
+            router.push("/master/login");
         }
-      } catch {
-        router.push('/master/login');
-      }
-    } else {
-      router.push('/master/login');
-    }
-  }, [router]);
+    }, [router]);
 
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-center">
-        <div className="spinner mx-auto mb-4" />
-        <p className="text-slate-400">Loading...</p>
-      </div>
-    </div>
-  );
+    return (
+        <div className="loading" style={{ minHeight: "100vh", alignItems: "center" }}>
+            <div className="spinner" />
+        </div>
+    );
 }

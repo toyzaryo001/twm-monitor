@@ -1,18 +1,23 @@
 {
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "noEmit": false,
-    "outDir": "dist",
-    "rootDir": "src",
-    "module": "commonjs",
-    "target": "ES2020",
-    "lib": ["ES2020"],
-    "moduleResolution": "node",
-    "types": ["node"],
-    "sourceMap": true,
-    "declaration": false,
-    "incremental": false
-  },
-  "include": ["src/server.ts", "src/api/**/*.ts"],
-  "exclude": ["node_modules", ".next", "dist"]
+    "compilerOptions": {
+        "target": "ES2020",
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
+        "outDir": "./dist",
+        "rootDir": "./src",
+        "strict": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true,
+        "resolveJsonModule": true,
+        "declaration": true,
+        "declarationMap": true
+    },
+    "include": [
+        "src/**/*"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist"
+    ]
 }

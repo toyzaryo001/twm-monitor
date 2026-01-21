@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useParams } from "next/navigation";
 import Link from "next/link";
 
 interface User {
@@ -11,18 +11,21 @@ interface User {
     role: string;
 }
 
-const navItems = [
-    { href: "/master/dashboard", label: "แดชบอร์ด", icon: "📊" },
-    { href: "/master/networks", label: "จัดการเครือข่าย", icon: "🌐" },
-    { href: "/master/users", label: "จัดการผู้ใช้", icon: "👥" },
-    { href: "/master/settings", label: "ตั้งค่า", icon: "⚙️" },
-];
-
-export default function MasterLayout({ children }: { children: React.ReactNode }) {
+export default function TenantLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
+    const params = useParams();
+    const prefix = params.prefix as string;
+
     const [user, setUser] = useState<User | null>(null);
+    const [networkName, setNetworkName] = useState("");
     const [loading, setLoading] = useState(true);
+
+    const navItems = [
+        { href: `/tenant/${prefix}/dashboard`, label: "แดชบอร์ด", icon: "📊" },
+        { href: `/tenant/${prefix}/accounts`, label: "จัดการบัญชี", icon: "💳" },
+        { href: `/tenant/${prefix}/settings`, label: "ตั้งค่า", icon: "⚙️" },
+    ];
 
     useEffect(() => {
         const token = localStorage.getItem("token");
@@ -33,11 +36,19 @@ export default function MasterLayout({ children }: { children: React.ReactNode }
             return;
         }
 
-        if (storedUser) {
-            setUser(JSON.parse(storedUser));
-        }
-        setLoading(false);
-    }, [router]);
+        if (storedUser) setUser(JSON.parse(storedUser));
+
+        // Fetch network info
+        fetch(`/api/tenant/${prefix}/stats`, {
+            headers: { Authorization: `Bearer ${token}` },
+        })
+            .then((r) => r.json())
+            .then((data) => {
+                if (data.ok) setNetworkName(data.data.network.name);
+                setLoading(false);
+            })
+            .catch(() => setLoading(false));
+    }, [router, prefix]);
 
     const handleLogout = () => {
         localStorage.removeItem("token");
@@ -45,31 +56,18 @@ export default function MasterLayout({ children }: { children: React.ReactNode }
         router.push("/master/login");
     };
 
-    // Don't show layout on login page
-    if (pathname === "/master/login") {
-        return <>{children}</>;
-    }
-
     if (loading) {
-        return (
-            <div className="loading" style={{ minHeight: "100vh", alignItems: "center" }}>
-                <div className="spinner" />
-            </div>
-        );
+        return <div className="loading" style={{ minHeight: "100vh", alignItems: "center" }}><div className="spinner" /></div>;
     }
 
     return (
         <div className="layout">
             <aside className="sidebar">
-                <div className="sidebar-logo">🔐 Master Panel</div>
+                <div className="sidebar-logo">🏪 {networkName || prefix}</div>
 
                 <nav style={{ flex: 1 }}>
                     {navItems.map((item) => (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            className={`nav-item ${pathname === item.href ? "active" : ""}`}
-                        >
+                        <Link key={item.href} href={item.href} className={`nav-item ${pathname === item.href ? "active" : ""}`}>
                             <span>{item.icon}</span>
                             <span>{item.label}</span>
                         </Link>
@@ -81,6 +79,11 @@ export default function MasterLayout({ children }: { children: React.ReactNode }
                         <div style={{ fontSize: 14, fontWeight: 500 }}>{user?.displayName || user?.email}</div>
                         <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{user?.role}</div>
                     </div>
+                    {user?.role === "MASTER" && (
+                        <Link href="/master/dashboard" className="btn btn-secondary" style={{ width: "100%", marginBottom: 8 }}>
+                            ← กลับ Master
+                        </Link>
+                    )}
                     <button onClick={handleLogout} className="btn btn-secondary" style={{ width: "100%" }}>
                         ออกจากระบบ
                     </button>

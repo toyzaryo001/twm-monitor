@@ -1,99 +1,56 @@
-// Auth middleware for JWT validation
-import type { Request, Response, NextFunction } from 'express';
-import { verifyJWT } from '../lib/auth';
-import { getMasterPrisma } from '../lib/prisma-master';
-
-export interface AuthUser {
-    id: string;
-    email: string;
-    role: 'MASTER' | 'TENANT_ADMIN' | 'TENANT_USER';
-    tenantId?: string;
-    prefix?: string;
-}
+import { Request, Response, NextFunction } from "express";
+import { verifyToken } from "../lib/auth";
 
 declare global {
     namespace Express {
         interface Request {
-            user?: AuthUser;
+            user?: {
+                userId: string;
+                email: string;
+                role: string;
+                networkId?: string | null;
+            };
         }
     }
 }
 
-/**
- * Middleware to require authentication
- */
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
     const authHeader = req.headers.authorization;
-
-    if (!authHeader?.startsWith('Bearer ')) {
-        return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
+    if (!authHeader?.startsWith("Bearer ")) {
+        return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
     }
 
-    const token = authHeader.slice(7);
-    const payload = verifyJWT(token);
+    const token = authHeader.substring(7);
+    const payload = verifyToken(token);
 
     if (!payload) {
-        return res.status(401).json({ ok: false, error: 'INVALID_TOKEN' });
+        return res.status(401).json({ ok: false, error: "INVALID_TOKEN" });
     }
 
-    req.user = {
-        id: payload.sub,
-        email: payload.email,
-        role: payload.role as AuthUser['role'],
-        tenantId: payload.tenantId,
-        prefix: payload.prefix,
-    };
-
+    req.user = payload;
     next();
 }
 
-/**
- * Middleware to require MASTER role
- */
 export function requireMaster(req: Request, res: Response, next: NextFunction) {
-    if (!req.user) {
-        return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
+    if (req.user?.role !== "MASTER") {
+        return res.status(403).json({ ok: false, error: "MASTER_REQUIRED" });
     }
-
-    if (req.user.role !== 'MASTER') {
-        return res.status(403).json({ ok: false, error: 'FORBIDDEN' });
-    }
-
     next();
 }
 
-/**
- * Middleware to require tenant access (TENANT_ADMIN or TENANT_USER)
- */
-export function requireTenantAccess(req: Request, res: Response, next: NextFunction) {
-    if (!req.user) {
-        return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
-    }
+export function requireNetworkAccess(req: Request, res: Response, next: NextFunction) {
+    const { prefix } = req.params;
 
-    // Master has access to everything
-    if (req.user.role === 'MASTER') {
+    // Master can access all networks
+    if (req.user?.role === "MASTER") {
         return next();
     }
 
-    // Check if user has tenant assigned
-    if (!req.user.tenantId) {
-        return res.status(403).json({ ok: false, error: 'NO_TENANT_ACCESS' });
-    }
-
-    next();
-}
-
-/**
- * Middleware to require tenant admin or master
- */
-export function requireTenantAdmin(req: Request, res: Response, next: NextFunction) {
-    if (!req.user) {
-        return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
-    }
-
-    if (req.user.role === 'MASTER' || req.user.role === 'TENANT_ADMIN') {
+    // Check if user belongs to this network (by prefix lookup needed)
+    // For now, allow NETWORK_ADMIN and NETWORK_USER
+    if (req.user?.role === "NETWORK_ADMIN" || req.user?.role === "NETWORK_USER") {
         return next();
     }
 
-    return res.status(403).json({ ok: false, error: 'FORBIDDEN' });
+    return res.status(403).json({ ok: false, error: "NETWORK_ACCESS_DENIED" });
 }
