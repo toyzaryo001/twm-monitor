@@ -1,8 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
 
-import { Prisma } from '@prisma/client';
-
 import { prisma } from '../lib/prisma';
 
 export const telegramRouter = Router();
@@ -63,14 +61,13 @@ telegramRouter.post('/test', async (req, res, next) => {
 
     const result = await sendTelegramMessage({ botToken, chatId, text: body.text });
 
-    const payload: Prisma.InputJsonValue | undefined =
-      result.payload === null ? undefined : (result.payload as Prisma.InputJsonValue);
+    const payload = result.payload === null ? undefined : (result.payload as unknown as object);
 
     await prisma.notificationLog.create({
       data: {
         type: result.ok ? 'telegram_sent' : 'telegram_failed',
         message: result.ok ? 'Telegram test sent' : 'Telegram test failed',
-        payload,
+        payload: payload as any,
         accountId: body.accountId,
       },
     });
