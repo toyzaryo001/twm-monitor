@@ -4,6 +4,7 @@ import { Router } from 'express';
 import { masterAuthRouter } from './auth.router';
 import { masterTenantsRouter } from './tenants.router';
 import { masterUsersRouter } from './users.router';
+import { masterSettingsRouter } from './settings.router';
 
 export const masterRouter = Router();
 
@@ -15,6 +16,9 @@ masterRouter.use('/tenants', masterTenantsRouter);
 
 // User management
 masterRouter.use('/users', masterUsersRouter);
+
+// Settings
+masterRouter.use('/settings', masterSettingsRouter);
 
 // Master overview/stats endpoint
 masterRouter.get('/overview', async (req, res, next) => {
