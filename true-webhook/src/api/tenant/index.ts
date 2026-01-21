@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import accountsRouter from "./accounts";
 import { requireAuth, requireNetworkAccess } from "../../middleware/auth";
 import { prisma } from "../../lib/prisma";
@@ -11,10 +11,10 @@ router.use(requireAuth, requireNetworkAccess);
 router.use("/accounts", accountsRouter);
 
 // Dashboard stats
-router.get("/stats", async (req, res, next) => {
+router.get("/stats", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     try {
         const network = await prisma.network.findUnique({
-            where: { prefix: req.params.prefix as string },
+            where: { prefix: req.params.prefix },
         });
 
         if (!network) {

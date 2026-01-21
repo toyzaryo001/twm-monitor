@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { requireAuth, requireNetworkAccess } from "../../middleware/auth";
@@ -13,9 +13,9 @@ async function getNetwork(prefix: string) {
 }
 
 // List accounts
-router.get("/", async (req, res, next) => {
+router.get("/", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     try {
-        const network = await getNetwork(req.params.prefix as string);
+        const network = await getNetwork(req.params.prefix);
         if (!network) {
             return res.status(404).json({ ok: false, error: "NETWORK_NOT_FOUND" });
         }
@@ -33,9 +33,9 @@ router.get("/", async (req, res, next) => {
 });
 
 // Create account
-router.post("/", async (req, res, next) => {
+router.post("/", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     try {
-        const network = await getNetwork(req.params.prefix as string);
+        const network = await getNetwork(req.params.prefix);
         if (!network) {
             return res.status(404).json({ ok: false, error: "NETWORK_NOT_FOUND" });
         }
@@ -60,7 +60,7 @@ router.post("/", async (req, res, next) => {
 });
 
 // Update account
-router.put("/:id", async (req, res, next) => {
+router.put("/:id", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
     try {
         const schema = z.object({
             name: z.string().optional(),
@@ -73,7 +73,7 @@ router.put("/:id", async (req, res, next) => {
         const data = schema.parse(req.body);
 
         const account = await prisma.account.update({
-            where: { id: req.params.id as string },
+            where: { id: req.params.id },
             data,
         });
 
@@ -84,9 +84,9 @@ router.put("/:id", async (req, res, next) => {
 });
 
 // Delete account
-router.delete("/:id", async (req, res, next) => {
+router.delete("/:id", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
     try {
-        await prisma.account.delete({ where: { id: req.params.id as string } });
+        await prisma.account.delete({ where: { id: req.params.id } });
         return res.status(204).send();
     } catch (err) {
         res.status(404).json({ ok: false, error: "NOT_FOUND" });
