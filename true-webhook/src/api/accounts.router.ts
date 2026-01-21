@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 
-import { prisma } from '../lib/prisma';
+import { getPrisma } from '../lib/prisma';
 
 export const accountsRouter = Router();
 
@@ -32,6 +32,7 @@ const updateAccountSchema = createAccountSchema.partial();
 
 accountsRouter.get('/', async (_req, res, next) => {
   try {
+    const prisma = getPrisma();
     const accounts = await prisma.account.findMany({
       orderBy: { createdAt: 'desc' },
       include: { telegramConfig: true },
@@ -45,6 +46,7 @@ accountsRouter.get('/', async (_req, res, next) => {
 
 accountsRouter.get('/:id', async (req, res, next) => {
   try {
+    const prisma = getPrisma();
     const account = await prisma.account.findUnique({
       where: { id: req.params.id },
       include: { telegramConfig: true },
@@ -62,6 +64,7 @@ accountsRouter.get('/:id', async (req, res, next) => {
 
 accountsRouter.post('/', async (req, res, next) => {
   try {
+    const prisma = getPrisma();
     const body = createAccountSchema.parse(req.body) as CreateAccountBody;
 
     const account = await prisma.account.create({
@@ -96,6 +99,7 @@ accountsRouter.post('/', async (req, res, next) => {
 
 accountsRouter.put('/:id', async (req, res, next) => {
   try {
+    const prisma = getPrisma();
     const body = updateAccountSchema.parse(req.body);
 
     const existing = await prisma.account.findUnique({
@@ -150,6 +154,7 @@ accountsRouter.put('/:id', async (req, res, next) => {
 
 accountsRouter.delete('/:id', async (req, res, next) => {
   try {
+    const prisma = getPrisma();
     await prisma.account.delete({ where: { id: req.params.id } });
     res.status(204).send();
   } catch (err) {

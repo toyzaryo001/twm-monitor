@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 
-import { prisma } from '../lib/prisma';
+import { getPrisma } from '../lib/prisma';
 
 export const telegramRouter = Router();
 
@@ -29,6 +29,7 @@ async function sendTelegramMessage(params: {
 
 telegramRouter.post('/test', async (req, res, next) => {
   try {
+    const prisma = getPrisma();
     const body = z
       .object({
         accountId: z.string().min(1).optional(),

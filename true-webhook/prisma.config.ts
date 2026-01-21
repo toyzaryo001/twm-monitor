@@ -3,11 +3,43 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
+function pickEnv(keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = process.env[key];
+    if (value && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+function buildPostgresUrlFromParts(): string | undefined {
+  const host = pickEnv(["PGHOST", "POSTGRES_HOST", "POSTGRESQL_HOST"]);
+  const port = pickEnv(["PGPORT", "POSTGRES_PORT", "POSTGRESQL_PORT"]) ?? "5432";
+  const database = pickEnv([
+    "PGDATABASE",
+    "POSTGRES_DB",
+    "POSTGRES_DATABASE",
+    "POSTGRESQL_DATABASE",
+  ]);
+  const user = pickEnv(["PGUSER", "POSTGRES_USER", "POSTGRESQL_USER"]);
+  const password = pickEnv(["PGPASSWORD", "POSTGRES_PASSWORD", "POSTGRESQL_PASSWORD"]);
+
+  if (!host || !database || !user) return undefined;
+
+  const auth = password
+    ? `${encodeURIComponent(user)}:${encodeURIComponent(password)}`
+    : `${encodeURIComponent(user)}`;
+
+  return `postgresql://${auth}@${host}:${port}/${database}`;
+}
+
 const databaseUrl =
-  process.env["DATABASE_URL"] ||
-  process.env["POSTGRES_URL"] ||
-  process.env["POSTGRESQL_URL"] ||
-  process.env["RAILWAY_DATABASE_URL"];
+  pickEnv([
+    "DATABASE_URL",
+    "DATABASE_PRIVATE_URL",
+    "POSTGRES_URL",
+    "POSTGRESQL_URL",
+    "RAILWAY_DATABASE_URL",
+  ]) ?? buildPostgresUrlFromParts();
 
 if (!databaseUrl) {
   // eslint-disable-next-line no-console

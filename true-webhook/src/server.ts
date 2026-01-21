@@ -51,6 +51,14 @@ async function main() {
       });
     }
 
+    if (err instanceof Error && err.message === 'DATABASE_URL_NOT_SET') {
+      return res.status(503).json({
+        ok: false,
+        error: 'DATABASE_NOT_CONFIGURED',
+        message: 'Set DATABASE_URL in Railway Variables (or link the Postgres plugin variables).',
+      });
+    }
+
     return res.status(500).json({
       ok: false,
       error: 'INTERNAL_SERVER_ERROR',
@@ -58,7 +66,7 @@ async function main() {
   });
 
   // Next.js handles everything else
-  app.all('*', (req, res) => handle(req, res));
+  app.use((req, res) => handle(req, res));
 
   app.listen(port, () => {
     // eslint-disable-next-line no-console
