@@ -3,12 +3,25 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
+const databaseUrl =
+  process.env["DATABASE_URL"] ||
+  process.env["POSTGRES_URL"] ||
+  process.env["POSTGRESQL_URL"] ||
+  process.env["RAILWAY_DATABASE_URL"];
+
+if (!databaseUrl) {
+  // eslint-disable-next-line no-console
+  console.error(
+    "[prisma.config] Missing database URL. Set DATABASE_URL (recommended) in Railway Variables."
+  );
+}
+
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    url: databaseUrl,
   },
 });
