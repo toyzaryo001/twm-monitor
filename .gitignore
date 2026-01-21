@@ -18,5 +18,7 @@ out/
 # Logs
 *.log
 
-# Env
+# Env (ignore real env files, keep examples)
 .env*
+!.env.example
+!**/.env.example
