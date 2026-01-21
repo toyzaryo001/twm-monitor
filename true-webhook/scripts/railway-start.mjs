@@ -51,37 +51,37 @@ const databaseUrl =
 
 if (databaseUrl) {
   process.env.DATABASE_URL = databaseUrl;
-  
+
   // Check if RESET_DB is set - this will reset the database completely
   const resetDb = process.env.RESET_DB === "true" || process.env.RESET_DB === "1";
-  
+
   if (resetDb) {
     console.log("[railway-start] RESET_DB=true - Resetting database...");
-    const resetResult = runPrisma(["migrate", "reset", "--force", "--skip-seed"]);
+    const resetResult = runPrisma(["migrate", "reset", "--force", "--skip-seed", "--schema=prisma/master/schema.prisma"]);
     if (resetResult.status !== 0) {
       console.error("[railway-start] Database reset failed!");
       process.exit(resetResult.status ?? 1);
     }
     console.log("[railway-start] Database reset complete.");
   } else {
-    console.log("[railway-start] DATABASE_URL detected; running migrations...");
-    
-    // First attempt to run migrations
-    let result = runPrisma(["migrate", "deploy"]);
-    
+    console.log("[railway-start] DATABASE_URL detected; running Master migrations...");
+
+    // First attempt to run Master schema migrations
+    let result = runPrisma(["migrate", "deploy", "--schema=prisma/master/schema.prisma"]);
+
     // If migration failed (possibly P3009 - failed migrations exist)
     if (result.status !== 0) {
       console.log("[railway-start] Migration failed. Attempting to resolve failed migrations...");
-      
-      // Try to resolve failed migration for 0001_init as rolled-back
-      const resolveResult = runPrisma(["migrate", "resolve", "--rolled-back", "0001_init"]);
-      
+
+      // Try to resolve failed migration as rolled-back
+      const resolveResult = runPrisma(["migrate", "resolve", "--rolled-back", "20260122130000_init_master", "--schema=prisma/master/schema.prisma"]);
+
       if (resolveResult.status === 0) {
         console.log("[railway-start] Resolved failed migration. Retrying deploy...");
-        
+
         // Retry the migration
         result = runPrisma(["migrate", "deploy"]);
-        
+
         if (result.status !== 0) {
           console.error("[railway-start] Migration still failed after resolve. Please check your database.");
           // Don't exit - try to start server anyway if DB might be partially set up

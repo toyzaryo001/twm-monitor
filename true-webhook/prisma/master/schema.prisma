@@ -1,11 +1,10 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../../apps/api/src/generated/prisma-master"
+  output   = "../../src/generated/prisma-master"
 }
 
 datasource db {
   provider = "postgresql"
-  // Default schema is public; keep master metadata there
   url      = env("DATABASE_URL")
 }
 
@@ -16,30 +15,40 @@ enum UserRole {
 }
 
 model Tenant {
-  id        String   @id @default(cuid())
-  name      String
-  prefix    String   @unique
-  isActive  Boolean  @default(true)
+  id             String   @id @default(cuid())
+  name           String
+  prefix         String   @unique
+  schemaName     String   @unique  // e.g., "tenant_abc"
+  isActive       Boolean  @default(true)
+  maxAccounts    Int      @default(10)
+  
+  // Branding (optional)
+  logoUrl        String?
+  primaryColor   String?  @default("#6366f1")
+  
+  users          User[]
 
-  users     User[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  passwordHash String
-  role         UserRole  @default(TENANT_USER)
+  id             String    @id @default(cuid())
+  email          String    @unique
+  passwordHash   String
+  role           UserRole  @default(TENANT_USER)
+  displayName    String?
+  
+  tenantId       String?
+  tenant         Tenant?   @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  
+  // Session
+  lastLoginAt    DateTime?
+  refreshToken   String?
 
-  tenantId     String?
-  tenant       Tenant?   @relation(fields: [tenantId], references: [id], onDelete: SetNull)
-
-  lastLoginAt  DateTime?
-
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([tenantId])
+  @@index([email])
 }

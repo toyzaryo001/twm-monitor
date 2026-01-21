@@ -1,0 +1,83 @@
+// Tenant Schema Template
+// This schema is applied to each tenant's PostgreSQL schema (e.g., tenant_abc)
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../src/generated/prisma-tenant"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                        String           @id @default(cuid())
+  name                      String
+  isActive                  Boolean          @default(true)
+
+  trueWalletEndpointUrl     String
+  trueWalletBearerToken     String
+  mobileNo                  String?
+
+  autoRefreshEnabled        Boolean          @default(true)
+  autoRefreshIntervalSeconds Int             @default(60)
+
+  telegramConfig            TelegramConfig?
+  balanceSnapshots          BalanceSnapshot[]
+  notifications             NotificationLog[]
+
+  createdAt                 DateTime         @default(now())
+  updatedAt                 DateTime         @updatedAt
+}
+
+model TelegramConfig {
+  id            String   @id @default(cuid())
+  accountId     String   @unique
+  botToken      String
+  chatId        String
+  enabled       Boolean  @default(true)
+  notifyMoneyIn Boolean  @default(true)
+  notifyMoneyOut Boolean @default(true)
+
+  account       Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model BalanceSnapshot {
+  id           String   @id @default(cuid())
+  accountId    String
+  balanceSatang Int
+  mobileNo     String?
+  source       String?
+  walletUpdatedAt DateTime?
+
+  checkedAt    DateTime @default(now())
+
+  account      Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, checkedAt])
+}
+
+enum NotificationType {
+  balance_change
+  telegram_sent
+  telegram_failed
+  system
+}
+
+model NotificationLog {
+  id        String           @id @default(cuid())
+  type      NotificationType
+  message   String
+  payload   Json?
+
+  accountId String?
+  account   Account?         @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime         @default(now())
+
+  @@index([accountId, createdAt])
+}

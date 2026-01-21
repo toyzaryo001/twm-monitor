@@ -2,7 +2,8 @@
 cmds = ["npm ci"]
 
 [phases.build]
-cmds = ["npm run prisma:generate", "npm run build"]
+cmds = ["npx prisma generate --schema=prisma/master/schema.prisma", "npx prisma generate --schema=prisma/tenant/schema.prisma", "npm run build"]
 
 [start]
 cmd = "npm run start:railway"
+
