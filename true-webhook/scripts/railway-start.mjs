@@ -57,7 +57,7 @@ if (databaseUrl) {
 
   if (resetDb) {
     console.log("[railway-start] RESET_DB=true - Resetting database...");
-    const resetResult = runPrisma(["migrate", "reset", "--force", "--skip-seed", "--schema=prisma/master/schema.prisma"]);
+    const resetResult = runPrisma(["migrate", "reset", "--force", "--skip-seed", "--config=prisma/master/prisma.config.ts"]);
     if (resetResult.status !== 0) {
       console.error("[railway-start] Database reset failed!");
       process.exit(resetResult.status ?? 1);
@@ -67,14 +67,14 @@ if (databaseUrl) {
     console.log("[railway-start] DATABASE_URL detected; running Master migrations...");
 
     // First attempt to run Master schema migrations
-    let result = runPrisma(["migrate", "deploy", "--schema=prisma/master/schema.prisma"]);
+    let result = runPrisma(["migrate", "deploy", "--config=prisma/master/prisma.config.ts"]);
 
     // If migration failed (possibly P3009 - failed migrations exist)
     if (result.status !== 0) {
       console.log("[railway-start] Migration failed. Attempting to resolve failed migrations...");
 
       // Try to resolve failed migration as rolled-back
-      const resolveResult = runPrisma(["migrate", "resolve", "--rolled-back", "20260122130000_init_master", "--schema=prisma/master/schema.prisma"]);
+      const resolveResult = runPrisma(["migrate", "resolve", "--rolled-back", "20260122130000_init_master", "--config=prisma/master/prisma.config.ts"]);
 
       if (resolveResult.status === 0) {
         console.log("[railway-start] Resolved failed migration. Retrying deploy...");

@@ -11,8 +11,8 @@
     "start": "cross-env NODE_ENV=production node dist/server.js",
     "start:railway": "node scripts/railway-start.mjs",
     "lint": "next lint",
-    "prisma:generate": "prisma generate --schema=prisma/master/schema.prisma && prisma generate --schema=prisma/tenant/schema.prisma",
-    "prisma:migrate:master": "prisma migrate dev --schema=prisma/master/schema.prisma"
+    "prisma:generate": "prisma generate --config=prisma/master/prisma.config.ts && prisma generate --config=prisma/tenant/prisma.config.ts",
+    "prisma:migrate:master": "prisma migrate dev --config=prisma/master/prisma.config.ts"
   },
   "dependencies": {
     "@prisma/client": "^7.2.0",
