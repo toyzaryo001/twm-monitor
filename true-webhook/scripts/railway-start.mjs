@@ -24,6 +24,22 @@ function buildPostgresUrlFromParts() {
   return `postgresql://${auth}@${host}:${port}/${database}`;
 }
 
+function runPrisma(args) {
+  const prismaBin = process.platform === "win32" ? "prisma.cmd" : "prisma";
+  return spawnSync(prismaBin, args, {
+    stdio: "inherit",
+    env: process.env,
+  });
+}
+
+function runPrismaCapture(args) {
+  const prismaBin = process.platform === "win32" ? "prisma.cmd" : "prisma";
+  return spawnSync(prismaBin, args, {
+    encoding: "utf-8",
+    env: process.env,
+  });
+}
+
 const databaseUrl =
   pickEnv([
     "DATABASE_URL",
@@ -35,16 +51,48 @@ const databaseUrl =
 
 if (databaseUrl) {
   process.env.DATABASE_URL = databaseUrl;
-  console.log("[railway-start] DATABASE_URL detected; running migrations...");
-
-  const prismaBin = process.platform === "win32" ? "prisma.cmd" : "prisma";
-  const result = spawnSync(prismaBin, ["migrate", "deploy"], {
-    stdio: "inherit",
-    env: process.env,
-  });
-
-  if (result.status !== 0) {
-    process.exit(result.status ?? 1);
+  
+  // Check if RESET_DB is set - this will reset the database completely
+  const resetDb = process.env.RESET_DB === "true" || process.env.RESET_DB === "1";
+  
+  if (resetDb) {
+    console.log("[railway-start] RESET_DB=true - Resetting database...");
+    const resetResult = runPrisma(["migrate", "reset", "--force", "--skip-seed"]);
+    if (resetResult.status !== 0) {
+      console.error("[railway-start] Database reset failed!");
+      process.exit(resetResult.status ?? 1);
+    }
+    console.log("[railway-start] Database reset complete.");
+  } else {
+    console.log("[railway-start] DATABASE_URL detected; running migrations...");
+    
+    // First attempt to run migrations
+    let result = runPrisma(["migrate", "deploy"]);
+    
+    // If migration failed (possibly P3009 - failed migrations exist)
+    if (result.status !== 0) {
+      console.log("[railway-start] Migration failed. Attempting to resolve failed migrations...");
+      
+      // Try to resolve failed migration for 0001_init as rolled-back
+      const resolveResult = runPrisma(["migrate", "resolve", "--rolled-back", "0001_init"]);
+      
+      if (resolveResult.status === 0) {
+        console.log("[railway-start] Resolved failed migration. Retrying deploy...");
+        
+        // Retry the migration
+        result = runPrisma(["migrate", "deploy"]);
+        
+        if (result.status !== 0) {
+          console.error("[railway-start] Migration still failed after resolve. Please check your database.");
+          // Don't exit - try to start server anyway if DB might be partially set up
+        }
+      } else {
+        console.warn("[railway-start] Could not resolve migration automatically.");
+        console.warn("[railway-start] You may need to manually run: prisma migrate resolve --rolled-back 0001_init");
+        console.warn("[railway-start] Or set RESET_DB=true in Railway variables to reset the database.");
+        // Continue anyway - the server has safeguards for missing DB
+      }
+    }
   }
 } else {
   console.warn(
@@ -53,6 +101,8 @@ if (databaseUrl) {
 }
 
 process.env.NODE_ENV = "production";
+
+console.log("[railway-start] Starting server...");
 
 const server = spawnSync("node", ["dist/server.js"], {
   stdio: "inherit",

@@ -36,12 +36,12 @@ const databaseUrl =
 
 if (databaseUrl) {
   process.env.DATABASE_URL = databaseUrl;
-  console.log("[api-start] DATABASE_URL detected; running migrations...");
+  console.log("[api-start] DATABASE_URL detected; running master migrations...");
 
   const prismaBin = process.platform === "win32" ? "prisma.cmd" : "prisma";
-  const schemaPath = path.resolve(process.cwd(), "..", "..", "prisma", "schema.prisma");
+  const masterSchemaPath = path.resolve(process.cwd(), "..", "..", "prisma", "master", "schema.prisma");
 
-  const result = spawnSync(prismaBin, ["migrate", "deploy", "--schema", schemaPath], {
+  const result = spawnSync(prismaBin, ["migrate", "deploy", "--schema", masterSchemaPath], {
     stdio: "inherit",
     env: process.env,
   });
