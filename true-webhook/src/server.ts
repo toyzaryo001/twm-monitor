@@ -27,7 +27,7 @@ async function main() {
     server.use("/api", apiRouter);
 
     // Next.js handler
-    server.all("/{*path}", (req, res) => {
+    server.all("*", (req, res) => {
         return handle(req, res);
     });
 
