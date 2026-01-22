@@ -1,10 +1,15 @@
 import { Router, Request, Response, NextFunction } from "express";
 import accountsRouter from "./accounts";
+import authRouter from "./auth";
 import { requireAuth, requireNetworkAccess } from "../../middleware/auth";
 import { prisma } from "../../lib/prisma";
 
 const router = Router({ mergeParams: true });
 
+// Auth routes (no auth required - public endpoints)
+router.use("/auth", authRouter);
+
+// Protected routes below
 router.use(requireAuth, requireNetworkAccess);
 
 // Accounts management

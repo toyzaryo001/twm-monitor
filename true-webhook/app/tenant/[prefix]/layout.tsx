@@ -28,11 +28,17 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
     ];
 
     useEffect(() => {
-        const token = localStorage.getItem("token");
-        const storedUser = localStorage.getItem("user");
+        // Skip auth check on login page
+        if (pathname?.endsWith("/login")) {
+            setLoading(false);
+            return;
+        }
+
+        const token = localStorage.getItem("tenantToken");
+        const storedUser = localStorage.getItem("tenantUser");
 
         if (!token) {
-            router.push("/master/login");
+            router.push(`/tenant/${prefix}/login`);
             return;
         }
 
@@ -48,13 +54,18 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
                 setLoading(false);
             })
             .catch(() => setLoading(false));
-    }, [router, prefix]);
+    }, [router, prefix, pathname]);
 
     const handleLogout = () => {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        router.push("/master/login");
+        localStorage.removeItem("tenantToken");
+        localStorage.removeItem("tenantUser");
+        router.push(`/tenant/${prefix}/login`);
     };
+
+    // Don't wrap login page with layout
+    if (pathname?.endsWith("/login")) {
+        return <>{children}</>;
+    }
 
     if (loading) {
         return <div className="loading" style={{ minHeight: "100vh", alignItems: "center" }}><div className="spinner" /></div>;
