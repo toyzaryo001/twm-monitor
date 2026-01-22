@@ -1,10 +1,10 @@
 {
   "/_not-found/page": "app/_not-found/page.js",
   "/page": "app/page.js",
-  "/master/dashboard/page": "app/master/dashboard/page.js",
   "/master/login/page": "app/master/login/page.js",
-  "/master/users/page": "app/master/users/page.js",
+  "/master/dashboard/page": "app/master/dashboard/page.js",
   "/master/settings/page": "app/master/settings/page.js",
+  "/master/users/page": "app/master/users/page.js",
   "/master/networks/page": "app/master/networks/page.js",
   "/tenant/[prefix]/dashboard/page": "app/tenant/[prefix]/dashboard/page.js",
   "/tenant/[prefix]/accounts/page": "app/tenant/[prefix]/accounts/page.js",
