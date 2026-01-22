@@ -10,10 +10,16 @@ const next_1 = __importDefault(require("next"));
 const router_1 = __importDefault(require("./api/router"));
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000", 10);
-const app = (0, next_1.default)({ dev });
+// Ensure Next.js finds the correct directory
+const dir = process.cwd();
+console.log("[server] Working directory:", dir);
+console.log("[server] NODE_ENV:", process.env.NODE_ENV);
+const app = (0, next_1.default)({ dev, dir });
 const handle = app.getRequestHandler();
 async function main() {
+    console.log("[server] Preparing Next.js app...");
     await app.prepare();
+    console.log("[server] Next.js app ready!");
     const server = (0, express_1.default)();
     server.use((0, cors_1.default)());
     server.use(express_1.default.json());
@@ -23,7 +29,7 @@ async function main() {
     });
     // API routes
     server.use("/api", router_1.default);
-    // Next.js handler
+    // Next.js handler for all other routes
     server.all("*", (req, res) => {
         return handle(req, res);
     });
@@ -31,4 +37,7 @@ async function main() {
         console.log(`[server] listening on http://localhost:${port} (dev=${dev})`);
     });
 }
-main().catch(console.error);
+main().catch((err) => {
+    console.error("[server] Failed to start:", err);
+    process.exit(1);
+});

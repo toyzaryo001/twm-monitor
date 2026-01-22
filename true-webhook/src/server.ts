@@ -2,16 +2,24 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import next from "next";
+import path from "path";
 import apiRouter from "./api/router";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000", 10);
 
-const app = next({ dev });
+// Ensure Next.js finds the correct directory
+const dir = process.cwd();
+console.log("[server] Working directory:", dir);
+console.log("[server] NODE_ENV:", process.env.NODE_ENV);
+
+const app = next({ dev, dir });
 const handle = app.getRequestHandler();
 
 async function main() {
+    console.log("[server] Preparing Next.js app...");
     await app.prepare();
+    console.log("[server] Next.js app ready!");
 
     const server = express();
 
@@ -26,7 +34,7 @@ async function main() {
     // API routes
     server.use("/api", apiRouter);
 
-    // Next.js handler
+    // Next.js handler for all other routes
     server.all("*", (req, res) => {
         return handle(req, res);
     });
@@ -36,4 +44,7 @@ async function main() {
     });
 }
 
-main().catch(console.error);
+main().catch((err) => {
+    console.error("[server] Failed to start:", err);
+    process.exit(1);
+});
