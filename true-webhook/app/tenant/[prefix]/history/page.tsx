@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 
 interface Account {
@@ -26,8 +26,39 @@ export default function HistoryPage() {
     const [history, setHistory] = useState<HistoryEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadingHistory, setLoadingHistory] = useState(false);
+    const [isLive, setIsLive] = useState(true);
+    const intervalRef = useRef<NodeJS.Timeout | null>(null);
+    const lastIdRef = useRef<string | null>(null);
 
     const getToken = () => localStorage.getItem("tenantToken") || "";
+
+    const fetchHistory = useCallback(async (showLoading = false) => {
+        if (!selectedAccount) return;
+
+        if (showLoading) setLoadingHistory(true);
+        const token = getToken();
+
+        try {
+            const res = await fetch(`/api/tenant/${prefix}/accounts/${selectedAccount}/history`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await res.json();
+            if (data.ok) {
+                const newData = data.data as HistoryEntry[];
+
+                // Check if new data arrived
+                if (newData.length > 0 && newData[0].id !== lastIdRef.current) {
+                    lastIdRef.current = newData[0].id;
+                    setHistory(newData);
+                } else if (history.length === 0) {
+                    setHistory(newData);
+                }
+            }
+        } catch (e) {
+            console.error("Error fetching history", e);
+        }
+        setLoadingHistory(false);
+    }, [selectedAccount, prefix, history.length]);
 
     useEffect(() => {
         const fetchAccounts = async () => {
@@ -52,29 +83,29 @@ export default function HistoryPage() {
         fetchAccounts();
     }, [prefix]);
 
+    // Initial fetch when account changes
     useEffect(() => {
-        if (!selectedAccount) return;
+        if (selectedAccount) {
+            lastIdRef.current = null;
+            fetchHistory(true);
+        }
+    }, [selectedAccount]);
 
-        const fetchHistory = async () => {
-            setLoadingHistory(true);
-            const token = getToken();
+    // Background polling (silent, no UI indicator)
+    useEffect(() => {
+        if (!isLive || !selectedAccount) {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            return;
+        }
 
-            try {
-                const res = await fetch(`/api/tenant/${prefix}/accounts/${selectedAccount}/history`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-                const data = await res.json();
-                if (data.ok) {
-                    setHistory(data.data);
-                }
-            } catch (e) {
-                console.error("Error fetching history", e);
-            }
-            setLoadingHistory(false);
+        intervalRef.current = setInterval(() => {
+            fetchHistory(false);
+        }, 5000);
+
+        return () => {
+            if (intervalRef.current) clearInterval(intervalRef.current);
         };
-
-        fetchHistory();
-    }, [selectedAccount, prefix]);
+    }, [isLive, selectedAccount, fetchHistory]);
 
     const formatDate = (dateStr: string) => {
         const date = new Date(dateStr);
@@ -107,21 +138,54 @@ export default function HistoryPage() {
             <div className="tenant-page-header">
                 <h1 className="tenant-page-title">ประวัติยอดเงิน</h1>
 
-                {accounts.length > 0 && (
-                    <select
-                        className="tenant-form-input"
-                        style={{ width: "auto", minWidth: 200 }}
-                        value={selectedAccount}
-                        onChange={(e) => setSelectedAccount(e.target.value)}
+                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                    {/* Live indicator */}
+                    <div
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            cursor: "pointer",
+                        }}
+                        onClick={() => setIsLive(!isLive)}
+                        title={isLive ? "กดเพื่อหยุด Live" : "กดเพื่อเปิด Live"}
                     >
-                        {accounts.map((acc) => (
-                            <option key={acc.id} value={acc.id}>
-                                {acc.name} {acc.phoneNumber ? `(${acc.phoneNumber})` : ""}
-                            </option>
-                        ))}
-                    </select>
-                )}
+                        <div style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: "50%",
+                            background: isLive ? "#22c55e" : "#6b7280",
+                            animation: isLive ? "pulse 2s infinite" : "none",
+                        }} />
+                        <span style={{ fontSize: 12, color: isLive ? "#22c55e" : "#6b7280" }}>
+                            {isLive ? "LIVE" : "PAUSED"}
+                        </span>
+                    </div>
+
+                    {/* Account selector */}
+                    {accounts.length > 0 && (
+                        <select
+                            className="tenant-form-input"
+                            style={{ width: "auto", minWidth: 200 }}
+                            value={selectedAccount}
+                            onChange={(e) => setSelectedAccount(e.target.value)}
+                        >
+                            {accounts.map((acc) => (
+                                <option key={acc.id} value={acc.id}>
+                                    {acc.name} {acc.phoneNumber ? `(${acc.phoneNumber})` : ""}
+                                </option>
+                            ))}
+                        </select>
+                    )}
+                </div>
             </div>
+
+            <style jsx>{`
+                @keyframes pulse {
+                    0%, 100% { opacity: 1; }
+                    50% { opacity: 0.5; }
+                }
+            `}</style>
 
             <div className="tenant-card">
                 {accounts.length === 0 ? (
@@ -138,7 +202,7 @@ export default function HistoryPage() {
                         <div className="tenant-empty-icon">📊</div>
                         <div className="tenant-empty-text">ยังไม่มีประวัติยอดเงิน</div>
                         <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 8 }}>
-                            กดปุ่ม "เช็คยอด" ที่หน้า Wallets เพื่อดึงข้อมูล
+                            ระบบจะบันทึกอัตโนมัติเมื่อยอดเงินเปลี่ยนแปลง
                         </p>
                     </div>
                 ) : (
