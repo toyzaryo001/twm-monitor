@@ -12,7 +12,6 @@ export default function LoginPage() {
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [displayName, setDisplayName] = useState("");
 
     useEffect(() => {
         fetch("/api/master/auth/setup-status")
@@ -32,9 +31,7 @@ export default function LoginPage() {
 
         try {
             const endpoint = isSetup ? "/api/master/auth/setup" : "/api/master/auth/login";
-            const body = isSetup
-                ? { email, password, displayName }
-                : { email, password };
+            const body = { email, password };
 
             const res = await fetch(endpoint, {
                 method: "POST",
@@ -76,19 +73,6 @@ export default function LoginPage() {
                 </p>
 
                 <form onSubmit={handleSubmit}>
-                    {isSetup && (
-                        <div className="form-group">
-                            <label className="form-label">ชื่อแสดง</label>
-                            <input
-                                type="text"
-                                className="form-input"
-                                value={displayName}
-                                onChange={(e) => setDisplayName(e.target.value)}
-                                placeholder="Master Admin"
-                            />
-                        </div>
-                    )}
-
                     <div className="form-group">
                         <label className="form-label">อีเมล</label>
                         <input
@@ -124,16 +108,6 @@ export default function LoginPage() {
                         {loading ? "กำลังดำเนินการ..." : isSetup ? "สร้างบัญชี" : "เข้าสู่ระบบ"}
                     </button>
                 </form>
-
-                {needsSetup && !isSetup && (
-                    <button
-                        onClick={() => setIsSetup(true)}
-                        className="btn btn-secondary"
-                        style={{ width: "100%", marginTop: 12 }}
-                    >
-                        สร้างบัญชีผู้ดูแลระบบ
-                    </button>
-                )}
             </div>
         </div>
     );
