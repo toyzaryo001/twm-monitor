@@ -25,10 +25,18 @@ export default function NetworksPage() {
         return "";
     };
 
+    const handleUnauthorized = () => {
+        if (typeof window !== "undefined") {
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
+            window.location.href = "/master/login";
+        }
+    };
+
     const fetchNetworks = async () => {
         const token = getToken();
         if (!token) {
-            setLoading(false);
+            handleUnauthorized();
             return;
         }
 
@@ -36,6 +44,12 @@ export default function NetworksPage() {
             const res = await fetch("/api/master/networks", {
                 headers: { Authorization: `Bearer ${token}` },
             });
+
+            if (res.status === 401) {
+                handleUnauthorized();
+                return;
+            }
+
             const data = await res.json();
             if (data.ok) setNetworks(data.data);
         } catch (e) {
@@ -62,6 +76,12 @@ export default function NetworksPage() {
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify(form),
             });
+
+            if (res.status === 401) {
+                handleUnauthorized();
+                return;
+            }
+
             const data = await res.json();
 
             if (!data.ok) {
@@ -88,20 +108,32 @@ export default function NetworksPage() {
     const handleDelete = async (id: string) => {
         if (!confirm("ยืนยันการลบเครือข่าย?")) return;
         const token = getToken();
-        await fetch(`/api/master/networks/${id}`, {
+        const res = await fetch(`/api/master/networks/${id}`, {
             method: "DELETE",
             headers: { Authorization: `Bearer ${token}` },
         });
+
+        if (res.status === 401) {
+            handleUnauthorized();
+            return;
+        }
+
         fetchNetworks();
     };
 
     const handleToggle = async (network: Network) => {
         const token = getToken();
-        await fetch(`/api/master/networks/${network.id}`, {
+        const res = await fetch(`/api/master/networks/${network.id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
             body: JSON.stringify({ isActive: !network.isActive }),
         });
+
+        if (res.status === 401) {
+            handleUnauthorized();
+            return;
+        }
+
         fetchNetworks();
     };
 

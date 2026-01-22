@@ -36,11 +36,11 @@ router.get("/", async (req, res, next) => {
 router.post("/", async (req, res, next) => {
     try {
         const schema = z.object({
-            email: z.string().email(),
+            email: z.string().min(3),
             password: z.string().min(6),
             displayName: z.string().optional(),
             role: z.enum(["MASTER", "NETWORK_ADMIN", "NETWORK_USER"]),
-            networkId: z.string().optional(),
+            networkId: z.string().optional().nullable(),
         });
 
         const { email, password, displayName, role, networkId } = schema.parse(req.body);
