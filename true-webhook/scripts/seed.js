@@ -20,7 +20,7 @@ async function main() {
                 role: "MASTER"
             }
         });
-        console.log("[seed] Created admin: superTT / Tt112233");
+        console.log("[seed] Created admin: superTT / Tt112233 [v2]");
     } catch (e) {
         console.error("[seed] Error:", e.message);
     } finally {

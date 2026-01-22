@@ -18,14 +18,29 @@ export default function NetworksPage() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [form, setForm] = useState({ prefix: "", name: "" });
 
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
+    const getToken = () => {
+        if (typeof window !== "undefined") {
+            return localStorage.getItem("token") || "";
+        }
+        return "";
+    };
 
     const fetchNetworks = async () => {
-        const res = await fetch("/api/master/networks", {
-            headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json();
-        if (data.ok) setNetworks(data.data);
+        const token = getToken();
+        if (!token) {
+            setLoading(false);
+            return;
+        }
+
+        try {
+            const res = await fetch("/api/master/networks", {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await res.json();
+            if (data.ok) setNetworks(data.data);
+        } catch (e) {
+            console.error("Error fetching networks:", e);
+        }
         setLoading(false);
     };
 
@@ -35,14 +50,28 @@ export default function NetworksPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        const token = getToken();
+        if (!token) return;
+
         const url = editingId ? `/api/master/networks/${editingId}` : "/api/master/networks";
         const method = editingId ? "PUT" : "POST";
 
-        await fetch(url, {
-            method,
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify(form),
-        });
+        try {
+            const res = await fetch(url, {
+                method,
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify(form),
+            });
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.error || "เกิดข้อผิดพลาด");
+                return;
+            }
+        } catch (e) {
+            alert("เกิดข้อผิดพลาด");
+            return;
+        }
 
         setShowModal(false);
         setEditingId(null);
@@ -58,6 +87,7 @@ export default function NetworksPage() {
 
     const handleDelete = async (id: string) => {
         if (!confirm("ยืนยันการลบเครือข่าย?")) return;
+        const token = getToken();
         await fetch(`/api/master/networks/${id}`, {
             method: "DELETE",
             headers: { Authorization: `Bearer ${token}` },
@@ -66,6 +96,7 @@ export default function NetworksPage() {
     };
 
     const handleToggle = async (network: Network) => {
+        const token = getToken();
         await fetch(`/api/master/networks/${network.id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -143,9 +174,8 @@ export default function NetworksPage() {
                                     type="text"
                                     className="form-input"
                                     value={form.prefix}
-                                    onChange={(e) => setForm({ ...form, prefix: e.target.value })}
+                                    onChange={(e) => setForm({ ...form, prefix: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, "") })}
                                     placeholder="shop1"
-                                    pattern="^[a-z0-9_-]+$"
                                     required
                                     disabled={!!editingId}
                                 />
