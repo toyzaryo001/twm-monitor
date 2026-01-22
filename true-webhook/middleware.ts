@@ -8,6 +8,8 @@ export function middleware(request: NextRequest) {
     const hostname = request.headers.get("host") || "";
     const url = request.nextUrl.clone();
 
+    console.log(`[middleware] hostname=${hostname} pathname=${url.pathname}`);
+
     // Extract subdomain
     // hostname could be: master.tmw-monitors.com, shop1.tmw-monitors.com, localhost:3000
     let subdomain: string | null = null;
