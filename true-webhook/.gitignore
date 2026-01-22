@@ -2,11 +2,6 @@
 node_modules/
 .pnpm-store/
 
-# Build outputs
-.next/
-dist/
-out/
-
 # Environment
 .env
 .env.local
@@ -22,7 +17,7 @@ out/
 .DS_Store
 Thumbs.db
 
-# Prisma
+# Prisma generated (will be generated at build time)
 src/generated/
 
 # Debug
@@ -35,4 +30,3 @@ yarn-error.log*
 
 # TypeScript
 *.tsbuildinfo
-next-env.d.ts
