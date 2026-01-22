@@ -2,6 +2,7 @@
 import { execSync } from "child_process";
 import crypto from "crypto";
 
+// Updated: 2026-01-22 10:50
 console.log("[railway-start] Starting deployment...");
 
 function run(cmd) {
