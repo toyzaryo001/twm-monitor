@@ -13,8 +13,13 @@ router.use("/auth", authRouter);
 // Networks management
 router.use("/networks", networksRouter);
 
+import settingsRouter from "./settings";
+
 // Users management
 router.use("/users", usersRouter);
+
+// Settings management
+router.use("/settings", settingsRouter);
 
 // Dashboard overview
 router.get("/overview", requireAuth, requireMaster, async (req, res, next) => {
