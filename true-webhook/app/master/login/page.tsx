@@ -10,7 +10,7 @@ export default function LoginPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
-    const [email, setEmail] = useState("");
+    const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
 
     useEffect(() => {
@@ -31,7 +31,7 @@ export default function LoginPage() {
 
         try {
             const endpoint = isSetup ? "/api/master/auth/setup" : "/api/master/auth/login";
-            const body = { email, password };
+            const body = { username, password };
 
             const res = await fetch(endpoint, {
                 method: "POST",
@@ -42,7 +42,7 @@ export default function LoginPage() {
             const data = await res.json();
 
             if (!data.ok) {
-                setError(data.error === "INVALID_CREDENTIALS" ? "อีเมลหรือรหัสผ่านไม่ถูกต้อง" : data.error);
+                setError(data.error === "INVALID_CREDENTIALS" ? "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" : data.error);
                 setLoading(false);
                 return;
             }
@@ -74,14 +74,14 @@ export default function LoginPage() {
 
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
-                        <label className="form-label">อีเมล</label>
+                        <label className="form-label">ชื่อผู้ใช้</label>
                         <input
-                            type="email"
+                            type="text"
                             className="form-input"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
                             required
-                            placeholder="admin@example.com"
+                            placeholder="username"
                         />
                     </div>
 
