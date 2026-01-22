@@ -11,9 +11,9 @@
         "start": "cross-env NODE_ENV=production node dist/server.js",
         "start:railway": "node scripts/railway-start.mjs",
         "lint": "next lint",
-        "prisma:generate": "prisma generate --config=prisma/prisma.config.ts",
-        "prisma:migrate": "prisma migrate dev --config=prisma/prisma.config.ts",
-        "prisma:push": "prisma db push --config=prisma/prisma.config.ts"
+        "prisma:generate": "prisma generate",
+        "prisma:migrate": "prisma migrate dev",
+        "prisma:push": "prisma db push"
     },
     "dependencies": {
         "@prisma/client": "^7.2.0",
