@@ -1,47 +1,28 @@
-import { spawnSync } from "node:child_process";
+#!/usr/bin/env node
+import { execSync } from "child_process";
 
-function runPrisma(args) {
-    const prismaBin = process.platform === "win32" ? "prisma.cmd" : "prisma";
-    return spawnSync(prismaBin, args, {
-        stdio: "inherit",
-        env: process.env,
-    });
-}
+console.log("[railway-start] Starting deployment...");
 
-const databaseUrl = process.env.DATABASE_URL;
-
-if (databaseUrl) {
-    process.env.DATABASE_URL = databaseUrl;
-
-    const resetDb = process.env.RESET_DB === "true" || process.env.RESET_DB === "1";
-
-    if (resetDb) {
-        console.log("[railway-start] RESET_DB=true - Pushing schema...");
-        const result = runPrisma(["db", "push", "--force-reset", "--config=prisma/prisma.config.ts"]);
-        if (result.status !== 0) {
-            console.error("[railway-start] db push failed!");
-        } else {
-            console.log("[railway-start] Database reset complete.");
-        }
-    } else {
-        console.log("[railway-start] Running migrations...");
-        const result = runPrisma(["migrate", "deploy", "--config=prisma/prisma.config.ts"]);
-        if (result.status !== 0) {
-            console.warn("[railway-start] Migration failed, trying db push...");
-            runPrisma(["db", "push", "--config=prisma/prisma.config.ts"]);
-        }
+function run(cmd) {
+    console.log(`[railway-start] Running: ${cmd}`);
+    try {
+        execSync(cmd, { stdio: "inherit" });
+        return true;
+    } catch (error) {
+        console.error(`[railway-start] Command failed: ${cmd}`);
+        return false;
     }
-} else {
-    console.warn("[railway-start] No DATABASE_URL found. Skipping migrations.");
 }
 
-process.env.NODE_ENV = "production";
+// Run migrations
+console.log("[railway-start] Running database migrations...");
+const migrateResult = run("npx prisma migrate deploy");
 
-console.log("[railway-start] Starting server...");
+if (!migrateResult) {
+    console.log("[railway-start] Migration failed, trying db push...");
+    run("npx prisma db push --accept-data-loss");
+}
 
-const server = spawnSync("node", ["dist/server.js"], {
-    stdio: "inherit",
-    env: process.env,
-});
-
-process.exit(server.status ?? 0);
+// Start the application
+console.log("[railway-start] Starting application...");
+run("npm run start");

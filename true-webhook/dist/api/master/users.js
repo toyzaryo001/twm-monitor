@@ -12,8 +12,17 @@ router.get("/", async (req, res, next) => {
     try {
         const users = await prisma_1.prisma.user.findMany({
             orderBy: { createdAt: "desc" },
-            include: { network: { select: { id: true, name: true, prefix: true } } },
-            omit: { passwordHash: true, refreshToken: true },
+            select: {
+                id: true,
+                email: true,
+                displayName: true,
+                role: true,
+                networkId: true,
+                lastLoginAt: true,
+                createdAt: true,
+                updatedAt: true,
+                network: { select: { id: true, name: true, prefix: true } },
+            },
         });
         return res.json({ ok: true, data: users });
     }
@@ -39,8 +48,15 @@ router.post("/", async (req, res, next) => {
         const passwordHash = await (0, auth_1.hashPassword)(password);
         const user = await prisma_1.prisma.user.create({
             data: { email, passwordHash, displayName, role, networkId },
-            include: { network: { select: { id: true, name: true } } },
-            omit: { passwordHash: true, refreshToken: true },
+            select: {
+                id: true,
+                email: true,
+                displayName: true,
+                role: true,
+                networkId: true,
+                createdAt: true,
+                network: { select: { id: true, name: true } },
+            },
         });
         return res.status(201).json({ ok: true, data: user });
     }
@@ -66,7 +82,15 @@ router.put("/:id", async (req, res, next) => {
         const user = await prisma_1.prisma.user.update({
             where: { id: req.params.id },
             data: updateData,
-            omit: { passwordHash: true, refreshToken: true },
+            select: {
+                id: true,
+                email: true,
+                displayName: true,
+                role: true,
+                networkId: true,
+                createdAt: true,
+                updatedAt: true,
+            },
         });
         return res.json({ ok: true, data: user });
     }

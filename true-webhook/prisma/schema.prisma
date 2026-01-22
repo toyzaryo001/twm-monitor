@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 // ========== ENUMS ==========
@@ -18,7 +19,7 @@ enum UserRole {
 
 model Network {
   id          String    @id @default(cuid())
-  prefix      String    @unique  // URL-friendly, e.g., "shop1"
+  prefix      String    @unique
   name        String
   isActive    Boolean   @default(true)
   
