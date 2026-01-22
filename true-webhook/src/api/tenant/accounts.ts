@@ -93,4 +93,102 @@ router.delete("/:id", async (req: Request<{ prefix: string; id: string }>, res: 
     }
 });
 
+// Check balance from external wallet API
+router.post("/:id/balance", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
+    try {
+        const account = await prisma.account.findUnique({
+            where: { id: req.params.id },
+        });
+
+        if (!account) {
+            return res.status(404).json({ ok: false, error: "ACCOUNT_NOT_FOUND" });
+        }
+
+        // Fetch balance from external wallet API
+        try {
+            const walletRes = await fetch(account.walletEndpointUrl, {
+                method: "GET",
+                headers: {
+                    "Authorization": `Bearer ${account.walletBearerToken}`,
+                    "Content-Type": "application/json",
+                },
+            });
+
+            if (!walletRes.ok) {
+                return res.status(502).json({ ok: false, error: "WALLET_API_ERROR", status: walletRes.status });
+            }
+
+            const walletData = await walletRes.json();
+
+            // Parse balance from API response
+            // Format: { status: "ok", data: { balance: "20010", mobile_no: "0801234567", updated_at: "..." } }
+            let balanceSatang = 0;
+            let mobileNo = account.phoneNumber || "";
+
+            if (walletData.data) {
+                // Balance is a string in satang
+                balanceSatang = parseInt(walletData.data.balance, 10) || 0;
+                mobileNo = walletData.data.mobile_no || account.phoneNumber || "";
+            } else if (walletData.balance) {
+                // Fallback format
+                balanceSatang = parseInt(walletData.balance, 10) || 0;
+                mobileNo = walletData.mobile_no || walletData.mobileNo || account.phoneNumber || "";
+            }
+
+            // Save balance snapshot
+            const snapshot = await prisma.balanceSnapshot.create({
+                data: {
+                    accountId: account.id,
+                    balanceSatang: balanceSatang,
+                    mobileNo: mobileNo,
+                    source: "manual_check",
+                    walletUpdatedAt: new Date(),
+                },
+            });
+
+            return res.json({
+                ok: true,
+                data: {
+                    balance: balanceSatang / 100, // Convert satang to baht
+                    balanceSatang,
+                    mobileNo,
+                    checkedAt: snapshot.checkedAt,
+                },
+            });
+        } catch (fetchErr) {
+            console.error("Wallet API fetch error:", fetchErr);
+            return res.status(502).json({ ok: false, error: "WALLET_API_UNREACHABLE" });
+        }
+    } catch (err) {
+        next(err);
+    }
+});
+
+// Get latest balance for an account
+router.get("/:id/balance", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
+    try {
+        const snapshot = await prisma.balanceSnapshot.findFirst({
+            where: { accountId: req.params.id },
+            orderBy: { checkedAt: "desc" },
+        });
+
+        if (!snapshot) {
+            return res.json({ ok: true, data: null });
+        }
+
+        return res.json({
+            ok: true,
+            data: {
+                balance: snapshot.balanceSatang / 100,
+                balanceSatang: snapshot.balanceSatang,
+                mobileNo: snapshot.mobileNo,
+                checkedAt: snapshot.checkedAt,
+            },
+        });
+    } catch (err) {
+        next(err);
+    }
+});
+
 export default router;
+

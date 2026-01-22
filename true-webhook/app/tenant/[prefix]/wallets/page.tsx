@@ -11,10 +11,17 @@ interface Account {
     walletEndpointUrl: string;
 }
 
+interface BalanceData {
+    balance: number;
+    checkedAt: string;
+}
+
 export default function WalletsPage() {
     const params = useParams();
     const prefix = params.prefix as string;
     const [accounts, setAccounts] = useState<Account[]>([]);
+    const [balances, setBalances] = useState<Record<string, BalanceData | null>>({});
+    const [checkingId, setCheckingId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [form, setForm] = useState({ name: "", phoneNumber: "", walletEndpointUrl: "", walletBearerToken: "" });
@@ -30,11 +37,58 @@ export default function WalletsPage() {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await res.json();
-            if (data.ok) setAccounts(data.data);
+            if (data.ok) {
+                setAccounts(data.data);
+                // Fetch cached balances for all accounts
+                for (const account of data.data) {
+                    fetchCachedBalance(account.id);
+                }
+            }
         } catch (e) {
             console.error("Error fetching accounts", e);
         }
         setLoading(false);
+    };
+
+    const fetchCachedBalance = async (accountId: string) => {
+        const token = getToken();
+        try {
+            const res = await fetch(`/api/tenant/${prefix}/accounts/${accountId}/balance`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await res.json();
+            if (data.ok && data.data) {
+                setBalances(prev => ({ ...prev, [accountId]: data.data }));
+            }
+        } catch (e) {
+            console.error("Error fetching cached balance", e);
+        }
+    };
+
+    const handleCheckBalance = async (accountId: string) => {
+        setCheckingId(accountId);
+        const token = getToken();
+
+        try {
+            const res = await fetch(`/api/tenant/${prefix}/accounts/${accountId}/balance`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await res.json();
+
+            if (data.ok) {
+                setBalances(prev => ({ ...prev, [accountId]: data.data }));
+            } else {
+                alert(data.error === "WALLET_API_UNREACHABLE"
+                    ? "ไม่สามารถเชื่อมต่อ Wallet API ได้"
+                    : data.error === "WALLET_API_ERROR"
+                        ? "Wallet API ตอบกลับผิดพลาด"
+                        : "เกิดข้อผิดพลาด: " + data.error);
+            }
+        } catch (e) {
+            alert("เกิดข้อผิดพลาดในการเช็คยอด");
+        }
+        setCheckingId(null);
     };
 
     useEffect(() => {
@@ -134,12 +188,26 @@ export default function WalletsPage() {
 
                             <div className="wallet-balance">
                                 <div className="wallet-balance-label">ยอดเงินคงเหลือ</div>
-                                <div className="wallet-balance-value">฿ ---.--</div>
+                                <div className="wallet-balance-value">
+                                    {balances[account.id]
+                                        ? `฿ ${balances[account.id]!.balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
+                                        : "฿ ---.--"}
+                                </div>
+                                {balances[account.id] && (
+                                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                                        อัพเดท: {new Date(balances[account.id]!.checkedAt).toLocaleString("th-TH")}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="wallet-actions">
-                                <button className="tenant-btn tenant-btn-success" style={{ flex: 1 }}>
-                                    🔄 เช็คยอด
+                                <button
+                                    className="tenant-btn tenant-btn-success"
+                                    style={{ flex: 1 }}
+                                    onClick={() => handleCheckBalance(account.id)}
+                                    disabled={checkingId === account.id}
+                                >
+                                    {checkingId === account.id ? "⏳ กำลังเช็ค..." : "🔄 เช็คยอด"}
                                 </button>
                                 <button
                                     className="tenant-btn tenant-btn-secondary"
