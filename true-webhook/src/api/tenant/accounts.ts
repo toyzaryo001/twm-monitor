@@ -190,5 +190,42 @@ router.get("/:id/balance", async (req: Request<{ prefix: string; id: string }>, 
     }
 });
 
+// Get balance history for an account (timeline)
+router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
+    try {
+        const limit = parseInt(req.query.limit as string, 10) || 50;
+
+        const snapshots = await prisma.balanceSnapshot.findMany({
+            where: { accountId: req.params.id },
+            orderBy: { checkedAt: "desc" },
+            take: limit,
+        });
+
+        // Calculate change from previous snapshot
+        const history = snapshots.map((snapshot, index) => {
+            const prevSnapshot = snapshots[index + 1];
+            const change = prevSnapshot
+                ? snapshot.balanceSatang - prevSnapshot.balanceSatang
+                : 0;
+
+            return {
+                id: snapshot.id,
+                balance: snapshot.balanceSatang / 100,
+                balanceSatang: snapshot.balanceSatang,
+                change: change / 100,
+                changeSatang: change,
+                mobileNo: snapshot.mobileNo,
+                source: snapshot.source,
+                checkedAt: snapshot.checkedAt,
+            };
+        });
+
+        return res.json({ ok: true, data: history });
+    } catch (err) {
+        next(err);
+    }
+});
+
 export default router;
+
 
