@@ -36,6 +36,7 @@ async function main() {
 
     // Next.js handler for all other routes
     server.all("*", (req, res) => {
+        console.log(`[server] ${req.method} ${req.url}`);
         return handle(req, res);
     });
 
