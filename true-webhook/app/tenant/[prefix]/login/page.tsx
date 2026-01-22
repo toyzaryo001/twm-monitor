@@ -15,7 +15,6 @@ export default function TenantLoginPage() {
     const [form, setForm] = useState({ username: "", password: "" });
 
     useEffect(() => {
-        // Check network status
         const checkNetwork = async () => {
             try {
                 const res = await fetch(`/api/tenant/${prefix}/auth/status`);
@@ -34,7 +33,6 @@ export default function TenantLoginPage() {
             setLoading(false);
         };
 
-        // Check if already logged in
         const token = localStorage.getItem("tenantToken");
         if (token) {
             router.push(`/tenant/${prefix}/dashboard`);
@@ -70,11 +68,8 @@ export default function TenantLoginPage() {
                 return;
             }
 
-            // Save token and user info
             localStorage.setItem("tenantToken", data.data.token);
             localStorage.setItem("tenantUser", JSON.stringify(data.data.user));
-
-            // Redirect to dashboard
             router.push(`/tenant/${prefix}/dashboard`);
         } catch (e) {
             setError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
@@ -84,50 +79,51 @@ export default function TenantLoginPage() {
 
     if (loading) {
         return (
-            <div className="loading" style={{ minHeight: "100vh", alignItems: "center" }}>
+            <div className="tenant-login-container">
                 <div className="spinner" />
             </div>
         );
     }
 
     return (
-        <div className="auth-container">
-            <div className="auth-card">
-                <div className="auth-header">
-                    <h1 className="auth-title">🌐 {networkName || prefix}</h1>
-                    <p className="auth-subtitle">เข้าสู่ระบบเครือข่าย</p>
+        <div className="tenant-login-container">
+            <div className="tenant-login-card">
+                <div className="tenant-login-header">
+                    <div className="tenant-login-icon">💰</div>
+                    <h1 className="tenant-login-title">{networkName || prefix}</h1>
+                    <p className="tenant-login-subtitle">เข้าสู่ระบบเพื่อใช้งาน</p>
                 </div>
 
                 {error && !networkName ? (
-                    <div className="alert alert-error" style={{ marginBottom: 16 }}>
+                    <div className="tenant-alert tenant-alert-error">
                         {error}
                     </div>
                 ) : (
                     <form onSubmit={handleSubmit}>
                         {error && (
-                            <div className="alert alert-error" style={{ marginBottom: 16 }}>
+                            <div className="tenant-alert tenant-alert-error">
                                 {error}
                             </div>
                         )}
 
-                        <div className="form-group">
-                            <label className="form-label">ชื่อผู้ใช้</label>
+                        <div className="tenant-form-group">
+                            <label className="tenant-form-label">ชื่อผู้ใช้</label>
                             <input
                                 type="text"
-                                className="form-input"
+                                className="tenant-form-input"
                                 value={form.username}
                                 onChange={(e) => setForm({ ...form, username: e.target.value })}
-                                placeholder="username"
+                                placeholder="กรอกชื่อผู้ใช้"
                                 required
                                 autoComplete="username"
                             />
                         </div>
 
-                        <div className="form-group">
-                            <label className="form-label">รหัสผ่าน</label>
+                        <div className="tenant-form-group">
+                            <label className="tenant-form-label">รหัสผ่าน</label>
                             <input
                                 type="password"
-                                className="form-input"
+                                className="tenant-form-input"
                                 value={form.password}
                                 onChange={(e) => setForm({ ...form, password: e.target.value })}
                                 placeholder="••••••••"
@@ -138,8 +134,8 @@ export default function TenantLoginPage() {
 
                         <button
                             type="submit"
-                            className="btn btn-primary"
-                            style={{ width: "100%", marginTop: 8 }}
+                            className="tenant-btn tenant-btn-primary"
+                            style={{ width: "100%", marginTop: 8, padding: "14px 20px" }}
                             disabled={submitting}
                         >
                             {submitting ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
@@ -147,9 +143,12 @@ export default function TenantLoginPage() {
                     </form>
                 )}
 
-                <div style={{ marginTop: 24, textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
-                    <a href="/master/login" style={{ color: "var(--accent)" }}>
-                        เข้าสู่ระบบ Master Panel
+                <div style={{ marginTop: 32, textAlign: "center", paddingTop: 20, borderTop: "1px solid var(--border)" }}>
+                    <a
+                        href="/master/login"
+                        style={{ color: "var(--text-muted)", fontSize: 13, textDecoration: "none" }}
+                    >
+                        เข้าสู่ระบบ Master Panel →
                     </a>
                 </div>
             </div>

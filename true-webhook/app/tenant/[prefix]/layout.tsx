@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname, useParams } from "next/navigation";
 import Link from "next/link";
+import "../tenant-theme.css";
 
 interface User {
     id: string;
     email: string;
     displayName?: string;
     role: string;
+    network?: { id: string; name: string; prefix: string };
 }
 
 export default function TenantLayout({ children }: { children: React.ReactNode }) {
@@ -23,7 +25,8 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
 
     const navItems = [
         { href: `/tenant/${prefix}/dashboard`, label: "แดชบอร์ด", icon: "📊" },
-        { href: `/tenant/${prefix}/accounts`, label: "จัดการบัญชี", icon: "💳" },
+        { href: `/tenant/${prefix}/wallets`, label: "วอลเล็ท", icon: "💳" },
+        { href: `/tenant/${prefix}/history`, label: "ประวัติ", icon: "📜" },
         { href: `/tenant/${prefix}/settings`, label: "ตั้งค่า", icon: "⚙️" },
     ];
 
@@ -42,15 +45,21 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
             return;
         }
 
-        if (storedUser) setUser(JSON.parse(storedUser));
+        if (storedUser) {
+            const parsedUser = JSON.parse(storedUser);
+            setUser(parsedUser);
+            if (parsedUser.network) {
+                setNetworkName(parsedUser.network.name);
+            }
+        }
 
         // Fetch network info
-        fetch(`/api/tenant/${prefix}/stats`, {
-            headers: { Authorization: `Bearer ${token}` },
-        })
+        fetch(`/api/tenant/${prefix}/auth/status`)
             .then((r) => r.json())
             .then((data) => {
-                if (data.ok) setNetworkName(data.data.network.name);
+                if (data.ok && data.data.name) {
+                    setNetworkName(data.data.name);
+                }
                 setLoading(false);
             })
             .catch(() => setLoading(false));
@@ -64,44 +73,83 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
 
     // Don't wrap login page with layout
     if (pathname?.endsWith("/login")) {
-        return <>{children}</>;
+        return <div className="tenant-theme">{children}</div>;
     }
 
     if (loading) {
-        return <div className="loading" style={{ minHeight: "100vh", alignItems: "center" }}><div className="spinner" /></div>;
+        return (
+            <div className="tenant-theme">
+                <div className="loading" style={{ minHeight: "100vh", alignItems: "center" }}>
+                    <div className="spinner" />
+                </div>
+            </div>
+        );
     }
 
-    return (
-        <div className="layout">
-            <aside className="sidebar">
-                <div className="sidebar-logo">🏪 {networkName || prefix}</div>
+    const getUserInitials = () => {
+        if (user?.displayName) {
+            return user.displayName.substring(0, 2).toUpperCase();
+        }
+        if (user?.email) {
+            return user.email.substring(0, 2).toUpperCase();
+        }
+        return "U";
+    };
 
-                <nav style={{ flex: 1 }}>
-                    {navItems.map((item) => (
-                        <Link key={item.href} href={item.href} className={`nav-item ${pathname === item.href ? "active" : ""}`}>
-                            <span>{item.icon}</span>
-                            <span>{item.label}</span>
-                        </Link>
-                    ))}
+    return (
+        <div className="tenant-theme">
+            <div className="tenant-layout">
+                {/* Top Navbar */}
+                <nav className="tenant-navbar">
+                    <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
+                        {/* Brand */}
+                        <div className="tenant-navbar-brand">
+                            <div className="brand-icon">💰</div>
+                            <span>{networkName || prefix}</span>
+                        </div>
+
+                        {/* Navigation */}
+                        <div className="tenant-nav">
+                            {navItems.map((item) => (
+                                <Link
+                                    key={item.href}
+                                    href={item.href}
+                                    className={`tenant-nav-item ${pathname === item.href ? "active" : ""}`}
+                                >
+                                    <span>{item.icon}</span>
+                                    <span>{item.label}</span>
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Right side */}
+                    <div className="tenant-navbar-right">
+                        {user?.role === "MASTER" && (
+                            <Link href="/master/dashboard" className="tenant-btn tenant-btn-secondary" style={{ fontSize: 13 }}>
+                                ← Master Panel
+                            </Link>
+                        )}
+
+                        <div className="tenant-user-info">
+                            <div className="tenant-user-avatar">{getUserInitials()}</div>
+                            <div>
+                                <div className="tenant-user-name">{user?.displayName || user?.email}</div>
+                                <div className="tenant-user-role">
+                                    {user?.role === "MASTER" ? "Master" : "Super Admin"}
+                                </div>
+                            </div>
+                        </div>
+
+                        <button onClick={handleLogout} className="tenant-btn tenant-btn-secondary tenant-btn-icon" title="ออกจากระบบ">
+                            🚪
+                        </button>
+                    </div>
                 </nav>
 
-                <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>
-                    <div style={{ padding: "0 16px", marginBottom: 16 }}>
-                        <div style={{ fontSize: 14, fontWeight: 500 }}>{user?.displayName || user?.email}</div>
-                        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{user?.role}</div>
-                    </div>
-                    {user?.role === "MASTER" && (
-                        <Link href="/master/dashboard" className="btn btn-secondary" style={{ width: "100%", marginBottom: 8 }}>
-                            ← กลับ Master
-                        </Link>
-                    )}
-                    <button onClick={handleLogout} className="btn btn-secondary" style={{ width: "100%" }}>
-                        ออกจากระบบ
-                    </button>
-                </div>
-            </aside>
-
-            <main className="main-content">{children}</main>
+                {/* Main Content */}
+                <main className="tenant-main">{children}</main>
+            </div>
         </div>
     );
 }
