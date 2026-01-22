@@ -2,6 +2,11 @@
 node_modules/
 .pnpm-store/
 
+# Build outputs
+.next/
+dist/
+out/
+
 # Environment
 .env
 .env.local
