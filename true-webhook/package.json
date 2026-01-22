@@ -8,7 +8,7 @@
     "scripts": {
         "dev": "cross-env NODE_ENV=development ts-node-dev --respawn --transpile-only src/server.ts",
         "build": "npm run prisma:generate && next build && tsc -p tsconfig.server.json",
-        "start": "cross-env NODE_ENV=production node dist/server.js",
+        "start": "node dist/server.js",
         "start:railway": "node scripts/railway-start.mjs",
         "lint": "next lint",
         "prisma:generate": "prisma generate",

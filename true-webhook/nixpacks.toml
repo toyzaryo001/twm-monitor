@@ -5,4 +5,4 @@ cmds = ["npm ci"]
 cmds = ["npx prisma generate", "npm run build"]
 
 [start]
-cmd = "npm run start:railway"
+cmd = "NODE_ENV=production npm run start:railway"
