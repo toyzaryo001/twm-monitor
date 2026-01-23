@@ -27,6 +27,11 @@ router.post("/login", async (req, res, next) => {
             return res.status(401).json({ ok: false, error: "INVALID_CREDENTIALS" });
         }
 
+        // Only allow MASTER role to login to Master Panel
+        if (user.role !== "MASTER") {
+            return res.status(403).json({ ok: false, error: "ACCESS_DENIED", message: "Only Master Admin can access this panel" });
+        }
+
         const token = signToken({
             userId: user.id,
             email: user.email,
