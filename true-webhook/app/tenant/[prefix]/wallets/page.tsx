@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { useToast } from "../../../components/Toast";
 
 interface Account {
     id: string;
@@ -18,6 +19,7 @@ interface BalanceData {
 
 export default function WalletsPage() {
     const params = useParams();
+    const { showToast } = useToast();
     const prefix = params.prefix as string;
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [balances, setBalances] = useState<Record<string, BalanceData | null>>({});
@@ -80,14 +82,18 @@ export default function WalletsPage() {
             if (data.ok) {
                 setBalances(prev => ({ ...prev, [accountId]: data.data }));
             } else {
-                alert(data.error === "WALLET_API_UNREACHABLE"
-                    ? "ไม่สามารถเชื่อมต่อ Wallet API ได้"
-                    : data.error === "WALLET_API_ERROR"
-                        ? "Wallet API ตอบกลับผิดพลาด"
-                        : "เกิดข้อผิดพลาด: " + data.error);
+                showToast({
+                    type: "error",
+                    title: "เกิดข้อผิดพลาด",
+                    message: data.error === "WALLET_API_UNREACHABLE"
+                        ? "ไม่สามารถเชื่อมต่อ Wallet API ได้"
+                        : data.error === "WALLET_API_ERROR"
+                            ? "Wallet API ตอบกลับผิดพลาด"
+                            : "เกิดข้อผิดพลาด: " + data.error
+                });
             }
         } catch (e) {
-            alert("เกิดข้อผิดพลาดในการเช็คยอด");
+            showToast({ type: "error", title: "ล้มเหลว", message: "เกิดข้อผิดพลาดในการเช็คยอด" });
         }
         setCheckingId(null);
     };
@@ -118,16 +124,18 @@ export default function WalletsPage() {
             const data = await res.json();
 
             if (!data.ok) {
-                alert(data.error || "เกิดข้อผิดพลาด");
+                showToast({ type: "error", title: "เกิดข้อผิดพลาด", message: data.error || "ไม่สามารถบันทึกข้อมูลได้" });
                 return;
             }
+
+            showToast({ type: "success", title: "สำเร็จ", message: editingId ? "แก้ไขวอลเล็ทเรียบร้อยแล้ว" : "เพิ่มวอลเล็ทเรียบร้อยแล้ว" });
 
             setShowModal(false);
             setEditingId(null);
             setForm({ name: "", phoneNumber: "", walletEndpointUrl: "", walletBearerToken: "" });
             fetchAccounts();
         } catch (e) {
-            alert("เกิดข้อผิดพลาด");
+            showToast({ type: "error", title: "ล้มเหลว", message: "เกิดข้อผิดพลาดในการบันทึก" });
         }
     };
 
@@ -155,11 +163,20 @@ export default function WalletsPage() {
     const handleDelete = async (id: string) => {
         if (!confirm("ยืนยันการลบวอลเล็ท?")) return;
         const token = getToken();
-        await fetch(`/api/tenant/${prefix}/accounts/${id}`, {
-            method: "DELETE",
-            headers: { Authorization: `Bearer ${token}` },
-        });
-        fetchAccounts();
+        try {
+            const res = await fetch(`/api/tenant/${prefix}/accounts/${id}`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (res.ok) {
+                showToast({ type: "success", title: "สำเร็จ", message: "ลบวอลเล็ทเรียบร้อยแล้ว" });
+                fetchAccounts();
+            } else {
+                showToast({ type: "error", title: "ล้มเหลว", message: "ไม่สามารถลบวอลเล็ทได้" });
+            }
+        } catch (e) {
+            showToast({ type: "error", title: "เกิดข้อผิดพลาด", message: "เกิดข้อผิดพลาดในการลบ" });
+        }
     };
 
     if (loading) {

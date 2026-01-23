@@ -78,8 +78,12 @@ router.put("/:id", async (req: Request<{ prefix: string; id: string }>, res: Res
         });
 
         return res.json({ ok: true, data: account });
-    } catch (err) {
-        next(err);
+    } catch (err: any) {
+        if (err instanceof z.ZodError) {
+            return res.status(400).json({ ok: false, error: "Validation Error: " + err.errors.map((e: any) => e.message).join(", ") });
+        }
+        console.error("Update wallet error:", err);
+        return res.status(500).json({ ok: false, error: err.message || "Failed to update wallet" });
     }
 });
 
