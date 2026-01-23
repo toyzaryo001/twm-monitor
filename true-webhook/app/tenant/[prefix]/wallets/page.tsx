@@ -24,6 +24,7 @@ export default function WalletsPage() {
     const [checkingId, setCheckingId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
     const [form, setForm] = useState({ name: "", phoneNumber: "", walletEndpointUrl: "", walletBearerToken: "" });
 
     const getToken = () => localStorage.getItem("tenantToken") || "";
@@ -99,11 +100,20 @@ export default function WalletsPage() {
         e.preventDefault();
         const token = getToken();
 
+        const url = editingId ? `/api/tenant/${prefix}/accounts/${editingId}` : `/api/tenant/${prefix}/accounts`;
+        const method = editingId ? "PUT" : "POST";
+
+        // Prepare payload, remove empty token if editing
+        const payload: any = { ...form };
+        if (editingId && !payload.walletBearerToken) {
+            delete payload.walletBearerToken;
+        }
+
         try {
-            const res = await fetch(`/api/tenant/${prefix}/accounts`, {
-                method: "POST",
+            const res = await fetch(url, {
+                method,
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                body: JSON.stringify(form),
+                body: JSON.stringify(payload),
             });
             const data = await res.json();
 
@@ -113,11 +123,23 @@ export default function WalletsPage() {
             }
 
             setShowModal(false);
+            setEditingId(null);
             setForm({ name: "", phoneNumber: "", walletEndpointUrl: "", walletBearerToken: "" });
             fetchAccounts();
         } catch (e) {
             alert("เกิดข้อผิดพลาด");
         }
+    };
+
+    const handleEdit = (account: Account) => {
+        setForm({
+            name: account.name,
+            phoneNumber: account.phoneNumber || "",
+            walletEndpointUrl: account.walletEndpointUrl,
+            walletBearerToken: "", // Leave blank to keep existing
+        });
+        setEditingId(account.id);
+        setShowModal(true);
     };
 
     const handleToggle = async (account: Account) => {
@@ -152,7 +174,11 @@ export default function WalletsPage() {
         <div>
             <div className="tenant-page-header">
                 <h1 className="tenant-page-title">จัดการวอลเล็ท</h1>
-                <button className="tenant-btn tenant-btn-primary" onClick={() => setShowModal(true)}>
+                <button className="tenant-btn tenant-btn-primary" onClick={() => {
+                    setForm({ name: "", phoneNumber: "", walletEndpointUrl: "", walletBearerToken: "" });
+                    setEditingId(null);
+                    setShowModal(true);
+                }}>
                     ➕ เพิ่มวอลเล็ท
                 </button>
             </div>
@@ -165,7 +191,11 @@ export default function WalletsPage() {
                         <button
                             className="tenant-btn tenant-btn-primary"
                             style={{ marginTop: 16 }}
-                            onClick={() => setShowModal(true)}
+                            onClick={() => {
+                                setForm({ name: "", phoneNumber: "", walletEndpointUrl: "", walletBearerToken: "" });
+                                setEditingId(null);
+                                setShowModal(true);
+                            }}
                         >
                             ➕ เพิ่มวอลเล็ทแรก
                         </button>
@@ -217,6 +247,12 @@ export default function WalletsPage() {
                                 </button>
                                 <button
                                     className="tenant-btn tenant-btn-secondary"
+                                    onClick={() => handleEdit(account)}
+                                >
+                                    ✏️
+                                </button>
+                                <button
+                                    className="tenant-btn tenant-btn-secondary"
                                     style={{ background: "rgba(239, 68, 68, 0.2)", color: "var(--error)" }}
                                     onClick={() => handleDelete(account.id)}
                                 >
@@ -251,7 +287,9 @@ export default function WalletsPage() {
                         style={{ maxWidth: 480, width: "100%" }}
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <div className="tenant-card-title" style={{ marginBottom: 24 }}>➕ เพิ่มวอลเล็ท TrueWallet</div>
+                        <div className="tenant-card-title" style={{ marginBottom: 24 }}>
+                            {editingId ? "✏️ แก้ไขวอลเล็ท" : "➕ เพิ่มวอลเล็ท TrueWallet"}
+                        </div>
 
                         <form onSubmit={handleSubmit}>
                             <div className="tenant-form-group">
@@ -297,7 +335,7 @@ export default function WalletsPage() {
                                     value={form.walletBearerToken}
                                     onChange={(e) => setForm({ ...form, walletBearerToken: e.target.value })}
                                     placeholder="API Token"
-                                    required
+                                    required={!editingId}
                                 />
                             </div>
 
@@ -311,7 +349,7 @@ export default function WalletsPage() {
                                     ยกเลิก
                                 </button>
                                 <button type="submit" className="tenant-btn tenant-btn-primary" style={{ flex: 1 }}>
-                                    ➕ เพิ่มวอลเล็ท
+                                    {editingId ? "บันทึก" : "➕ เพิ่มวอลเล็ท"}
                                 </button>
                             </div>
                         </form>
