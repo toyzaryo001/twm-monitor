@@ -80,76 +80,114 @@ async function sendTelegramNotification(
 }
 
 // Check balance for a single account
-async function checkAccountBalance(account: AccountToCheck): Promise<{ changed: boolean; balance: number }> {
+async function checkAccountBalance(account: AccountToCheck, retryCount = 0): Promise<{ changed: boolean; balance: number }> {
+    const MAX_RETRIES = 2;
+    const TIMEOUT_MS = 10000; // 10 seconds timeout
+
     try {
-        const response = await fetch(account.walletEndpointUrl, {
-            method: "GET",
-            headers: {
-                "Authorization": `Bearer ${account.walletBearerToken}`,
-                "Content-Type": "application/json",
-            },
-        });
+        // Create abort controller for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-        if (!response.ok) {
-            console.error(`[Worker] API error for ${account.name}: ${response.status}`);
-            return { changed: false, balance: 0 };
-        }
-
-        const data = await response.json();
-
-        // Parse balance
-        let balanceSatang = 0;
-        let mobileNo = account.phoneNumber || "";
-
-        if (data.data) {
-            balanceSatang = parseInt(data.data.balance, 10) || 0;
-            mobileNo = data.data.mobile_no || account.phoneNumber || "";
-        } else if (data.balance) {
-            balanceSatang = parseInt(data.balance, 10) || 0;
-            mobileNo = data.mobile_no || data.mobileNo || account.phoneNumber || "";
-        }
-
-        // Check if balance changed
-        const lastBalance = lastBalances.get(account.id);
-        const changed = lastBalance === undefined || lastBalance !== balanceSatang;
-
-        if (changed) {
-            // Update in-memory cache
-            lastBalances.set(account.id, balanceSatang);
-
-            // Save to database
-            const snapshot = await prisma.balanceSnapshot.create({
-                data: {
-                    accountId: account.id,
-                    balanceSatang,
-                    mobileNo,
-                    source: "realtime_worker",
-                    walletUpdatedAt: new Date(),
+        try {
+            const response = await fetch(account.walletEndpointUrl, {
+                method: "GET",
+                headers: {
+                    "Authorization": `Bearer ${account.walletBearerToken}`,
+                    "Content-Type": "application/json",
+                    "Connection": "close", // Close connection after request
                 },
+                signal: controller.signal,
             });
 
-            // Calculate change amount
-            const changeAmount = lastBalance !== undefined ? balanceSatang - lastBalance : 0;
+            clearTimeout(timeoutId);
 
-            // Broadcast to connected SSE clients
-            broadcastBalanceUpdate(account.id, {
-                balance: balanceSatang / 100,
-                balanceSatang,
-                change: changeAmount / 100,
-                checkedAt: snapshot.checkedAt,
-            });
-
-            // Send Telegram notification (only for actual changes, not first check)
-            if (lastBalance !== undefined && changeAmount !== 0) {
-                sendTelegramNotification(account, changeAmount, balanceSatang);
+            if (!response.ok) {
+                console.error(`[Worker] API error for ${account.name}: ${response.status}`);
+                return { changed: false, balance: 0 };
             }
 
-            console.log(`[Worker] ${account.name}: Balance changed ${(lastBalance || 0) / 100} → ${balanceSatang / 100} (${changeAmount >= 0 ? "+" : ""}${changeAmount / 100})`);
+            const data = await response.json();
+
+            // Parse balance
+            let balanceSatang = 0;
+            let mobileNo = account.phoneNumber || "";
+
+            if (data.data) {
+                balanceSatang = parseInt(data.data.balance, 10) || 0;
+                mobileNo = data.data.mobile_no || account.phoneNumber || "";
+            } else if (data.balance) {
+                balanceSatang = parseInt(data.balance, 10) || 0;
+                mobileNo = data.mobile_no || data.mobileNo || account.phoneNumber || "";
+            }
+
+            // Check if balance changed
+            const lastBalance = lastBalances.get(account.id);
+            const changed = lastBalance === undefined || lastBalance !== balanceSatang;
+
+            if (changed) {
+                // Update in-memory cache
+                lastBalances.set(account.id, balanceSatang);
+
+                // Save to database
+                const snapshot = await prisma.balanceSnapshot.create({
+                    data: {
+                        accountId: account.id,
+                        balanceSatang,
+                        mobileNo,
+                        source: "realtime_worker",
+                        walletUpdatedAt: new Date(),
+                    },
+                });
+
+                // Calculate change amount
+                const changeAmount = lastBalance !== undefined ? balanceSatang - lastBalance : 0;
+
+                // Broadcast to connected SSE clients
+                broadcastBalanceUpdate(account.id, {
+                    balance: balanceSatang / 100,
+                    balanceSatang,
+                    change: changeAmount / 100,
+                    checkedAt: snapshot.checkedAt,
+                });
+
+                // Send Telegram notification (only for actual changes, not first check)
+                if (lastBalance !== undefined && changeAmount !== 0) {
+                    sendTelegramNotification(account, changeAmount, balanceSatang);
+                }
+
+                console.log(`[Worker] ${account.name}: Balance changed ${(lastBalance || 0) / 100} → ${balanceSatang / 100} (${changeAmount >= 0 ? "+" : ""}${changeAmount / 100})`);
+            }
+
+            return { changed, balance: balanceSatang };
+        } catch (fetchErr: any) {
+            clearTimeout(timeoutId);
+
+            // Handle timeout
+            if (fetchErr.name === 'AbortError') {
+                console.error(`[Worker] Timeout for ${account.name} after ${TIMEOUT_MS}ms`);
+            } else {
+                throw fetchErr; // Re-throw to outer catch for retry logic
+            }
+
+            return { changed: false, balance: 0 };
+        }
+    } catch (err: any) {
+        // Retry logic for socket errors
+        const isSocketError = err.code === 'UND_ERR_SOCKET' ||
+            err.cause?.code === 'UND_ERR_SOCKET' ||
+            err.message?.includes('socket') ||
+            err.message?.includes('fetch failed');
+
+        if (isSocketError && retryCount < MAX_RETRIES) {
+            const delay = Math.pow(2, retryCount) * 1000; // Exponential backoff: 1s, 2s, 4s
+            console.log(`[Worker] Socket error for ${account.name}, retrying in ${delay}ms... (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return checkAccountBalance(account, retryCount + 1);
         }
 
-        return { changed, balance: balanceSatang };
-    } catch (err) {
-        console.error(`[Worker] Error checking ${account.name}:`, err);
+        console.error(`[Worker] Error checking ${account.name} (after ${retryCount} retries):`, err.message || err);
         return { changed: false, balance: 0 };
     }
 }
