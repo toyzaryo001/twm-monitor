@@ -131,15 +131,24 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
                                 <img
                                     src={logoUrl}
                                     alt="Logo"
-                                    style={{ width: 44, height: 44, borderRadius: 14, objectFit: "cover" }}
+                                    style={{
+                                        height: 48,
+                                        maxWidth: 160,
+                                        objectFit: "contain"
+                                    }}
                                     onError={(e) => {
                                         e.currentTarget.style.display = 'none';
-                                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                        const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                                        if (fallback) fallback.style.display = 'flex';
                                     }}
                                 />
                             ) : null}
-                            <div className={`brand-icon ${logoUrl ? 'hidden' : ''}`} style={logoUrl ? { display: 'none' } : {}}>💰</div>
-                            <span>{networkName || prefix}</span>
+                            {!logoUrl && (
+                                <>
+                                    <div className="brand-icon">💰</div>
+                                    <span>{networkName || prefix}</span>
+                                </>
+                            )}
                         </div>
 
                         {/* Navigation */}
