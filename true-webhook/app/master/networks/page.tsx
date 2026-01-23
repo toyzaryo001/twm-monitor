@@ -8,6 +8,7 @@ interface Network {
     name: string;
     isActive: boolean;
     createdAt: string;
+    totalBalance: number;
     _count: { users: number; accounts: number };
 }
 
@@ -159,7 +160,7 @@ export default function NetworksPage() {
                             <tr>
                                 <th>ชื่อ</th>
                                 <th>Prefix</th>
-                                <th>ผู้ใช้</th>
+                                <th>ยอดรวม</th>
                                 <th>บัญชี</th>
                                 <th>สถานะ</th>
                                 <th>จัดการ</th>
@@ -170,7 +171,9 @@ export default function NetworksPage() {
                                 <tr key={n.id}>
                                     <td>{n.name}</td>
                                     <td><code>{n.prefix}</code></td>
-                                    <td>{n._count.users}</td>
+                                    <td style={{ color: "var(--success)", fontWeight: 600 }}>
+                                        ฿ {n.totalBalance?.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "0.00"}
+                                    </td>
                                     <td>{n._count.accounts}</td>
                                     <td>
                                         <span className={`badge ${n.isActive ? "badge-success" : "badge-error"}`}>

@@ -8,17 +8,53 @@ const router = Router();
 // All routes require Master auth
 router.use(requireAuth, requireMaster);
 
-// List all networks
+// List all networks with balances
 router.get("/", async (req, res, next) => {
     try {
         const networks = await prisma.network.findMany({
             orderBy: { createdAt: "desc" },
             include: {
                 _count: { select: { users: true, accounts: true } },
+                accounts: {
+                    where: { isActive: true },
+                    select: { id: true },
+                },
             },
         });
 
-        return res.json({ ok: true, data: networks });
+        // Get latest balance for each active account
+        const networksWithBalance = await Promise.all(
+            networks.map(async (network) => {
+                let totalBalance = 0;
+
+                if (network.accounts.length > 0) {
+                    const accountIds = network.accounts.map(a => a.id);
+
+                    // Get latest balance snapshot for each account
+                    const latestSnapshots = await prisma.$queryRaw<{ balanceSatang: bigint }[]>`
+                        SELECT DISTINCT ON ("accountId") "balanceSatang"
+                        FROM "BalanceSnapshot"
+                        WHERE "accountId" = ANY(${accountIds})
+                        ORDER BY "accountId", "checkedAt" DESC
+                    `;
+
+                    totalBalance = latestSnapshots.reduce(
+                        (sum, s) => sum + Number(s.balanceSatang),
+                        0
+                    );
+                }
+
+                // Remove accounts from response
+                const { accounts, ...networkData } = network;
+
+                return {
+                    ...networkData,
+                    totalBalance: totalBalance / 100, // Convert to baht
+                };
+            })
+        );
+
+        return res.json({ ok: true, data: networksWithBalance });
     } catch (err) {
         next(err);
     }
