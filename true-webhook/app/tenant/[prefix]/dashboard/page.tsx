@@ -125,9 +125,6 @@ export default function TenantDashboard() {
             {/* Page Header */}
             <div className="tenant-page-header">
                 <h1 className="tenant-page-title">แดชบอร์ด</h1>
-                <Link href="/wallets" className="tenant-btn tenant-btn-primary">
-                    ➕ เพิ่มวอลเล็ท
-                </Link>
             </div>
 
             {/* Stats Cards */}
