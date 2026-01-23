@@ -72,7 +72,7 @@ router.post("/:prefix", async (req: Request, res: Response) => {
         const fee = typeof feeRaw === 'string' ? parseFloat(feeRaw) : feeRaw;
 
         // Check if transaction already exists (idempotency)
-        const existingTx = await prisma.transaction.findUnique({
+        const existingTx = await prisma.financialTransaction.findUnique({
             where: { transactionId: String(transactionId) }
         });
 
@@ -80,7 +80,7 @@ router.post("/:prefix", async (req: Request, res: Response) => {
             return res.status(200).json({ status: "ok", message: "Transaction already processed" });
         }
 
-        await prisma.transaction.create({
+        await prisma.financialTransaction.create({
             data: {
                 transactionId: String(transactionId),
                 accountId: account.id,

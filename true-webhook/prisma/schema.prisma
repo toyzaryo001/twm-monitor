@@ -91,7 +91,7 @@ model Account {
   telegramConfig             TelegramConfig?
   balanceSnapshots           BalanceSnapshot[]
   notificationLogs           NotificationLog[]
-  transactions               Transaction[]
+  transactions               FinancialTransaction[]
   
   createdAt                  DateTime         @default(now())
   updatedAt                  DateTime         @updatedAt
@@ -149,7 +149,7 @@ model NotificationLog {
   @@index([accountId, createdAt])
 }
 
-model Transaction {
+model FinancialTransaction {
   id              String   @id @default(cuid())
   transactionId   String   @unique // TrueMoney Transaction ID
   accountId       String

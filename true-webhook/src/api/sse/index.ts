@@ -68,6 +68,11 @@ export function broadcastBalanceUpdate(accountId: string, data: {
     balanceSatang: number;
     change: number;
     checkedAt: Date;
+    transaction?: {
+        amount: number;
+        fee: number;
+        type: string;
+    };
 }) {
     const accountClients = clients.get(accountId);
     if (!accountClients || accountClients.size === 0) {
