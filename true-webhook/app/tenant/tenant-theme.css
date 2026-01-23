@@ -61,6 +61,7 @@
     color: var(--tenant-primary);
     background: linear-gradient(135deg, #06b6d4, #3b82f6);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
@@ -288,6 +289,7 @@
     font-weight: 700;
     background: linear-gradient(135deg, #22d3ee, #06b6d4);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
     letter-spacing: -0.02em;
 }
