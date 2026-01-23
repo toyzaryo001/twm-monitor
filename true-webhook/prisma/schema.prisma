@@ -133,6 +133,7 @@ enum NotificationType {
   telegram_sent
   telegram_failed
   system
+  webhook_debug
 }
 
 model NotificationLog {

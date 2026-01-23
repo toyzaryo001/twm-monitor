@@ -47,7 +47,19 @@ router.all("/:prefix", async (req: Request, res: Response) => {
 
         // 2. Parse Payload
         // Note: TrueMoney might send different structures, need to log payload to verify
-        console.log(`[Webhook] Received for ${prefix}:`, JSON.stringify(req.body));
+        const bodyContent = JSON.stringify(req.body);
+        console.log(`[Webhook] Received for ${prefix}:`, bodyContent);
+
+        // DEBUG: Save raw payload to NotificationLog to inspect structure
+        await prisma.notificationLog.create({
+            data: {
+                type: "webhook_debug",
+                message: `Raw Payload for ${prefix}`,
+                payload: req.body as any,
+                // Make accountId optional in schema or just leave it null here if possible
+                // accountId: null 
+            }
+        });
 
         // Check if body is valid
         // For now, flexible parsing since actual payload might vary
@@ -59,7 +71,8 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         const transactionType = payload.transaction_type || (amountRaw > 0 ? "incoming" : "outgoing");
 
         if (!mobileNo) {
-            return res.status(400).json({ error: "Mobile number missing in payload" });
+            console.log(`[Webhook] Missing mobile_no in payload. Likely a verification test. Payload:`, JSON.stringify(payload));
+            return res.status(200).json({ status: "ignored", message: "Missing mobile_no, assuming verification" });
         }
 
         // 3. Find Account in Network
