@@ -135,16 +135,31 @@ router.post("/:id/balance", async (req: Request<{ prefix: string; id: string }>,
                 mobileNo = walletData.mobile_no || walletData.mobileNo || account.phoneNumber || "";
             }
 
-            // Save balance snapshot
-            const snapshot = await prisma.balanceSnapshot.create({
-                data: {
-                    accountId: account.id,
-                    balanceSatang: balanceSatang,
-                    mobileNo: mobileNo,
-                    source: "manual_check",
-                    walletUpdatedAt: new Date(),
-                },
+            // Check if balance changed from last snapshot
+            const lastSnapshot = await prisma.balanceSnapshot.findFirst({
+                where: { accountId: account.id },
+                orderBy: { checkedAt: "desc" },
             });
+
+            const balanceChanged = !lastSnapshot || lastSnapshot.balanceSatang !== balanceSatang;
+
+            // Only save snapshot if balance changed
+            let checkedAt = new Date();
+            if (balanceChanged) {
+                const snapshot = await prisma.balanceSnapshot.create({
+                    data: {
+                        accountId: account.id,
+                        balanceSatang: balanceSatang,
+                        mobileNo: mobileNo,
+                        source: "manual_check",
+                        walletUpdatedAt: new Date(),
+                    },
+                });
+                checkedAt = snapshot.checkedAt;
+            } else {
+                // Use last snapshot time if no change
+                checkedAt = lastSnapshot?.checkedAt || new Date();
+            }
 
             return res.json({
                 ok: true,
@@ -152,7 +167,8 @@ router.post("/:id/balance", async (req: Request<{ prefix: string; id: string }>,
                     balance: balanceSatang / 100, // Convert satang to baht
                     balanceSatang,
                     mobileNo,
-                    checkedAt: snapshot.checkedAt,
+                    checkedAt,
+                    changed: balanceChanged,
                 },
             });
         } catch (fetchErr) {

@@ -26,9 +26,8 @@ export default function HistoryPage() {
     const [history, setHistory] = useState<HistoryEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadingHistory, setLoadingHistory] = useState(false);
-    const [isLive, setIsLive] = useState(true);
-    const intervalRef = useRef<NodeJS.Timeout | null>(null);
-    const lastIdRef = useRef<string | null>(null);
+    const [isConnected, setIsConnected] = useState(false);
+    const eventSourceRef = useRef<EventSource | null>(null);
 
     const getToken = () => localStorage.getItem("tenantToken") || "";
 
@@ -44,22 +43,15 @@ export default function HistoryPage() {
             });
             const data = await res.json();
             if (data.ok) {
-                const newData = data.data as HistoryEntry[];
-
-                // Check if new data arrived
-                if (newData.length > 0 && newData[0].id !== lastIdRef.current) {
-                    lastIdRef.current = newData[0].id;
-                    setHistory(newData);
-                } else if (history.length === 0) {
-                    setHistory(newData);
-                }
+                setHistory(data.data);
             }
         } catch (e) {
             console.error("Error fetching history", e);
         }
         setLoadingHistory(false);
-    }, [selectedAccount, prefix, history.length]);
+    }, [selectedAccount, prefix]);
 
+    // Fetch accounts on mount
     useEffect(() => {
         const fetchAccounts = async () => {
             const token = getToken();
@@ -83,29 +75,56 @@ export default function HistoryPage() {
         fetchAccounts();
     }, [prefix]);
 
-    // Initial fetch when account changes
+    // Fetch history when account changes
     useEffect(() => {
         if (selectedAccount) {
-            lastIdRef.current = null;
             fetchHistory(true);
         }
-    }, [selectedAccount]);
+    }, [selectedAccount, fetchHistory]);
 
-    // Background polling (silent, no UI indicator)
+    // Setup SSE connection for real-time updates
     useEffect(() => {
-        if (!isLive || !selectedAccount) {
-            if (intervalRef.current) clearInterval(intervalRef.current);
-            return;
+        if (!selectedAccount) return;
+
+        // Close existing connection
+        if (eventSourceRef.current) {
+            eventSourceRef.current.close();
         }
 
-        intervalRef.current = setInterval(() => {
-            fetchHistory(false);
-        }, 5000);
+        // Create new SSE connection
+        const eventSource = new EventSource(`/api/sse/balance/${selectedAccount}`);
+        eventSourceRef.current = eventSource;
 
-        return () => {
-            if (intervalRef.current) clearInterval(intervalRef.current);
+        eventSource.onopen = () => {
+            console.log("[SSE] Connected to balance updates");
+            setIsConnected(true);
         };
-    }, [isLive, selectedAccount, fetchHistory]);
+
+        eventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                console.log("[SSE] Received:", data);
+
+                if (data.type === "update") {
+                    // New balance update - refresh history
+                    fetchHistory(false);
+                }
+            } catch (e) {
+                console.error("[SSE] Parse error:", e);
+            }
+        };
+
+        eventSource.onerror = () => {
+            console.log("[SSE] Connection error, reconnecting...");
+            setIsConnected(false);
+        };
+
+        // Cleanup on unmount or account change
+        return () => {
+            eventSource.close();
+            setIsConnected(false);
+        };
+    }, [selectedAccount, fetchHistory]);
 
     const formatDate = (dateStr: string) => {
         const date = new Date(dateStr);
@@ -140,25 +159,16 @@ export default function HistoryPage() {
 
                 <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                     {/* Live indicator */}
-                    <div
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 6,
-                            cursor: "pointer",
-                        }}
-                        onClick={() => setIsLive(!isLive)}
-                        title={isLive ? "กดเพื่อหยุด Live" : "กดเพื่อเปิด Live"}
-                    >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <div style={{
                             width: 8,
                             height: 8,
                             borderRadius: "50%",
-                            background: isLive ? "#22c55e" : "#6b7280",
-                            animation: isLive ? "pulse 2s infinite" : "none",
+                            background: isConnected ? "#22c55e" : "#ef4444",
+                            animation: isConnected ? "pulse 2s infinite" : "none",
                         }} />
-                        <span style={{ fontSize: 12, color: isLive ? "#22c55e" : "#6b7280" }}>
-                            {isLive ? "LIVE" : "PAUSED"}
+                        <span style={{ fontSize: 12, color: isConnected ? "#22c55e" : "#ef4444" }}>
+                            {isConnected ? "LIVE" : "OFFLINE"}
                         </span>
                     </div>
 
@@ -202,7 +212,7 @@ export default function HistoryPage() {
                         <div className="tenant-empty-icon">📊</div>
                         <div className="tenant-empty-text">ยังไม่มีประวัติยอดเงิน</div>
                         <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 8 }}>
-                            ระบบจะบันทึกอัตโนมัติเมื่อยอดเงินเปลี่ยนแปลง
+                            ระบบจะบันทึกอัตโนมัติเมื่อยอดเงินเปลี่ยนแปลง (Real-time)
                         </p>
                     </div>
                 ) : (

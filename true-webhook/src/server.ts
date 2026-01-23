@@ -4,9 +4,13 @@ import cors from "cors";
 import next from "next";
 import path from "path";
 import apiRouter from "./api/router";
+import { startBalanceWorker } from "./workers/balanceWorker";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000", 10);
+
+// Balance check interval (default 2 seconds)
+const BALANCE_CHECK_INTERVAL = parseInt(process.env.BALANCE_CHECK_INTERVAL || "2000", 10);
 
 // Ensure Next.js finds the correct directory
 const dir = process.cwd();
@@ -42,6 +46,9 @@ async function main() {
 
     server.listen(port, () => {
         console.log(`[server] listening on http://localhost:${port} (dev=${dev})`);
+
+        // Start the balance worker
+        startBalanceWorker(BALANCE_CHECK_INTERVAL);
     });
 }
 
@@ -49,3 +56,4 @@ main().catch((err) => {
     console.error("[server] Failed to start:", err);
     process.exit(1);
 });
+
