@@ -16,6 +16,14 @@ interface HistoryEntry {
     mobileNo?: string;
     source?: string;
     checkedAt: string;
+    // New fields
+    type?: string;
+    amount?: number;
+    fee?: number;
+    direction?: string;
+    sender?: string;
+    recipient?: string;
+    status?: string;
 }
 
 export default function HistoryPage() {
@@ -263,23 +271,61 @@ export default function HistoryPage() {
                                 <div style={{ flex: 1 }}>
                                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                                         <div>
+                                            {/* Header: Amount */}
                                             <div style={{
                                                 fontSize: 20,
                                                 fontWeight: 700,
                                                 color: "var(--text-primary)"
                                             }}>
-                                                ฿ {entry.balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                                                {entry.type === 'transaction'
+                                                    ? `฿ ${(entry.amount || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
+                                                    : `฿ ${entry.balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
+                                                }
                                             </div>
-                                            {entry.change !== 0 && (
-                                                <div style={{
-                                                    fontSize: 14,
-                                                    fontWeight: 600,
-                                                    color: entry.change > 0 ? "var(--success)" : "var(--error)",
-                                                    marginTop: 4,
-                                                }}>
-                                                    {entry.change > 0 ? "+" : ""}
-                                                    {entry.change.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
+
+                                            {/* Sub-header: Change / Details */}
+                                            {entry.type === 'transaction' ? (
+                                                <div style={{ marginTop: 8 }}>
+                                                    <div style={{
+                                                        fontSize: 14,
+                                                        fontWeight: 600,
+                                                        color: entry.direction === 'incoming' ? "var(--success)" : "var(--error)",
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        gap: 8
+                                                    }}>
+                                                        <span>{entry.direction === 'incoming' ? "รับเงินจาก" : "โอนเงินไป"}</span>
+                                                        <span style={{ color: "var(--text-primary)" }}>
+                                                            {entry.direction === 'incoming' ? entry.sender : entry.recipient}
+                                                        </span>
+                                                    </div>
+
+                                                    {entry.fee !== undefined && entry.fee > 0 && (
+                                                        <div style={{
+                                                            fontSize: 12,
+                                                            color: "var(--error)",
+                                                            marginTop: 2,
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            gap: 4
+                                                        }}>
+                                                            <span>ค่าธรรมเนียม:</span>
+                                                            <strong>฿ {entry.fee.toLocaleString()}</strong>
+                                                        </div>
+                                                    )}
                                                 </div>
+                                            ) : (
+                                                entry.change !== 0 && (
+                                                    <div style={{
+                                                        fontSize: 14,
+                                                        fontWeight: 600,
+                                                        color: entry.change > 0 ? "var(--success)" : "var(--error)",
+                                                        marginTop: 4,
+                                                    }}>
+                                                        {entry.change > 0 ? "+" : ""}
+                                                        {entry.change.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
+                                                    </div>
+                                                )
                                             )}
                                         </div>
                                         <div style={{ textAlign: "right" }}>
@@ -289,6 +335,19 @@ export default function HistoryPage() {
                                             <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
                                                 {formatTime(entry.checkedAt)}
                                             </div>
+                                            {entry.type === 'transaction' && (
+                                                <div style={{
+                                                    marginTop: 4,
+                                                    fontSize: 11,
+                                                    padding: "2px 6px",
+                                                    borderRadius: 4,
+                                                    background: "var(--bg-secondary)",
+                                                    color: "var(--text-muted)",
+                                                    display: "inline-block"
+                                                }}>
+                                                    Webhook
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
