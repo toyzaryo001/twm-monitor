@@ -23,12 +23,20 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
     const [networkName, setNetworkName] = useState("");
     const [loading, setLoading] = useState(true);
 
+    // Use short URLs - middleware will rewrite them
     const navItems = [
-        { href: `/tenant/${prefix}/dashboard`, label: "แดชบอร์ด", icon: "📊" },
-        { href: `/tenant/${prefix}/wallets`, label: "วอลเล็ท", icon: "💳" },
-        { href: `/tenant/${prefix}/history`, label: "ประวัติ", icon: "📜" },
-        { href: `/tenant/${prefix}/settings`, label: "ตั้งค่า", icon: "⚙️" },
+        { href: "/dashboard", label: "แดชบอร์ด", icon: "📊" },
+        { href: "/wallets", label: "วอลเล็ท", icon: "💳" },
+        { href: "/history", label: "ประวัติ", icon: "📜" },
+        { href: "/settings", label: "ตั้งค่า", icon: "⚙️" },
     ];
+
+    // Check if current path matches (handle both short and long URLs)
+    const isActive = (href: string) => {
+        const shortPath = href;
+        const longPath = `/tenant/${prefix}${href}`;
+        return pathname === shortPath || pathname === longPath;
+    };
 
     useEffect(() => {
         // Skip auth check on login page
@@ -41,7 +49,7 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
         const storedUser = localStorage.getItem("tenantUser");
 
         if (!token) {
-            router.push(`/tenant/${prefix}/login`);
+            router.push("/login");
             return;
         }
 
@@ -68,7 +76,7 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
     const handleLogout = () => {
         localStorage.removeItem("tenantToken");
         localStorage.removeItem("tenantUser");
-        router.push(`/tenant/${prefix}/login`);
+        router.push("/login");
     };
 
     // Don't wrap login page with layout
@@ -114,7 +122,7 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
                                 <Link
                                     key={item.href}
                                     href={item.href}
-                                    className={`tenant-nav-item ${pathname === item.href ? "active" : ""}`}
+                                    className={`tenant-nav-item ${isActive(item.href) ? "active" : ""}`}
                                 >
                                     <span>{item.icon}</span>
                                     <span>{item.label}</span>
