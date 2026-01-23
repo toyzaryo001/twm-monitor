@@ -23,6 +23,10 @@ router.use("/cron", cronRouter);
 // SSE routes (for real-time updates)
 router.use("/sse", sseRouter);
 
+// Webhook routes (TrueMoney Integration)
+import webhookRouter from "./webhook";
+router.use("/webhook", webhookRouter);
+
 export default router;
 
 

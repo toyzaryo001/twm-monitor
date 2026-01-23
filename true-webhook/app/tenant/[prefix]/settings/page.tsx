@@ -125,6 +125,52 @@ export default function TenantSettingsPage() {
                 </div>
             </div>
 
+            {/* Webhook Integration */}
+            <div className="tenant-card" style={{ marginBottom: 24 }}>
+                <div className="settings-section">
+                    <div className="settings-section-title">🔗 Webhook (รับยอดอัตโนมัติ)</div>
+                    <div style={{ padding: "12px 0", color: "var(--tenant-text-muted)", fontSize: "0.9rem", lineHeight: 1.5 }}>
+                        นำลิ้งก์ด้านล่างไปใส่ในแอพ TrueMoney เพื่อรับยอดโอนและค่าธรรมเนียมแบบ Real-time
+                    </div>
+                    <div className="settings-row" style={{ display: "block" }}>
+                        <div style={{
+                            background: "rgba(0,0,0,0.2)",
+                            padding: "12px",
+                            borderRadius: "8px",
+                            fontFamily: "monospace",
+                            wordBreak: "break-all",
+                            border: "1px solid var(--tenant-border)",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            gap: 10
+                        }}>
+                            <span style={{ color: "var(--accent)" }}>
+                                {typeof window !== 'undefined' ? `${window.location.origin}/api/webhook/${prefix}` : `/api/webhook/${prefix}`}
+                            </span>
+                            <button
+                                onClick={() => {
+                                    const url = `${window.location.origin}/api/webhook/${prefix}`;
+                                    navigator.clipboard.writeText(url);
+                                    alert("คัดลอกลิ้งก์แล้ว!");
+                                }}
+                                style={{
+                                    background: "var(--tenant-primary)",
+                                    border: "none",
+                                    borderRadius: "4px",
+                                    padding: "4px 8px",
+                                    color: "white",
+                                    cursor: "pointer",
+                                    fontSize: "12px"
+                                }}
+                            >
+                                คัดลอก
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {/* Telegram Notifications */}
             <div className="tenant-card" style={{ marginBottom: 24 }}>
                 <div className="settings-section">

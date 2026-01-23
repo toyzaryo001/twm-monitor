@@ -91,6 +91,7 @@ model Account {
   telegramConfig             TelegramConfig?
   balanceSnapshots           BalanceSnapshot[]
   notificationLogs           NotificationLog[]
+  transactions               Transaction[]
   
   createdAt                  DateTime         @default(now())
   updatedAt                  DateTime         @updatedAt
@@ -146,4 +147,35 @@ model NotificationLog {
   createdAt DateTime         @default(now())
   
   @@index([accountId, createdAt])
+}
+
+model Transaction {
+  id              String   @id @default(cuid())
+  transactionId   String   @unique // TrueMoney Transaction ID
+  accountId       String
+  
+  amount          Float    // Net amount
+  fee             Float    @default(0)
+  
+  type            String   // 'incoming' or 'outgoing'
+  status          String   // 'SUCCESS', 'PENDING', 'FAILED'
+  
+  senderName      String?
+  senderMobile    String?
+  recipientName   String?
+  recipientMobile String?
+  
+  ref1            String?
+  ref2            String?
+  ref3            String?
+  
+  rawPayload      Json?    // Full webhook payload
+  
+  timestamp       DateTime // Transaction time from TrueMoney
+  createdAt       DateTime @default(now())
+  
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  @@index([accountId, timestamp])
+  @@index([transactionId])
 }
