@@ -13,7 +13,7 @@ export default function TenantLoginPage() {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
     const [form, setForm] = useState({
-        prefix: prefixFromUrl || "",
+        prefix: "",  // Always start empty, user must fill in
         username: "",
         password: ""
     });
@@ -31,7 +31,7 @@ export default function TenantLoginPage() {
 
             if (!data.ok) {
                 setNetworkName("");
-                setError("ไม่พบเครือข่ายนี้");
+                setError("เครือข่ายนี้ไม่มีในระบบ");
             } else if (!data.data.isActive) {
                 setNetworkName("");
                 setError("เครือข่ายนี้ถูกปิดใช้งาน");
@@ -53,12 +53,9 @@ export default function TenantLoginPage() {
             return;
         }
 
-        // If prefix from URL, check network
-        if (prefixFromUrl) {
-            checkNetwork(prefixFromUrl);
-        }
+        // Don't auto-check from URL, user must fill in prefix manually
         setLoading(false);
-    }, [prefixFromUrl, router]);
+    }, [router]);
 
     // Debounce prefix check
     useEffect(() => {
