@@ -1,38 +1,80 @@
-/* Tenant Panel Theme - Separate from Master */
+/* Tenant Panel Theme - Ultra Modern Premium Design */
 
 /* Override CSS variables for Tenant */
 .tenant-theme {
-    --bg-primary: #0f172a;
-    --bg-secondary: #1e293b;
-    --bg-card: #334155;
-    --bg-hover: #475569;
-    --text-primary: #f8fafc;
-    --text-secondary: #cbd5e1;
-    --text-muted: #94a3b8;
-    --accent: #0ea5e9;
-    --accent-hover: #38bdf8;
-    --accent-light: rgba(14, 165, 233, 0.1);
-    --success: #22c55e;
-    --success-light: rgba(34, 197, 94, 0.1);
+    --bg-primary: #030712;
+    --bg-secondary: #0f172a;
+    --bg-card: rgba(30, 41, 59, 0.6);
+    --bg-card-solid: #1e293b;
+    --bg-hover: rgba(51, 65, 85, 0.5);
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #06b6d4;
+    --accent-hover: #22d3ee;
+    --accent-light: rgba(6, 182, 212, 0.15);
+    --accent-glow: rgba(6, 182, 212, 0.4);
+    --success: #10b981;
+    --success-light: rgba(16, 185, 129, 0.15);
     --warning: #f59e0b;
     --error: #ef4444;
-    --border: #475569;
+    --border: rgba(71, 85, 105, 0.4);
+    --border-glow: rgba(6, 182, 212, 0.3);
     --radius: 16px;
+    --radius-lg: 24px;
+    --glass: blur(12px);
 }
 
-/* Tenant Layout - Top Navbar */
+/* Animated Background */
 .tenant-layout {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     background: var(--bg-primary);
+    position: relative;
+    overflow: hidden;
 }
 
+.tenant-layout::before {
+    content: '';
+    position: fixed;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background:
+        radial-gradient(ellipse at 20% 20%, rgba(6, 182, 212, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(16, 185, 129, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 40% 60%, rgba(6, 182, 212, 0.04) 0%, transparent 40%);
+    animation: bgFloat 20s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 0;
+}
+
+@keyframes bgFloat {
+
+    0%,
+    100% {
+        transform: translate(0, 0) rotate(0deg);
+    }
+
+    33% {
+        transform: translate(2%, 1%) rotate(1deg);
+    }
+
+    66% {
+        transform: translate(-1%, 2%) rotate(-1deg);
+    }
+}
+
+/* Glass Navbar */
 .tenant-navbar {
-    background: var(--bg-secondary);
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: var(--glass);
+    -webkit-backdrop-filter: var(--glass);
     border-bottom: 1px solid var(--border);
-    padding: 0 24px;
-    height: 64px;
+    padding: 0 32px;
+    height: 72px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -44,50 +86,70 @@
 .tenant-navbar-brand {
     display: flex;
     align-items: center;
-    gap: 12px;
-    font-size: 18px;
+    gap: 14px;
+    font-size: 20px;
     font-weight: 700;
-    color: var(--accent);
+    color: var(--text-primary);
 }
 
 .tenant-navbar-brand .brand-icon {
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     background: linear-gradient(135deg, var(--accent), var(--success));
-    border-radius: 10px;
+    border-radius: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
+    font-size: 24px;
+    box-shadow: 0 4px 20px var(--accent-glow);
+    animation: iconGlow 3s ease-in-out infinite;
+}
+
+@keyframes iconGlow {
+
+    0%,
+    100% {
+        box-shadow: 0 4px 20px var(--accent-glow);
+    }
+
+    50% {
+        box-shadow: 0 4px 30px var(--accent-glow), 0 0 50px rgba(6, 182, 212, 0.2);
+    }
 }
 
 .tenant-nav {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    background: rgba(30, 41, 59, 0.5);
+    padding: 6px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
 }
 
 .tenant-nav-item {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 16px;
-    border-radius: var(--radius);
+    padding: 12px 20px;
+    border-radius: 14px;
     color: var(--text-secondary);
     text-decoration: none;
-    transition: all 0.2s;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     font-size: 14px;
     font-weight: 500;
+    position: relative;
 }
 
 .tenant-nav-item:hover {
-    background: var(--bg-hover);
     color: var(--text-primary);
+    background: rgba(6, 182, 212, 0.1);
 }
 
 .tenant-nav-item.active {
-    background: var(--accent);
+    background: linear-gradient(135deg, var(--accent), #0891b2);
     color: white;
+    box-shadow: 0 4px 16px var(--accent-glow);
 }
 
 .tenant-navbar-right {
@@ -99,166 +161,242 @@
 .tenant-user-info {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 8px 12px;
-    background: var(--bg-card);
+    gap: 14px;
+    padding: 8px 16px 8px 8px;
+    background: rgba(30, 41, 59, 0.6);
+    backdrop-filter: var(--glass);
+    border: 1px solid var(--border);
     border-radius: var(--radius);
+    transition: all 0.3s;
+}
+
+.tenant-user-info:hover {
+    border-color: var(--border-glow);
 }
 
 .tenant-user-avatar {
-    width: 32px;
-    height: 32px;
+    width: 38px;
+    height: 38px;
     background: linear-gradient(135deg, var(--accent), var(--success));
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
     color: white;
+    box-shadow: 0 2px 10px var(--accent-glow);
 }
 
 .tenant-user-name {
-    font-size: 13px;
-    font-weight: 500;
+    font-size: 14px;
+    font-weight: 600;
     color: var(--text-primary);
 }
 
 .tenant-user-role {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-muted);
 }
 
 /* Main Content Area */
 .tenant-main {
     flex: 1;
-    padding: 24px;
+    padding: 32px;
     max-width: 1400px;
     margin: 0 auto;
     width: 100%;
+    position: relative;
+    z-index: 1;
 }
 
-/* Tenant Cards - More modern style */
+/* Glass Cards */
 .tenant-card {
     background: var(--bg-card);
-    border-radius: var(--radius);
-    padding: 24px;
+    backdrop-filter: var(--glass);
+    -webkit-backdrop-filter: var(--glass);
+    border-radius: var(--radius-lg);
+    padding: 28px;
     border: 1px solid var(--border);
-    transition: all 0.2s;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.tenant-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-light), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
 }
 
 .tenant-card:hover {
-    border-color: var(--accent);
-    box-shadow: 0 0 20px rgba(14, 165, 233, 0.1);
+    border-color: var(--border-glow);
+    box-shadow: 0 8px 40px rgba(6, 182, 212, 0.1);
+    transform: translateY(-2px);
+}
+
+.tenant-card:hover::before {
+    opacity: 1;
 }
 
 .tenant-card-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 16px;
+    margin-bottom: 20px;
 }
 
 .tenant-card-title {
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 600;
     color: var(--text-primary);
 }
 
-/* Balance Cards */
+/* Balance Cards - Premium Style */
 .balance-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 20px;
-    margin-bottom: 24px;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+    margin-bottom: 32px;
 }
 
 .balance-card {
-    background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-secondary) 100%);
-    border-radius: var(--radius);
-    padding: 24px;
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%);
+    backdrop-filter: var(--glass);
+    border-radius: var(--radius-lg);
+    padding: 28px;
     border: 1px solid var(--border);
     position: relative;
     overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .balance-card::before {
     content: '';
     position: absolute;
-    top: 0;
-    right: 0;
-    width: 100px;
-    height: 100px;
-    background: linear-gradient(135deg, var(--accent-light), transparent);
-    border-radius: 0 0 0 100%;
+    top: -50%;
+    right: -50%;
+    width: 150%;
+    height: 150%;
+    background: radial-gradient(circle, var(--accent-light) 0%, transparent 60%);
+    opacity: 0.5;
+    transition: all 0.4s;
+}
+
+.balance-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(6, 182, 212, 0.15);
+    border-color: var(--border-glow);
+}
+
+.balance-card:hover::before {
+    opacity: 0.8;
 }
 
 .balance-card-label {
     font-size: 13px;
     color: var(--text-muted);
     margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: relative;
 }
 
 .balance-card-value {
-    font-size: 32px;
-    font-weight: 700;
-    color: var(--success);
-    margin-bottom: 4px;
+    font-size: 36px;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--success), #34d399);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+    position: relative;
 }
 
 .balance-card-name {
-    font-size: 14px;
-    font-weight: 500;
+    font-size: 16px;
+    font-weight: 600;
     color: var(--text-primary);
+    position: relative;
 }
 
 .balance-card-phone {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-muted);
+    font-family: monospace;
+    position: relative;
 }
 
 .balance-card-actions {
     display: flex;
-    gap: 8px;
-    margin-top: 16px;
+    gap: 10px;
+    margin-top: 20px;
+    position: relative;
 }
 
-/* Wallet Cards */
+/* Wallet Cards - Enhanced */
 .wallet-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    gap: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 24px;
 }
 
 .wallet-card {
     background: var(--bg-card);
-    border-radius: var(--radius);
-    padding: 20px;
+    backdrop-filter: var(--glass);
+    border-radius: var(--radius-lg);
+    padding: 24px;
     border: 1px solid var(--border);
-    transition: all 0.2s;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.wallet-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, transparent 40%, var(--accent-light) 100%);
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
 }
 
 .wallet-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    transform: translateY(-4px);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3);
+    border-color: var(--border-glow);
+}
+
+.wallet-card:hover::after {
+    opacity: 1;
 }
 
 .wallet-card-header {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 16px;
+    gap: 16px;
+    margin-bottom: 20px;
+    position: relative;
+    z-index: 1;
 }
 
 .wallet-icon {
-    width: 48px;
-    height: 48px;
+    width: 56px;
+    height: 56px;
     background: linear-gradient(135deg, #f97316, #ea580c);
-    border-radius: 12px;
+    border-radius: 16px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 24px;
+    font-size: 28px;
+    box-shadow: 0 8px 24px rgba(249, 115, 22, 0.3);
 }
 
 .wallet-info {
@@ -266,99 +404,146 @@
 }
 
 .wallet-name {
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 18px;
+    font-weight: 700;
     color: var(--text-primary);
 }
 
 .wallet-phone {
-    font-size: 13px;
+    font-size: 14px;
     color: var(--text-muted);
+    font-family: monospace;
 }
 
 .wallet-status {
-    padding: 4px 10px;
-    border-radius: 20px;
+    padding: 6px 14px;
+    border-radius: 24px;
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .wallet-status.active {
     background: var(--success-light);
     color: var(--success);
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
 }
 
 .wallet-status.inactive {
-    background: rgba(239, 68, 68, 0.1);
+    background: rgba(239, 68, 68, 0.15);
     color: var(--error);
 }
 
 .wallet-balance {
-    background: var(--bg-secondary);
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 16px;
+    background: rgba(15, 23, 42, 0.6);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 20px;
+    position: relative;
+    z-index: 1;
+    border: 1px solid rgba(71, 85, 105, 0.3);
 }
 
 .wallet-balance-label {
     font-size: 12px;
     color: var(--text-muted);
-    margin-bottom: 4px;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .wallet-balance-value {
-    font-size: 24px;
-    font-weight: 700;
-    color: var(--success);
+    font-size: 28px;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--success), #34d399);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 
 .wallet-actions {
     display: flex;
-    gap: 8px;
+    gap: 10px;
+    position: relative;
+    z-index: 1;
 }
 
-/* Tenant Buttons */
+/* Premium Buttons */
 .tenant-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    padding: 10px 20px;
-    border-radius: var(--radius);
+    padding: 12px 24px;
+    border-radius: 14px;
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 600;
     border: none;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.tenant-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s;
+}
+
+.tenant-btn:hover::before {
+    left: 100%;
 }
 
 .tenant-btn-primary {
-    background: linear-gradient(135deg, var(--accent), #0284c7);
+    background: linear-gradient(135deg, var(--accent), #0891b2);
     color: white;
+    box-shadow: 0 4px 16px var(--accent-glow);
 }
 
 .tenant-btn-primary:hover {
-    background: linear-gradient(135deg, var(--accent-hover), var(--accent));
-    transform: translateY(-1px);
+    box-shadow: 0 8px 28px var(--accent-glow);
+    transform: translateY(-2px);
 }
 
 .tenant-btn-secondary {
-    background: var(--bg-hover);
+    background: rgba(51, 65, 85, 0.6);
     color: var(--text-primary);
+    border: 1px solid var(--border);
+    backdrop-filter: var(--glass);
 }
 
 .tenant-btn-secondary:hover {
-    background: var(--border);
+    background: rgba(71, 85, 105, 0.6);
+    border-color: var(--accent-light);
 }
 
 .tenant-btn-success {
-    background: linear-gradient(135deg, var(--success), #16a34a);
+    background: linear-gradient(135deg, var(--success), #059669);
     color: white;
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+}
+
+.tenant-btn-success:hover {
+    box-shadow: 0 8px 28px rgba(16, 185, 129, 0.4);
+    transform: translateY(-2px);
 }
 
 .tenant-btn-icon {
-    padding: 10px;
-    border-radius: 10px;
+    padding: 12px;
+    border-radius: 12px;
+}
+
+.tenant-btn-danger {
+    background: linear-gradient(135deg, var(--error), #dc2626);
+    color: white;
+    box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3);
 }
 
 /* Page Header */
@@ -366,92 +551,132 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 24px;
+    margin-bottom: 32px;
 }
 
 .tenant-page-title {
-    font-size: 24px;
-    font-weight: 700;
-    color: var(--text-primary);
+    font-size: 28px;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--text-primary), var(--text-secondary));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 
-/* Login Page Tenant Theme */
+/* Login Page - Premium Glass */
 .tenant-login-container {
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
-    padding: 20px;
+    background: var(--bg-primary);
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+}
+
+.tenant-login-container::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background:
+        radial-gradient(ellipse at 30% 30%, rgba(6, 182, 212, 0.1) 0%, transparent 50%),
+        radial-gradient(ellipse at 70% 70%, rgba(16, 185, 129, 0.08) 0%, transparent 50%);
+    animation: bgFloat 15s ease-in-out infinite;
 }
 
 .tenant-login-card {
     background: var(--bg-card);
-    border-radius: 24px;
-    padding: 40px;
+    backdrop-filter: var(--glass);
+    -webkit-backdrop-filter: var(--glass);
+    border-radius: var(--radius-lg);
+    padding: 48px;
     width: 100%;
-    max-width: 420px;
+    max-width: 440px;
     border: 1px solid var(--border);
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 32px 80px rgba(0, 0, 0, 0.4);
+    position: relative;
+    z-index: 1;
+}
+
+.tenant-login-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
 }
 
 .tenant-login-header {
     text-align: center;
-    margin-bottom: 32px;
+    margin-bottom: 40px;
 }
 
 .tenant-login-icon {
-    width: 64px;
-    height: 64px;
+    width: 72px;
+    height: 72px;
     background: linear-gradient(135deg, var(--accent), var(--success));
-    border-radius: 20px;
+    border-radius: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 32px;
-    margin: 0 auto 16px;
+    font-size: 36px;
+    margin: 0 auto 20px;
+    box-shadow: 0 8px 32px var(--accent-glow);
+    animation: iconGlow 3s ease-in-out infinite;
 }
 
 .tenant-login-title {
-    font-size: 24px;
-    font-weight: 700;
-    color: var(--text-primary);
+    font-size: 28px;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--text-primary), var(--accent-hover));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
     margin-bottom: 8px;
 }
 
 .tenant-login-subtitle {
-    font-size: 14px;
+    font-size: 15px;
     color: var(--text-muted);
 }
 
-/* Form styles for tenant */
+/* Form styles */
 .tenant-form-group {
-    margin-bottom: 20px;
+    margin-bottom: 24px;
 }
 
 .tenant-form-label {
     display: block;
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--text-secondary);
-    margin-bottom: 8px;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .tenant-form-input {
     width: 100%;
-    padding: 14px 16px;
-    background: var(--bg-secondary);
+    padding: 16px 20px;
+    background: rgba(15, 23, 42, 0.6);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 14px;
     color: var(--text-primary);
-    font-size: 14px;
-    transition: all 0.2s;
+    font-size: 15px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .tenant-form-input:focus {
     outline: none;
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-light);
+    box-shadow: 0 0 0 4px var(--accent-light), 0 8px 24px rgba(6, 182, 212, 0.1);
+    background: rgba(15, 23, 42, 0.8);
 }
 
 .tenant-form-input::placeholder {
@@ -461,56 +686,146 @@
 /* Empty State */
 .tenant-empty {
     text-align: center;
-    padding: 60px 20px;
+    padding: 80px 24px;
     color: var(--text-muted);
 }
 
 .tenant-empty-icon {
-    font-size: 48px;
-    margin-bottom: 16px;
-    opacity: 0.5;
+    font-size: 56px;
+    margin-bottom: 20px;
+    opacity: 0.4;
 }
 
 .tenant-empty-text {
-    font-size: 16px;
+    font-size: 18px;
+    font-weight: 500;
 }
 
 /* Alert styles */
 .tenant-alert {
-    padding: 14px 16px;
-    border-radius: 12px;
+    padding: 16px 20px;
+    border-radius: 14px;
     font-size: 14px;
-    margin-bottom: 16px;
+    font-weight: 500;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 .tenant-alert-error {
-    background: rgba(239, 68, 68, 0.1);
+    background: rgba(239, 68, 68, 0.15);
     color: var(--error);
-    border: 1px solid rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .tenant-alert-success {
     background: var(--success-light);
     color: var(--success);
-    border: 1px solid rgba(34, 197, 94, 0.2);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+/* Settings Card */
+.settings-section {
+    margin-bottom: 24px;
+}
+
+.settings-section-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.settings-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 0;
+    border-bottom: 1px solid rgba(71, 85, 105, 0.2);
+}
+
+.settings-row:last-child {
+    border-bottom: none;
+}
+
+.settings-label {
+    font-size: 15px;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.settings-value {
+    font-size: 14px;
+    color: var(--text-secondary);
+    font-family: monospace;
 }
 
 /* Responsive */
 @media (max-width: 768px) {
     .tenant-navbar {
         padding: 0 16px;
+        height: 64px;
     }
 
     .tenant-nav {
-        display: none;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        top: auto;
+        background: rgba(15, 23, 42, 0.95);
+        backdrop-filter: var(--glass);
+        border-radius: 0;
+        border-top: 1px solid var(--border);
+        padding: 8px 16px;
+        justify-content: space-around;
+        z-index: 100;
+    }
+
+    .tenant-nav-item {
+        flex-direction: column;
+        gap: 4px;
+        padding: 8px 12px;
+        font-size: 11px;
     }
 
     .tenant-main {
-        padding: 16px;
+        padding: 20px 16px 100px;
     }
 
     .balance-grid,
     .wallet-grid {
         grid-template-columns: 1fr;
     }
+
+    .tenant-login-card {
+        padding: 32px 24px;
+    }
+
+    .tenant-page-title {
+        font-size: 22px;
+    }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
 }
