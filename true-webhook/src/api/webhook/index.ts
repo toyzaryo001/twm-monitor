@@ -21,13 +21,15 @@ const webhookSchema = z.object({
 
 // POST /api/webhook/:prefix
 router.all("/:prefix", async (req: Request, res: Response) => {
+    console.log(`[Webhook] ${req.method} request for prefix: ${req.params.prefix}`);
+
     // Handle verification requests (HEAD/GET)
     if (req.method === "HEAD" || req.method === "GET") {
-        return res.status(200).send("OK");
+        return res.status(200).json({ status: "ok", message: "Ready to receive webhooks" });
     }
 
     if (req.method !== "POST") {
-        return res.status(405).send("Method Not Allowed");
+        return res.status(405).json({ error: "Method Not Allowed" });
     }
 
     const { prefix } = req.params;
