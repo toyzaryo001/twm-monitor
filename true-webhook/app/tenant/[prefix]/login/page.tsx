@@ -57,15 +57,18 @@ export default function TenantLoginPage() {
         setLoading(false);
     }, [router]);
 
-    // Debounce prefix check
+    // Debounce prefix check - always check when user types
     useEffect(() => {
-        if (form.prefix && form.prefix !== prefixFromUrl) {
+        if (form.prefix) {
             const timer = setTimeout(() => {
                 checkNetwork(form.prefix);
             }, 500);
             return () => clearTimeout(timer);
+        } else {
+            setNetworkName("");
+            setError("");
         }
-    }, [form.prefix, prefixFromUrl]);
+    }, [form.prefix]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
