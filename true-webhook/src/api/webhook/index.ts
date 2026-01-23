@@ -53,7 +53,7 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         // DEBUG: Save raw payload to NotificationLog to inspect structure
         await prisma.notificationLog.create({
             data: {
-                type: "webhook_debug",
+                type: "webhook_debug" as any, // Cast to any to avoid TS error before generation
                 message: `Raw Payload for ${prefix}`,
                 payload: req.body as any,
                 // Make accountId optional in schema or just leave it null here if possible
