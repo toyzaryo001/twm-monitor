@@ -150,7 +150,7 @@ export default function TenantLoginPage() {
                             className="tenant-form-input"
                             value={form.prefix}
                             onChange={(e) => setForm({ ...form, prefix: e.target.value.toLowerCase() })}
-                            placeholder="เช่น shop1, jga88"
+                            placeholder=""
                             required
                             autoComplete="off"
                             style={{ fontFamily: "monospace" }}
