@@ -31,6 +31,18 @@ model Network {
   name        String
   isActive    Boolean   @default(true)
   
+  // Real-time settings
+  realtimeEnabled         Boolean   @default(true)
+  checkIntervalMs         Int       @default(2000)  // Milliseconds between checks
+  
+  // Telegram notification settings
+  telegramBotToken        String?
+  telegramChatId          String?
+  telegramEnabled         Boolean   @default(false)
+  notifyMoneyIn           Boolean   @default(true)
+  notifyMoneyOut          Boolean   @default(true)
+  notifyMinAmount         Int       @default(0)     // Minimum amount (satang) to trigger notification
+  
   users       User[]
   accounts    Account[]
   

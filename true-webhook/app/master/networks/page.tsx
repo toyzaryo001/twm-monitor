@@ -178,6 +178,13 @@ export default function NetworksPage() {
                                         </span>
                                     </td>
                                     <td style={{ display: "flex", gap: 8 }}>
+                                        <a
+                                            href={`/master/networks/${n.id}`}
+                                            className="btn btn-primary"
+                                            style={{ padding: "8px 12px" }}
+                                        >
+                                            ⚙️ ตั้งค่า
+                                        </a>
                                         <button className="btn btn-secondary" style={{ padding: "8px 12px" }} onClick={() => handleToggle(n)}>
                                             {n.isActive ? "ปิด" : "เปิด"}
                                         </button>

@@ -76,16 +76,80 @@ router.put("/:id", async (req, res, next) => {
         const schema = z.object({
             name: z.string().min(1).optional(),
             isActive: z.boolean().optional(),
+            // Real-time settings
+            realtimeEnabled: z.boolean().optional(),
+            checkIntervalMs: z.number().min(1000).max(300000).optional(),
+            // Telegram settings
+            telegramBotToken: z.string().optional(),
+            telegramChatId: z.string().optional(),
+            telegramEnabled: z.boolean().optional(),
+            notifyMoneyIn: z.boolean().optional(),
+            notifyMoneyOut: z.boolean().optional(),
+            notifyMinAmount: z.number().min(0).optional(),
         });
 
         const data = schema.parse(req.body);
 
+        // Clean empty strings to null for telegram fields
+        const cleanData = {
+            ...data,
+            telegramBotToken: data.telegramBotToken === "" ? null : data.telegramBotToken,
+            telegramChatId: data.telegramChatId === "" ? null : data.telegramChatId,
+        };
+
         const network = await prisma.network.update({
             where: { id: req.params.id as string },
-            data,
+            data: cleanData,
         });
 
         return res.json({ ok: true, data: network });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// Test Telegram notification
+router.post("/:id/test-telegram", async (req, res, next) => {
+    try {
+        const network = await prisma.network.findUnique({
+            where: { id: req.params.id as string },
+        });
+
+        if (!network) {
+            return res.status(404).json({ ok: false, error: "NOT_FOUND" });
+        }
+
+        if (!network.telegramBotToken || !network.telegramChatId) {
+            return res.status(400).json({ ok: false, error: "TELEGRAM_NOT_CONFIGURED" });
+        }
+
+        // Send test message
+        const message = `🔔 ทดสอบการแจ้งเตือน
+
+📍 เครือข่าย: ${network.name}
+🔖 Prefix: ${network.prefix}
+⏰ เวลา: ${new Date().toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })}
+
+✅ การเชื่อมต่อ Telegram สำเร็จ!`;
+
+        const telegramUrl = `https://api.telegram.org/bot${network.telegramBotToken}/sendMessage`;
+        const response = await fetch(telegramUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                chat_id: network.telegramChatId,
+                text: message,
+                parse_mode: "HTML",
+            }),
+        });
+
+        const result = await response.json();
+
+        if (result.ok) {
+            return res.json({ ok: true, message: "Message sent" });
+        } else {
+            return res.status(400).json({ ok: false, error: result.description || "TELEGRAM_ERROR" });
+        }
     } catch (err) {
         next(err);
     }
@@ -102,3 +166,4 @@ router.delete("/:id", async (req, res, next) => {
 });
 
 export default router;
+
