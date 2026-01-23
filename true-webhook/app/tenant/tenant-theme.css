@@ -1,15 +1,27 @@
 :root {
-    --tenant-bg: #f8f9fa;
-    --tenant-card-bg: #ffffff;
-    --tenant-text: #1f2937;
-    --tenant-text-muted: #6b7280;
-    --tenant-primary: #f59e0b;
-    /* TrueMoney Orange */
-    --tenant-primary-hover: #d97706;
-    --tenant-secondary: #e5e7eb;
-    --tenant-border: #e5e7eb;
+    --tenant-bg: #0f172a;
+    /* Slate 900 */
+    --tenant-card-bg: #1e293b;
+    /* Slate 800 */
+    --tenant-text: #f8fafc;
+    /* Slate 50 */
+    --tenant-text-muted: #94a3b8;
+    /* Slate 400 */
+
+    --tenant-primary: #06b6d4;
+    /* Cyan 500 */
+    --tenant-primary-hover: #0891b2;
+    /* Cyan 600 */
+
+    --tenant-secondary: #334155;
+    /* Slate 700 */
+    --tenant-border: #334155;
+    /* Slate 700 */
+
     --tenant-success: #10b981;
+    /* Emerald 500 */
     --tenant-error: #ef4444;
+    /* Red 500 */
 }
 
 .tenant-theme {
@@ -36,6 +48,8 @@
     position: sticky;
     top: 0;
     z-index: 100;
+    backdrop-filter: blur(8px);
+    background: rgba(30, 41, 59, 0.8);
 }
 
 .tenant-brand {
@@ -45,6 +59,9 @@
     align-items: center;
     gap: 8px;
     color: var(--tenant-primary);
+    background: linear-gradient(135deg, #06b6d4, #3b82f6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 
 .tenant-menu {
@@ -67,7 +84,7 @@
 }
 
 .tenant-menu-item.active {
-    background: rgba(245, 158, 11, 0.1);
+    background: rgba(6, 182, 212, 0.15);
     color: var(--tenant-primary);
 }
 
@@ -80,10 +97,10 @@
 
 .tenant-card {
     background: var(--tenant-card-bg);
-    border-radius: 12px;
+    border-radius: 16px;
     border: 1px solid var(--tenant-border);
     padding: 24px;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 .tenant-btn {
@@ -100,12 +117,14 @@
 }
 
 .tenant-btn-primary {
-    background: var(--tenant-primary);
+    background: linear-gradient(135deg, #06b6d4, #0891b2);
     color: white;
+    box-shadow: 0 2px 4px rgba(6, 182, 212, 0.3);
 }
 
 .tenant-btn-primary:hover {
-    background: var(--tenant-primary-hover);
+    box-shadow: 0 4px 6px rgba(6, 182, 212, 0.4);
+    transform: translateY(-1px);
 }
 
 .tenant-btn-secondary {
@@ -114,72 +133,103 @@
 }
 
 .tenant-btn-secondary:hover {
-    background: #d1d5db;
+    background: #475569;
 }
 
 .tenant-btn-success {
-    background: var(--tenant-success);
+    background: linear-gradient(135deg, #10b981, #059669);
     color: white;
+    box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+}
+
+.tenant-btn-logout {
+    background: transparent;
+    border: 1px solid var(--tenant-border);
+    color: var(--tenant-text-muted);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.8rem;
+}
+
+.tenant-btn-logout:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border-color: #ef4444;
 }
 
 .tenant-form-group {
-    margin-bottom: 16px;
+    margin-bottom: 20px;
 }
 
 .tenant-form-label {
     display: block;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
     font-weight: 500;
     font-size: 0.875rem;
+    color: var(--tenant-text-muted);
 }
 
 .tenant-form-input {
     width: 100%;
-    padding: 10px;
+    padding: 12px;
+    background: #0f172a;
     border: 1px solid var(--tenant-border);
     border-radius: 8px;
     font-size: 1rem;
-    transition: border-color 0.2s;
+    color: var(--tenant-text);
+    transition: all 0.2s;
 }
 
 .tenant-form-input:focus {
     border-color: var(--tenant-primary);
     outline: none;
-    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+    box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2);
 }
 
+/* Wallet Cards */
 .wallet-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 24px;
     margin-top: 24px;
 }
 
 .wallet-card {
-    background: white;
-    border-radius: 16px;
+    background: #1e293b;
+    border-radius: 20px;
     border: 1px solid var(--tenant-border);
     padding: 24px;
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
 }
 
 .wallet-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    transform: translateY(-4px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+    border-color: var(--tenant-primary);
 }
 
 .wallet-card-header {
     display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    margin-bottom: 20px;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
 }
 
 .wallet-icon {
     font-size: 24px;
-    background: #fff7ed;
-    padding: 10px;
+    background: linear-gradient(135deg, #f97316, #ea580c);
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     border-radius: 12px;
+    color: white;
+    box-shadow: 0 4px 6px rgba(234, 88, 12, 0.2);
 }
 
 .wallet-info {
@@ -199,27 +249,32 @@
 
 .wallet-status {
     font-size: 0.75rem;
-    padding: 4px 8px;
+    padding: 4px 10px;
     border-radius: 20px;
     font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .wallet-status.active {
-    background: #ecfdf5;
-    color: #059669;
+    background: rgba(16, 185, 129, 0.1);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.2);
 }
 
 .wallet-status.inactive {
-    background: #fef2f2;
-    color: #dc2626;
+    background: rgba(239, 68, 68, 0.1);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .wallet-balance {
-    background: #f8f9fa;
-    border-radius: 12px;
-    padding: 16px;
+    background: #0f172a;
+    border-radius: 16px;
+    padding: 20px;
     text-align: center;
-    margin-bottom: 20px;
+    margin-bottom: 24px;
+    border: 1px solid var(--tenant-border);
 }
 
 .wallet-balance-label {
@@ -229,16 +284,66 @@
 }
 
 .wallet-balance-value {
-    font-size: 2rem;
+    font-size: 2.25rem;
     font-weight: 700;
-    color: var(--tenant-text);
+    background: linear-gradient(135deg, #22d3ee, #06b6d4);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.02em;
 }
 
 .wallet-actions {
     display: flex;
-    gap: 8px;
+    gap: 12px;
 }
 
+/* Dashboard Stats */
+.balance-grid {
+    display: grid;
+    gap: 24px;
+    margin-bottom: 32px;
+}
+
+.balance-card {
+    background: linear-gradient(145deg, #1e293b, #0f172a);
+    padding: 24px;
+    border-radius: 20px;
+    border: 1px solid var(--tenant-border);
+    position: relative;
+    overflow: hidden;
+}
+
+.balance-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: linear-gradient(90deg, var(--tenant-primary), transparent);
+}
+
+.balance-card-label {
+    font-size: 0.875rem;
+    color: var(--tenant-text-muted);
+    margin-bottom: 12px;
+    font-weight: 500;
+}
+
+.balance-card-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 4px;
+}
+
+.balance-card-name {
+    font-size: 0.875rem;
+    color: var(--tenant-text-muted);
+    opacity: 0.8;
+}
+
+/* Page Headers */
 .tenant-page-header {
     display: flex;
     justify-content: space-between;
@@ -248,13 +353,35 @@
 
 .tenant-page-title {
     font-size: 1.875rem;
-    font-weight: 700;
+    font-weight: 800;
+    background: linear-gradient(135deg, #f8fafc, #94a3b8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 
+/* Empty States */
+.tenant-empty {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.tenant-empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.tenant-empty-text {
+    font-size: 1.125rem;
+    color: var(--tenant-text-muted);
+    margin-bottom: 24px;
+}
+
+/* Loading */
 .spinner {
     width: 40px;
     height: 40px;
-    border: 3px solid #f3f3f3;
+    border: 3px solid rgba(255, 255, 255, 0.1);
     border-top: 3px solid var(--tenant-primary);
     border-radius: 50%;
     animation: spin 1s linear infinite;
@@ -268,4 +395,21 @@
     100% {
         transform: rotate(360deg);
     }
+}
+
+/* Tenant card title */
+.tenant-card-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.tenant-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
 }
