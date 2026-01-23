@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { requireAuth, requireNetworkAccess } from "../../middleware/auth";
+import { broadcastBalanceUpdate } from "../sse";
 
 const router = Router({ mergeParams: true });
 
@@ -166,14 +167,12 @@ router.post("/:id/balance", async (req: Request<{ prefix: string; id: string }>,
             }
 
             // Broadcast update via SSE
-            import("../sse").then(({ broadcastBalanceUpdate }) => {
-                const change = balanceSatang - (lastSnapshot?.balanceSatang || 0);
-                broadcastBalanceUpdate(account.id, {
-                    balance: balanceSatang / 100,
-                    balanceSatang: balanceSatang,
-                    change: change,
-                    checkedAt: checkedAt,
-                });
+            const change = balanceSatang - (lastSnapshot?.balanceSatang || 0);
+            broadcastBalanceUpdate(account.id, {
+                balance: balanceSatang / 100,
+                balanceSatang: balanceSatang,
+                change: change,
+                checkedAt: checkedAt,
             });
 
             return res.json({
