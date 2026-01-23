@@ -225,6 +225,36 @@ router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, 
     try {
         const limit = parseInt(req.query.limit as string, 10) || 50;
 
+        // Fetch transactions from the new system
+        const transactions = await (prisma as any).transaction.findMany({
+            where: { accountId: req.params.id },
+            orderBy: { timestamp: "desc" },
+            take: limit,
+        });
+
+        if (transactions.length > 0) {
+            // Use new transaction data
+            return res.json({
+                ok: true,
+                data: transactions.map((tx: any) => ({
+                    id: tx.id,
+                    type: "transaction", // Mark as real transaction
+                    amount: tx.amount,
+                    fee: tx.fee,
+                    direction: tx.type, // incoming/outgoing
+                    sender: tx.senderMobile || tx.senderName || "Unknown",
+                    recipient: tx.recipientMobile || tx.recipientName || "Unknown",
+                    status: tx.status,
+                    timestamp: tx.timestamp,
+                    // Backward compatibility fields for frontend
+                    balance: 0, // We might not know balance at this exact tx if we don't snapshot
+                    change: tx.type === 'outgoing' ? -tx.amount : tx.amount,
+                    checkedAt: tx.timestamp
+                }))
+            });
+        }
+
+        // Fallback to old snapshot system if no transactions found
         const snapshots = await prisma.balanceSnapshot.findMany({
             where: { accountId: req.params.id },
             orderBy: { checkedAt: "desc" },
@@ -240,6 +270,7 @@ router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, 
 
             return {
                 id: snapshot.id,
+                type: "snapshot",
                 balance: snapshot.balanceSatang / 100,
                 balanceSatang: snapshot.balanceSatang,
                 change: change / 100,
