@@ -226,7 +226,7 @@ router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, 
         const limit = parseInt(req.query.limit as string, 10) || 50;
 
         // Fetch transactions from the new system
-        const transactions = await (prisma as any).transaction.findMany({
+        const transactions = await (prisma as any).financialTransaction.findMany({
             where: { accountId: req.params.id },
             orderBy: { timestamp: "desc" },
             take: limit,
