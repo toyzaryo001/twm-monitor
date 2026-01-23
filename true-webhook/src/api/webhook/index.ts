@@ -76,18 +76,45 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         }
 
         // 3. Find Account in Network
-        const account = await prisma.account.findFirst({
-            where: {
-                networkId: network.id,
-                // Match phone number (simple string match for now)
-                // In production, might need number normalization (e.g. 0xx vs 66xx)
-                phoneNumber: { contains: mobileNo }
-            }
-        });
+        // 3. Find Account in Network
+        // Strategy: Check if any of the numbers in payload belong to an account in this network
+        let account = null;
+        let determinedType = transactionType;
+
+        // Check Recipient (Incoming Money)
+        if (payload.recipient_mobile) {
+            account = await prisma.account.findFirst({
+                where: {
+                    networkId: network.id,
+                    phoneNumber: { contains: payload.recipient_mobile }
+                }
+            });
+            if (account) determinedType = "incoming";
+        }
+
+        // Check Sender (Outgoing Money) - if not found yet
+        if (!account && payload.sender_mobile) {
+            account = await prisma.account.findFirst({
+                where: {
+                    networkId: network.id,
+                    phoneNumber: { contains: payload.sender_mobile }
+                }
+            });
+            if (account) determinedType = "outgoing";
+        }
+
+        // Fallback to generic mobile_no
+        if (!account && payload.mobile_no) {
+            account = await prisma.account.findFirst({
+                where: {
+                    networkId: network.id,
+                    phoneNumber: { contains: payload.mobile_no }
+                }
+            });
+        }
 
         if (!account) {
-            console.log(`[Webhook] Account not found for mobile: ${mobileNo} in network ${prefix}`);
-            // Return 200 OK to acknowledge receipt even if account not found (to satisfy webhook sender)
+            console.log(`[Webhook] Account not found. Payload mobiles: ${payload.recipient_mobile}, ${payload.sender_mobile}, ${payload.mobile_no}`);
             return res.status(200).json({ status: "ignored", reason: "Account not found" });
         }
 
