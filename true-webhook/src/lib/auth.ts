@@ -11,9 +11,9 @@ interface TokenPayload {
 }
 
 // Simple JWT implementation
-export function signToken(payload: TokenPayload): string {
+export function signToken(payload: TokenPayload, expiresIn: number = TOKEN_EXPIRY): string {
     const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
-    const exp = Date.now() + TOKEN_EXPIRY;
+    const exp = Date.now() + expiresIn;
     const body = Buffer.from(JSON.stringify({ ...payload, exp })).toString("base64url");
     const signature = crypto
         .createHmac("sha256", JWT_SECRET)

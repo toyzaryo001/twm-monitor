@@ -57,12 +57,13 @@ router.post("/login", async (req: Request<{ prefix: string }>, res: Response, ne
         });
 
         // Generate token
+        // Generate token
         const token = signToken({
             userId: user.id,
             email: user.email,
             role: user.role,
             networkId: user.networkId,
-        });
+        }, 6 * 60 * 60 * 1000); // 6 hours expiration
 
         return res.json({
             ok: true,

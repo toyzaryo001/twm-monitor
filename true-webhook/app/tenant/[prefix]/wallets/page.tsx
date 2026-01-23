@@ -102,6 +102,40 @@ export default function WalletsPage() {
         fetchAccounts();
     }, [prefix]);
 
+    // Real-time balance updates via SSE
+    useEffect(() => {
+        if (accounts.length === 0) return;
+
+        const connections: EventSource[] = [];
+
+        accounts.forEach(account => {
+            const es = new EventSource(`/api/sse/balance/${account.id}`);
+
+            es.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === "initial" || data.type === "update") {
+                        setBalances(prev => ({
+                            ...prev,
+                            [account.id]: {
+                                balance: data.balance,
+                                checkedAt: data.checkedAt
+                            }
+                        }));
+                    }
+                } catch (e) {
+                    console.error("SSE Parse Error", e);
+                }
+            };
+
+            connections.push(es);
+        });
+
+        return () => {
+            connections.forEach(es => es.close());
+        };
+    }, [accounts]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const token = getToken();

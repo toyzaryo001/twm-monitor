@@ -1,199 +1,60 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, usePathname, useParams } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { ToastProvider } from "../../components/Toast";
 import "../tenant-theme.css";
 
-interface User {
-    id: string;
-    email: string;
-    displayName?: string;
-    role: string;
-    network?: { id: string; name: string; prefix: string };
-}
-
 export default function TenantLayout({ children }: { children: React.ReactNode }) {
+    const params = useParams();
     const router = useRouter();
     const pathname = usePathname();
-    const params = useParams();
     const prefix = params.prefix as string;
-
-    const [user, setUser] = useState<User | null>(null);
-    const [networkName, setNetworkName] = useState("");
-    const [logoUrl, setLogoUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-
-    // Use short URLs - middleware will rewrite them
-    const navItems = [
-        { href: "/dashboard", label: "แดชบอร์ด", icon: "📊" },
-        { href: "/wallets", label: "วอลเล็ท", icon: "💳" },
-        { href: "/history", label: "ประวัติ", icon: "📜" },
-        { href: "/settings", label: "ตั้งค่า", icon: "⚙️" },
-    ];
-
-    // Check if current path matches (handle both short and long URLs)
-    const isActive = (href: string) => {
-        const shortPath = href;
-        const longPath = `/tenant/${prefix}${href}`;
-        return pathname === shortPath || pathname === longPath;
-    };
+    const [network, setNetwork] = useState<any>(null);
 
     useEffect(() => {
-        // Skip auth check on login page
-        if (pathname?.endsWith("/login")) {
-            setLoading(false);
-            return;
-        }
+        // Simple auth check or network info fetch could go here
+        // For now, we assume middleware handles protection
+        setLoading(false);
+    }, []);
 
-        const token = localStorage.getItem("tenantToken");
-        const storedUser = localStorage.getItem("tenantUser");
-        const savedPrefix = localStorage.getItem("tenantPrefix");
-
-        if (!token) {
-            router.push("/login");
-            return;
-        }
-
-        // Check if user is accessing the correct prefix
-        if (savedPrefix && savedPrefix !== prefix) {
-            // User is trying to access a different network
-            // Clear local storage and redirect to login
-            localStorage.removeItem("tenantToken");
-            localStorage.removeItem("tenantUser");
-            localStorage.removeItem("tenantPrefix");
-            alert(`คุณไม่มีสิทธิ์เข้าถึงเครือข่ายนี้ กรุณาเข้าสู่ระบบใหม่`);
-            router.push("/login");
-            return;
-        }
-
-        if (storedUser) {
-            const parsedUser = JSON.parse(storedUser);
-            setUser(parsedUser);
-            if (parsedUser.network) {
-                setNetworkName(parsedUser.network.name);
-            }
-        }
-
-        // Fetch network info
-        fetch(`/api/tenant/${prefix}/auth/status`)
-            .then((r) => r.json())
-            .then((data) => {
-                if (data.ok && data.data.name) {
-                    setNetworkName(data.data.name);
-                    setLogoUrl(data.data.logoUrl || null);
-                }
-                setLoading(false);
-            })
-            .catch(() => setLoading(false));
-    }, [router, prefix, pathname]);
-
-    const handleLogout = () => {
-        localStorage.removeItem("tenantToken");
-        localStorage.removeItem("tenantUser");
-        router.push("/login");
-    };
-
-    // Don't wrap login page with layout
-    if (pathname?.endsWith("/login")) {
-        return <div className="tenant-theme">{children}</div>;
-    }
-
-    if (loading) {
-        return (
-            <div className="tenant-theme">
-                <div className="loading" style={{ minHeight: "100vh", alignItems: "center" }}>
-                    <div className="spinner" />
-                </div>
-            </div>
-        );
-    }
-
-    const getUserInitials = () => {
-        if (user?.displayName) {
-            return user.displayName.substring(0, 2).toUpperCase();
-        }
-        if (user?.email) {
-            return user.email.substring(0, 2).toUpperCase();
-        }
-        return "U";
-    };
+    if (loading) return null;
 
     return (
         <ToastProvider>
             <div className="tenant-theme">
                 <div className="tenant-layout">
-                    {/* Top Navbar */}
-                    <nav className="tenant-navbar">
-                        <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
-                            {/* Brand */}
-                            <div className="tenant-navbar-brand">
-                                {logoUrl ? (
-                                    <img
-                                        src={logoUrl}
-                                        alt="Logo"
-                                        style={{
-                                            height: 48,
-                                            maxWidth: 160,
-                                            objectFit: "contain"
-                                        }}
-                                        onError={(e) => {
-                                            e.currentTarget.style.display = 'none';
-                                            const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                                            if (fallback) fallback.style.display = 'flex';
-                                        }}
-                                    />
-                                ) : null}
-                                {!logoUrl && (
-                                    <>
-                                        <div className="brand-icon">💰</div>
-                                        <span>{networkName || prefix}</span>
-                                    </>
-                                )}
-                            </div>
-
-                            {/* Navigation */}
-                            <div className="tenant-nav">
-                                {navItems.map((item) => (
-                                    <Link
-                                        key={item.href}
-                                        href={item.href}
-                                        className={`tenant-nav-item ${isActive(item.href) ? "active" : ""}`}
-                                    >
-                                        <span>{item.icon}</span>
-                                        <span>{item.label}</span>
-                                    </Link>
-                                ))}
-                            </div>
+                    <header className="tenant-navbar">
+                        <div className="tenant-brand">
+                            <span className="tenant-brand-icon">🔶</span>
+                            <span className="tenant-brand-text">{prefix.toUpperCase()} Panel</span>
                         </div>
-
-                        {/* Right side */}
-                        <div className="tenant-navbar-right">
-                            {user?.role === "MASTER" && (
-                                <Link href="/master/dashboard" className="tenant-btn tenant-btn-secondary" style={{ fontSize: 13 }}>
-                                    ← Master Panel
-                                </Link>
-                            )}
-
-                            <div className="tenant-user-info">
-                                <div className="tenant-user-avatar">{getUserInitials()}</div>
-                                <div>
-                                    <div className="tenant-user-name">{user?.displayName || user?.email}</div>
-                                    <div className="tenant-user-role">
-                                        {user?.role === "MASTER" ? "Master" : "Super Admin"}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <button onClick={handleLogout} className="tenant-btn tenant-btn-secondary tenant-btn-icon" title="ออกจากระบบ">
-                                🚪
-                            </button>
+                        <div className="tenant-menu">
+                            <Link href={`/tenant/${prefix}/dashboard`} className={`tenant-menu-item ${pathname?.includes("/dashboard") ? "active" : ""}`}>
+                                📊 ภาพรวม
+                            </Link>
+                            <Link href={`/tenant/${prefix}/wallets`} className={`tenant-menu-item ${pathname?.includes("/wallets") ? "active" : ""}`}>
+                                💳 วอลเล็ท
+                            </Link>
+                            <Link href={`/tenant/${prefix}/history`} className={`tenant-menu-item ${pathname?.includes("/history") ? "active" : ""}`}>
+                                📜 ประวัติ
+                            </Link>
+                            <Link href={`/tenant/${prefix}/settings`} className={`tenant-menu-item ${pathname?.includes("/settings") ? "active" : ""}`}>
+                                ⚙️ ตั้งค่า
+                            </Link>
                         </div>
-                    </nav>
-
-                    {/* Main Content */}
-                    <main className="tenant-main">{children}</main>
+                        <div className="tenant-user">
+                            <button className="tenant-btn-logout" onClick={() => {
+                                localStorage.removeItem("tenantToken");
+                                router.push(`/tenant/${prefix}/login`);
+                            }}>ออกจากระบบ</button>
+                        </div>
+                    </header>
+                    <main className="tenant-content">
+                        {children}
+                    </main>
                 </div>
             </div>
         </ToastProvider>

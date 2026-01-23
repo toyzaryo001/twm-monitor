@@ -165,6 +165,17 @@ router.post("/:id/balance", async (req: Request<{ prefix: string; id: string }>,
                 checkedAt = lastSnapshot?.checkedAt || new Date();
             }
 
+            // Broadcast update via SSE
+            import("../../sse").then(({ broadcastBalanceUpdate }) => {
+                const change = balanceSatang - (lastSnapshot?.balanceSatang || 0);
+                broadcastBalanceUpdate(account.id, {
+                    balance: balanceSatang / 100,
+                    balanceSatang: balanceSatang,
+                    change: change,
+                    checkedAt: checkedAt,
+                });
+            });
+
             return res.json({
                 ok: true,
                 data: {
