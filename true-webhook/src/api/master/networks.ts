@@ -111,6 +111,7 @@ router.put("/:id", async (req, res, next) => {
     try {
         const schema = z.object({
             name: z.string().min(1).optional(),
+            logoUrl: z.string().optional(),
             isActive: z.boolean().optional(),
             // Real-time settings
             realtimeEnabled: z.boolean().optional(),
@@ -126,9 +127,10 @@ router.put("/:id", async (req, res, next) => {
 
         const data = schema.parse(req.body);
 
-        // Clean empty strings to null for telegram fields
+        // Clean empty strings to null for optional fields
         const cleanData = {
             ...data,
+            logoUrl: data.logoUrl === "" ? null : data.logoUrl,
             telegramBotToken: data.telegramBotToken === "" ? null : data.telegramBotToken,
             telegramChatId: data.telegramChatId === "" ? null : data.telegramChatId,
         };
