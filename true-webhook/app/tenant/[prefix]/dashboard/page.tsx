@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { useToast } from "../../../components/Toast";
 
 interface Account {
     id: string;
@@ -24,6 +25,7 @@ interface Stats {
 export default function TenantDashboard() {
     const params = useParams();
     const prefix = params.prefix as string;
+    const { showToast } = useToast();
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [balances, setBalances] = useState<Record<string, BalanceData | null>>({});
     const [checkingId, setCheckingId] = useState<string | null>(null);
@@ -61,14 +63,18 @@ export default function TenantDashboard() {
             if (data.ok) {
                 setBalances(prev => ({ ...prev, [accountId]: data.data }));
             } else {
-                alert(data.error === "WALLET_API_UNREACHABLE"
-                    ? "ไม่สามารถเชื่อมต่อ Wallet API ได้"
-                    : data.error === "WALLET_API_ERROR"
-                        ? "Wallet API ตอบกลับผิดพลาด"
-                        : "เกิดข้อผิดพลาด: " + data.error);
+                showToast({
+                    type: "error",
+                    title: "เกิดข้อผิดพลาด",
+                    message: data.error === "WALLET_API_UNREACHABLE"
+                        ? "ไม่สามารถเชื่อมต่อ Wallet API ได้"
+                        : data.error === "WALLET_API_ERROR"
+                            ? "Wallet API ตอบกลับผิดพลาด"
+                            : "เกิดข้อผิดพลาด: " + data.error
+                });
             }
         } catch (e) {
-            alert("เกิดข้อผิดพลาดในการเช็คยอด");
+            showToast({ type: "error", title: "ล้มเหลว", message: "เกิดข้อผิดพลาดในการเช็คยอด" });
         }
         setCheckingId(null);
     };
@@ -109,6 +115,40 @@ export default function TenantDashboard() {
         fetchData();
     }, [prefix, fetchCachedBalance]);
 
+    // Real-time balance updates via SSE
+    useEffect(() => {
+        if (accounts.length === 0) return;
+
+        const connections: EventSource[] = [];
+
+        accounts.forEach(account => {
+            const es = new EventSource(`/api/sse/balance/${account.id}`);
+
+            es.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === "initial" || data.type === "update") {
+                        setBalances(prev => ({
+                            ...prev,
+                            [account.id]: {
+                                balance: data.balance,
+                                checkedAt: data.checkedAt
+                            }
+                        }));
+                    }
+                } catch (e) {
+                    console.error("SSE Parse Error", e);
+                }
+            };
+
+            connections.push(es);
+        });
+
+        return () => {
+            connections.forEach(es => es.close());
+        };
+    }, [accounts]);
+
     if (loading) {
         return (
             <div style={{ display: "flex", justifyContent: "center", padding: 60 }}>
@@ -119,6 +159,16 @@ export default function TenantDashboard() {
 
     // Calculate total balance
     const totalBalance = Object.values(balances).reduce((sum, b) => sum + (b?.balance || 0), 0);
+
+    // Get top 3 wallets by balance
+    const top3Wallets = accounts
+        .map(account => ({
+            ...account,
+            balance: balances[account.id]?.balance || 0,
+            checkedAt: balances[account.id]?.checkedAt || null,
+        }))
+        .sort((a, b) => b.balance - a.balance)
+        .slice(0, 3);
 
     return (
         <div>
@@ -148,11 +198,11 @@ export default function TenantDashboard() {
                 </div>
             </div>
 
-            {/* Wallet Cards */}
+            {/* Top 3 Wallet Cards */}
             <div className="tenant-card">
                 <div className="tenant-card-header">
-                    <div className="tenant-card-title">วอลเล็ทของคุณ</div>
-                    <Link href="/wallets" style={{ color: "var(--accent)", fontSize: 13, textDecoration: "none" }}>
+                    <div className="tenant-card-title">🏆 Top 3 ยอดเงินสูงสุด</div>
+                    <Link href={`/tenant/${prefix}/wallets`} style={{ color: "var(--accent)", fontSize: 13, textDecoration: "none" }}>
                         ดูทั้งหมด →
                     </Link>
                 </div>
@@ -164,8 +214,31 @@ export default function TenantDashboard() {
                     </div>
                 ) : (
                     <div className="wallet-grid">
-                        {accounts.slice(0, 4).map((account) => (
-                            <div key={account.id} className="wallet-card">
+                        {top3Wallets.map((account, index) => (
+                            <div key={account.id} className="wallet-card" style={{
+                                border: index === 0 ? "2px solid var(--success)" : undefined,
+                                position: "relative"
+                            }}>
+                                {/* Rank badge */}
+                                <div style={{
+                                    position: "absolute",
+                                    top: -10,
+                                    left: -10,
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: "50%",
+                                    background: index === 0 ? "#ffd700" : index === 1 ? "#c0c0c0" : "#cd7f32",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontWeight: 700,
+                                    color: index === 0 ? "#000" : "#fff",
+                                    fontSize: 14,
+                                    boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+                                }}>
+                                    #{index + 1}
+                                </div>
+
                                 <div className="wallet-card-header">
                                     <div className="wallet-icon">🔶</div>
                                     <div className="wallet-info">
@@ -179,14 +252,15 @@ export default function TenantDashboard() {
 
                                 <div className="wallet-balance">
                                     <div className="wallet-balance-label">ยอดเงินคงเหลือ</div>
-                                    <div className="wallet-balance-value">
-                                        {balances[account.id]
-                                            ? `฿ ${balances[account.id]!.balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
-                                            : "฿ ---.--"}
+                                    <div className="wallet-balance-value" style={{
+                                        color: index === 0 ? "var(--success)" : undefined,
+                                        fontSize: index === 0 ? "2rem" : undefined
+                                    }}>
+                                        ฿ {account.balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                                     </div>
-                                    {balances[account.id] && (
+                                    {account.checkedAt && (
                                         <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
-                                            อัพเดท: {new Date(balances[account.id]!.checkedAt).toLocaleString("th-TH")}
+                                            อัพเดท: {new Date(account.checkedAt).toLocaleString("th-TH")}
                                         </div>
                                     )}
                                 </div>
@@ -200,7 +274,7 @@ export default function TenantDashboard() {
                                     >
                                         {checkingId === account.id ? "⏳ กำลังเช็ค..." : "🔄 เช็คยอด"}
                                     </button>
-                                    <Link href={`/history?wallet=${account.id}`} className="tenant-btn tenant-btn-secondary">
+                                    <Link href={`/tenant/${prefix}/history?wallet=${account.id}`} className="tenant-btn tenant-btn-secondary">
                                         📜 ประวัติ
                                     </Link>
                                 </div>
@@ -215,13 +289,13 @@ export default function TenantDashboard() {
                 <div className="tenant-card">
                     <div className="tenant-card-title">การดำเนินการ</div>
                     <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 16 }}>
-                        <Link href="/wallets" className="tenant-btn tenant-btn-secondary">
+                        <Link href={`/tenant/${prefix}/wallets`} className="tenant-btn tenant-btn-secondary">
                             💳 จัดการวอลเล็ท
                         </Link>
-                        <Link href="/history" className="tenant-btn tenant-btn-secondary">
+                        <Link href={`/tenant/${prefix}/history`} className="tenant-btn tenant-btn-secondary">
                             📜 ดูประวัติยอด
                         </Link>
-                        <Link href="/settings" className="tenant-btn tenant-btn-secondary">
+                        <Link href={`/tenant/${prefix}/settings`} className="tenant-btn tenant-btn-secondary">
                             ⚙️ ตั้งค่า
                         </Link>
                     </div>
