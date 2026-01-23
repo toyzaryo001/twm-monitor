@@ -34,7 +34,20 @@ router.get("/stats", async (req: Request<{ prefix: string }>, res: Response, nex
         return res.json({
             ok: true,
             data: {
-                network: { id: network.id, name: network.name, prefix: network.prefix },
+                network: {
+                    id: network.id,
+                    name: network.name,
+                    prefix: network.prefix,
+                    isActive: network.isActive,
+                    realtimeEnabled: network.realtimeEnabled,
+                    checkIntervalMs: network.checkIntervalMs,
+                    telegramEnabled: network.telegramEnabled,
+                    telegramBotToken: network.telegramBotToken ? "••••••••" + network.telegramBotToken.slice(-8) : null,
+                    telegramChatId: network.telegramChatId,
+                    notifyMoneyIn: network.notifyMoneyIn,
+                    notifyMoneyOut: network.notifyMoneyOut,
+                    notifyMinAmount: network.notifyMinAmount,
+                },
                 stats: { total: accountCount, active: activeAccounts },
             },
         });
