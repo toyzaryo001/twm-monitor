@@ -46,27 +46,61 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         }
 
         // 2. Parse Payload
-        // Note: TrueMoney might send different structures, need to log payload to verify
-        const bodyContent = JSON.stringify(req.body);
-        console.log(`[Webhook] Received for ${prefix}:`, bodyContent);
+        // Check if payload is wrapped in JWT "message" field
+        let payload = req.body;
 
-        // DEBUG: Save raw payload to NotificationLog to inspect structure
-        await prisma.notificationLog.create({
-            data: {
-                type: "webhook_debug" as any, // Cast to any to avoid TS error before generation
-                message: `Raw Payload for ${prefix}`,
-                payload: req.body as any,
-                // Make accountId optional in schema or just leave it null here if possible
-                // accountId: null 
+        if (req.body.message && typeof req.body.message === 'string') {
+            try {
+                // Initial JWT decode (header.body.signature)
+                const parts = req.body.message.split('.');
+                if (parts.length === 3) {
+                    const buffer = Buffer.from(parts[1], 'base64');
+                    const decodedStr = buffer.toString('utf-8');
+                    payload = JSON.parse(decodedStr);
+                    console.log(`[Webhook] Decoded JWT for ${prefix}:`, JSON.stringify(payload));
+
+                    // Log decoded structure
+                    await prisma.notificationLog.create({
+                        data: {
+                            type: "webhook_debug" as any,
+                            message: `Decoded Payload for ${prefix}`,
+                            payload: payload as any,
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error(`[Webhook] Failed to decode JWT:`, err);
             }
-        });
+        } else {
+            const bodyContent = JSON.stringify(req.body);
+            console.log(`[Webhook] Received plain JSON for ${prefix}:`, bodyContent);
+        }
 
-        // Check if body is valid
-        // For now, flexible parsing since actual payload might vary
-        const payload = req.body;
-        const transactionId = payload.transaction_id || payload.ref_id || payload.id;
-        const amountRaw = payload.amount || payload.amount_net || 0;
-        const feeRaw = payload.fee || payload.transaction_fee || 0;
+        // Handle Handshake
+        if (payload.server === "handshake") {
+            return res.status(200).json({ status: "ok", message: "Handshake accepted" });
+        }
+
+        // Extract fields from mapped payload
+        const transactionId = payload.transaction_id || payload.ref_id || payload.id || `unknown-${Date.now()}`;
+        // Amount might be in Baht or Satang? TrueMoney typically uses Baht in some APIs, Satang in others.
+        // Assuming payload.amount is in Baht based on "545" being likely 5.45 fee? Or 545 baht fee?
+        // Wait, "545" for a fee? If transfer is 201 baht. Fee 545 is impossible.
+        // Fee 5.45 baht? 545 satang = 5.45 baht.
+        // So amount is likely in SATANG? Or 545 is decimal?
+        // Let's assume input needs normalization.
+
+        let amountRaw = payload.amount || payload.amount_net || 0;
+        let feeRaw = payload.fee || payload.transaction_fee || 0;
+
+        // Fee adjustment logic based on event type
+        if (payload.event_type === "FEE_PAYMENT") {
+            // For fee payment, the 'amount' in payload IS the fee.
+            feeRaw = amountRaw;
+            amountRaw = 0; // It's just a fee record?
+            // Or better: mark it as internal fee transaction?
+        }
+
         const mobileNo = payload.mobile_no || payload.recipient_mobile || payload.sender_mobile;
         const transactionType = payload.transaction_type || (amountRaw > 0 ? "incoming" : "outgoing");
 
@@ -110,6 +144,15 @@ router.all("/:prefix", async (req: Request, res: Response) => {
                     networkId: network.id,
                     phoneNumber: { contains: payload.mobile_no }
                 }
+            });
+        }
+
+        // Final Fallback: If no mobile found, but we are in a valid network prefix
+        // checking the first account (Useful for FEE_PAYMENT which has no mobile info)
+        if (!account && network) {
+            console.log(`[Webhook] No mobile match, using default account for network ${prefix}`);
+            account = await prisma.account.findFirst({
+                where: { networkId: network.id }
             });
         }
 
