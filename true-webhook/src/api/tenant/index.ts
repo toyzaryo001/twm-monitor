@@ -38,6 +38,7 @@ router.get("/stats", async (req: Request<{ prefix: string }>, res: Response, nex
                     id: network.id,
                     name: network.name,
                     prefix: network.prefix,
+                    logoUrl: network.logoUrl,
                     isActive: network.isActive,
                     realtimeEnabled: network.realtimeEnabled,
                     checkIntervalMs: network.checkIntervalMs,

@@ -87,7 +87,7 @@ router.get("/status", async (req: Request<{ prefix: string }>, res: Response, ne
     try {
         const network = await prisma.network.findUnique({
             where: { prefix: req.params.prefix },
-            select: { name: true, isActive: true },
+            select: { name: true, isActive: true, logoUrl: true },
         });
 
         if (!network) {
@@ -96,7 +96,7 @@ router.get("/status", async (req: Request<{ prefix: string }>, res: Response, ne
 
         return res.json({
             ok: true,
-            data: { name: network.name, isActive: network.isActive },
+            data: { name: network.name, isActive: network.isActive, logoUrl: network.logoUrl },
         });
     } catch (err) {
         next(err);

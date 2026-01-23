@@ -8,6 +8,7 @@ interface Network {
     id: string;
     prefix: string;
     name: string;
+    logoUrl: string | null;
     isActive: boolean;
     realtimeEnabled: boolean;
     checkIntervalMs: number;
@@ -30,6 +31,7 @@ export default function NetworkSettingsPage() {
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState({
         name: "",
+        logoUrl: "",
         isActive: true,
         realtimeEnabled: true,
         checkIntervalMs: 2000,
@@ -56,6 +58,7 @@ export default function NetworkSettingsPage() {
                 setNetwork(data.data);
                 setForm({
                     name: data.data.name,
+                    logoUrl: data.data.logoUrl || "",
                     isActive: data.data.isActive,
                     realtimeEnabled: data.data.realtimeEnabled ?? true,
                     checkIntervalMs: data.data.checkIntervalMs ?? 2000,
@@ -173,6 +176,30 @@ export default function NetworkSettingsPage() {
                             onChange={(e) => setForm({ ...form, name: e.target.value })}
                             required
                         />
+                    </div>
+
+                    <div className="form-group">
+                        <label className="form-label">ลิ้งค์ Logo (รูปภาพ URL)</label>
+                        <input
+                            type="url"
+                            className="form-input"
+                            value={form.logoUrl}
+                            onChange={(e) => setForm({ ...form, logoUrl: e.target.value })}
+                            placeholder="https://example.com/logo.png"
+                        />
+                        <p style={{ color: "#9ca3af", fontSize: 13, marginTop: 6 }}>
+                            ใส่ลิ้งค์รูปภาพ แนะนำ PNG, JPG ขนาด 100x100 ขึ้นไป
+                        </p>
+                        {form.logoUrl && (
+                            <div style={{ marginTop: 12, padding: 12, background: "rgba(99, 102, 241, 0.1)", borderRadius: 12, display: "inline-block" }}>
+                                <img
+                                    src={form.logoUrl}
+                                    alt="Logo Preview"
+                                    style={{ maxWidth: 80, maxHeight: 80, borderRadius: 12 }}
+                                    onError={(e) => (e.currentTarget.style.display = 'none')}
+                                />
+                            </div>
+                        )}
                     </div>
 
                     <div className="form-group">

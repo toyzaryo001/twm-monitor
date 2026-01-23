@@ -21,6 +21,7 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
 
     const [user, setUser] = useState<User | null>(null);
     const [networkName, setNetworkName] = useState("");
+    const [logoUrl, setLogoUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
 
     // Use short URLs - middleware will rewrite them
@@ -80,6 +81,7 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
             .then((data) => {
                 if (data.ok && data.data.name) {
                     setNetworkName(data.data.name);
+                    setLogoUrl(data.data.logoUrl || null);
                 }
                 setLoading(false);
             })
@@ -125,7 +127,18 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
                     <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
                         {/* Brand */}
                         <div className="tenant-navbar-brand">
-                            <div className="brand-icon">💰</div>
+                            {logoUrl ? (
+                                <img
+                                    src={logoUrl}
+                                    alt="Logo"
+                                    style={{ width: 44, height: 44, borderRadius: 14, objectFit: "cover" }}
+                                    onError={(e) => {
+                                        e.currentTarget.style.display = 'none';
+                                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                    }}
+                                />
+                            ) : null}
+                            <div className={`brand-icon ${logoUrl ? 'hidden' : ''}`} style={logoUrl ? { display: 'none' } : {}}>💰</div>
                             <span>{networkName || prefix}</span>
                         </div>
 

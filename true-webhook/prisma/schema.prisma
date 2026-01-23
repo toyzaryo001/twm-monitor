@@ -29,6 +29,7 @@ model Network {
   id          String    @id @default(cuid())
   prefix      String    @unique
   name        String
+  logoUrl     String?   // Custom logo URL
   isActive    Boolean   @default(true)
   
   // Real-time settings
