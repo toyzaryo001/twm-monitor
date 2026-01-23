@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useToast } from "../../components/Toast";
 
 export default function SettingsPage() {
+    const { showToast } = useToast();
     const [jwtSecret, setJwtSecret] = useState("");
     const [savedSecret, setSavedSecret] = useState("");
     const [currentEnvSecret, setCurrentEnvSecret] = useState("");
@@ -56,18 +58,19 @@ export default function SettingsPage() {
             const data = await res.json();
             if (data.ok) {
                 setSavedSecret(secret);
-                alert("สร้างและบันทึกเรียบร้อย");
+                showToast({ type: "success", title: "สำเร็จ", message: "สร้างและบันทึก JWT Secret ใหม่เรียบร้อย" });
             } else {
-                alert("เกิดข้อผิดพลาด");
+                showToast({ type: "error", title: "เกิดข้อผิดพลาด", message: "ไม่สามารถบันทึกข้อมูลได้" });
             }
         } catch (e) {
-            alert("เกิดข้อผิดพลาด");
+            showToast({ type: "error", title: "ข้อผิดพลาด", message: "เกิดข้อผิดพลาดในการเชื่อมต่อ" });
         }
     };
 
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
         setCopied(true);
+        showToast({ type: "info", title: "คัดลอกแล้ว", message: "คัดลอกข้อวามลงคลิปบอร์ดแล้ว" });
         setTimeout(() => setCopied(false), 2000);
     };
 

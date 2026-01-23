@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import { ToastProvider } from "../components/Toast";
 
 interface User {
     id: string;
@@ -47,7 +48,7 @@ export default function MasterLayout({ children }: { children: React.ReactNode }
 
     // Don't show layout on login page
     if (pathname === "/master/login") {
-        return <>{children}</>;
+        return <ToastProvider>{children}</ToastProvider>;
     }
 
     if (loading) {
@@ -59,35 +60,37 @@ export default function MasterLayout({ children }: { children: React.ReactNode }
     }
 
     return (
-        <div className="layout">
-            <aside className="sidebar">
-                <div className="sidebar-logo">🔐 Master Panel</div>
+        <ToastProvider>
+            <div className="layout">
+                <aside className="sidebar">
+                    <div className="sidebar-logo">🔐 Master Panel</div>
 
-                <nav style={{ flex: 1 }}>
-                    {navItems.map((item) => (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            className={`nav-item ${pathname === item.href ? "active" : ""}`}
-                        >
-                            <span>{item.icon}</span>
-                            <span>{item.label}</span>
-                        </Link>
-                    ))}
-                </nav>
+                    <nav style={{ flex: 1 }}>
+                        {navItems.map((item) => (
+                            <Link
+                                key={item.href}
+                                href={item.href}
+                                className={`nav-item ${pathname === item.href ? "active" : ""}`}
+                            >
+                                <span>{item.icon}</span>
+                                <span>{item.label}</span>
+                            </Link>
+                        ))}
+                    </nav>
 
-                <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>
-                    <div style={{ padding: "0 16px", marginBottom: 16 }}>
-                        <div style={{ fontSize: 14, fontWeight: 500 }}>{user?.displayName || user?.email}</div>
-                        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{user?.role}</div>
+                    <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+                        <div style={{ padding: "0 16px", marginBottom: 16 }}>
+                            <div style={{ fontSize: 14, fontWeight: 500 }}>{user?.displayName || user?.email}</div>
+                            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{user?.role}</div>
+                        </div>
+                        <button onClick={handleLogout} className="btn btn-secondary" style={{ width: "100%" }}>
+                            ออกจากระบบ
+                        </button>
                     </div>
-                    <button onClick={handleLogout} className="btn btn-secondary" style={{ width: "100%" }}>
-                        ออกจากระบบ
-                    </button>
-                </div>
-            </aside>
+                </aside>
 
-            <main className="main-content">{children}</main>
-        </div>
+                <main className="main-content">{children}</main>
+            </div>
+        </ToastProvider>
     );
 }

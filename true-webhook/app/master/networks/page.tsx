@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useToast } from "../../components/Toast";
 
 interface Network {
     id: string;
@@ -13,6 +14,7 @@ interface Network {
 }
 
 export default function NetworksPage() {
+    const { showToast } = useToast();
     const [networks, setNetworks] = useState<Network[]>([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
@@ -86,11 +88,11 @@ export default function NetworksPage() {
             const data = await res.json();
 
             if (!data.ok) {
-                alert(data.error || "เกิดข้อผิดพลาด");
+                showToast({ type: "error", title: "เกิดข้อผิดพลาด", message: data.error || "ไม่สามารถบันทึกข้อมูลได้" });
                 return;
             }
         } catch (e) {
-            alert("เกิดข้อผิดพลาด");
+            showToast({ type: "error", title: "เกิดข้อผิดพลาด", message: "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้" });
             return;
         }
 

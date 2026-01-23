@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useToast } from "../../../components/Toast";
 
 interface Network {
     id: string;
@@ -25,6 +26,7 @@ export default function NetworkSettingsPage() {
     const params = useParams();
     const router = useRouter();
     const networkId = params.id as string;
+    const { showToast } = useToast();
 
     const [network, setNetwork] = useState<Network | null>(null);
     const [loading, setLoading] = useState(true);
@@ -93,13 +95,13 @@ export default function NetworkSettingsPage() {
             });
             const data = await res.json();
             if (data.ok) {
-                alert("บันทึกสำเร็จ!");
+                showToast({ type: "success", title: "บันทึกสำเร็จ!", message: "การตั้งค่าได้รับการบันทึกแล้ว" });
                 fetchNetwork();
             } else {
-                alert(data.error || "เกิดข้อผิดพลาด");
+                showToast({ type: "error", title: "เกิดข้อผิดพลาด", message: data.error || "ไม่สามารถบันทึกการตั้งค่าได้" });
             }
         } catch (e) {
-            alert("เกิดข้อผิดพลาด");
+            showToast({ type: "error", title: "เกิดข้อผิดพลาด", message: "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้" });
         }
         setSaving(false);
     };
@@ -113,12 +115,12 @@ export default function NetworkSettingsPage() {
             });
             const data = await res.json();
             if (data.ok) {
-                alert("ส่งข้อความทดสอบสำเร็จ!");
+                showToast({ type: "success", title: "ส่งข้อความทดสอบสำเร็จ!", message: "ตรวจสอบ Telegram ของคุณ" });
             } else {
-                alert(data.error || "ส่งไม่สำเร็จ");
+                showToast({ type: "error", title: "ส่งไม่สำเร็จ", message: data.error || "ไม่สามารถส่งข้อความได้" });
             }
         } catch (e) {
-            alert("เกิดข้อผิดพลาด");
+            showToast({ type: "error", title: "เกิดข้อผิดพลาด", message: "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้" });
         }
     };
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useToast } from "../../components/Toast";
 
 interface User {
     id: string;
@@ -17,6 +18,7 @@ interface Network {
 }
 
 export default function UsersPage() {
+    const { showToast } = useToast();
     const [users, setUsers] = useState<User[]>([]);
     const [networks, setNetworks] = useState<Network[]>([]);
     const [loading, setLoading] = useState(true);
@@ -54,7 +56,7 @@ export default function UsersPage() {
 
         // Validation for Network Admin
         if (form.role === "NETWORK_ADMIN" && !form.networkId) {
-            alert("กรุณาเลือกเครือข่ายสำหรับ Super Admin");
+            showToast({ type: "error", title: "ข้อมูลไม่ครบถ้วน", message: "กรุณาเลือกเครือข่ายสำหรับ Super Admin" });
             return;
         }
 
@@ -83,16 +85,18 @@ export default function UsersPage() {
             const data = await res.json();
 
             if (!data.ok) {
-                alert(data.error || "เกิดข้อผิดพลาด");
+                showToast({ type: "error", title: "เกิดข้อผิดพลาด", message: data.error || "ดำเนินการไม่สำเร็จ" });
                 return;
             }
+
+            showToast({ type: "success", title: "สำเร็จ", message: editingId ? "แก้ไขข้อมูลผู้ใช้เรียบร้อยแล้ว" : "เพิ่มผู้ใช้เรียบร้อยแล้ว" });
 
             setShowModal(false);
             setEditingId(null);
             setForm({ email: "", password: "", role: "NETWORK_ADMIN", networkId: "" });
             fetchData();
         } catch (e) {
-            alert("เกิดข้อผิดพลาดในการเชื่อมต่อ");
+            showToast({ type: "error", title: "ข้อผิดพลาด", message: "เกิดข้อผิดพลาดในการเชื่อมต่อ" });
         }
     };
 
@@ -110,8 +114,13 @@ export default function UsersPage() {
     const handleDelete = async (id: string) => {
         if (!confirm("ยืนยันการลบผู้ใช้?")) return;
         const token = getToken();
-        await fetch(`/api/master/users/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-        fetchData();
+        try {
+            await fetch(`/api/master/users/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+            showToast({ type: "success", title: "ลบสำเร็จ", message: "ลบผู้ใช้เรียบร้อยแล้ว" });
+            fetchData();
+        } catch (e) {
+            showToast({ type: "error", title: "ข้อผิดพลาด", message: "ไม่สามารถลบผู้ใช้ได้" });
+        }
     };
 
     const getRoleLabel = (role: string) => {
