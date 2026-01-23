@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname, useParams } from "next/navigation";
 import Link from "next/link";
+import { ToastProvider } from "../../components/Toast";
 import "../tenant-theme.css";
 
 interface User {
@@ -120,79 +121,81 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
     };
 
     return (
-        <div className="tenant-theme">
-            <div className="tenant-layout">
-                {/* Top Navbar */}
-                <nav className="tenant-navbar">
-                    <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
-                        {/* Brand */}
-                        <div className="tenant-navbar-brand">
-                            {logoUrl ? (
-                                <img
-                                    src={logoUrl}
-                                    alt="Logo"
-                                    style={{
-                                        height: 48,
-                                        maxWidth: 160,
-                                        objectFit: "contain"
-                                    }}
-                                    onError={(e) => {
-                                        e.currentTarget.style.display = 'none';
-                                        const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                                        if (fallback) fallback.style.display = 'flex';
-                                    }}
-                                />
-                            ) : null}
-                            {!logoUrl && (
-                                <>
-                                    <div className="brand-icon">💰</div>
-                                    <span>{networkName || prefix}</span>
-                                </>
-                            )}
-                        </div>
+        <ToastProvider>
+            <div className="tenant-theme">
+                <div className="tenant-layout">
+                    {/* Top Navbar */}
+                    <nav className="tenant-navbar">
+                        <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
+                            {/* Brand */}
+                            <div className="tenant-navbar-brand">
+                                {logoUrl ? (
+                                    <img
+                                        src={logoUrl}
+                                        alt="Logo"
+                                        style={{
+                                            height: 48,
+                                            maxWidth: 160,
+                                            objectFit: "contain"
+                                        }}
+                                        onError={(e) => {
+                                            e.currentTarget.style.display = 'none';
+                                            const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                                            if (fallback) fallback.style.display = 'flex';
+                                        }}
+                                    />
+                                ) : null}
+                                {!logoUrl && (
+                                    <>
+                                        <div className="brand-icon">💰</div>
+                                        <span>{networkName || prefix}</span>
+                                    </>
+                                )}
+                            </div>
 
-                        {/* Navigation */}
-                        <div className="tenant-nav">
-                            {navItems.map((item) => (
-                                <Link
-                                    key={item.href}
-                                    href={item.href}
-                                    className={`tenant-nav-item ${isActive(item.href) ? "active" : ""}`}
-                                >
-                                    <span>{item.icon}</span>
-                                    <span>{item.label}</span>
-                                </Link>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Right side */}
-                    <div className="tenant-navbar-right">
-                        {user?.role === "MASTER" && (
-                            <Link href="/master/dashboard" className="tenant-btn tenant-btn-secondary" style={{ fontSize: 13 }}>
-                                ← Master Panel
-                            </Link>
-                        )}
-
-                        <div className="tenant-user-info">
-                            <div className="tenant-user-avatar">{getUserInitials()}</div>
-                            <div>
-                                <div className="tenant-user-name">{user?.displayName || user?.email}</div>
-                                <div className="tenant-user-role">
-                                    {user?.role === "MASTER" ? "Master" : "Super Admin"}
-                                </div>
+                            {/* Navigation */}
+                            <div className="tenant-nav">
+                                {navItems.map((item) => (
+                                    <Link
+                                        key={item.href}
+                                        href={item.href}
+                                        className={`tenant-nav-item ${isActive(item.href) ? "active" : ""}`}
+                                    >
+                                        <span>{item.icon}</span>
+                                        <span>{item.label}</span>
+                                    </Link>
+                                ))}
                             </div>
                         </div>
 
-                        <button onClick={handleLogout} className="tenant-btn tenant-btn-secondary tenant-btn-icon" title="ออกจากระบบ">
-                            🚪
-                        </button>
-                    </div>
-                </nav>
+                        {/* Right side */}
+                        <div className="tenant-navbar-right">
+                            {user?.role === "MASTER" && (
+                                <Link href="/master/dashboard" className="tenant-btn tenant-btn-secondary" style={{ fontSize: 13 }}>
+                                    ← Master Panel
+                                </Link>
+                            )}
 
-                {/* Main Content */}
-                <main className="tenant-main">{children}</main>
+                            <div className="tenant-user-info">
+                                <div className="tenant-user-avatar">{getUserInitials()}</div>
+                                <div>
+                                    <div className="tenant-user-name">{user?.displayName || user?.email}</div>
+                                    <div className="tenant-user-role">
+                                        {user?.role === "MASTER" ? "Master" : "Super Admin"}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button onClick={handleLogout} className="tenant-btn tenant-btn-secondary tenant-btn-icon" title="ออกจากระบบ">
+                                🚪
+                            </button>
+                        </div>
+                    </nav>
+
+                    {/* Main Content */}
+                    <main className="tenant-main">{children}</main>
+                </div>
             </div>
-        </div>
+        </ToastProvider>
     );
 }
