@@ -47,8 +47,21 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
 
         const token = localStorage.getItem("tenantToken");
         const storedUser = localStorage.getItem("tenantUser");
+        const savedPrefix = localStorage.getItem("tenantPrefix");
 
         if (!token) {
+            router.push("/login");
+            return;
+        }
+
+        // Check if user is accessing the correct prefix
+        if (savedPrefix && savedPrefix !== prefix) {
+            // User is trying to access a different network
+            // Clear local storage and redirect to login
+            localStorage.removeItem("tenantToken");
+            localStorage.removeItem("tenantUser");
+            localStorage.removeItem("tenantPrefix");
+            alert(`คุณไม่มีสิทธิ์เข้าถึงเครือข่ายนี้ กรุณาเข้าสู่ระบบใหม่`);
             router.push("/login");
             return;
         }
