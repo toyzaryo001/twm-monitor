@@ -296,7 +296,13 @@
 
 .wallet-actions {
     display: flex;
-    gap: 12px;
+    gap: 8px;
+}
+
+.tenant-btn-sm {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+    height: 32px;
 }
 
 /* Dashboard Stats */

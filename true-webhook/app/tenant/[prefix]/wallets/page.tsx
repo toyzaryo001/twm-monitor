@@ -286,47 +286,62 @@ export default function WalletsPage() {
                             </div>
 
                             {/* Wallet Stats Footer */}
-                            <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px dashed var(--border)" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                                    <span style={{ fontSize: 14 }}>📖</span>
-                                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                                        ค่าธรรมเนียมรวม:
-                                    </span>
-                                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--error)" }}>
+                            <div style={{
+                                marginTop: 16,
+                                marginBottom: 16,
+                                padding: "12px",
+                                background: "rgba(0,0,0,0.2)",
+                                borderRadius: "8px",
+                                border: "1px dashed var(--tenant-border)"
+                            }}>
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                        <span style={{ fontSize: 13 }}>📖</span>
+                                        <span style={{ fontSize: 11, color: "var(--tenant-text-muted)" }}>ค่าธรรมเนียม:</span>
+                                    </div>
+                                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--tenant-error)" }}>
                                         ฿ {(account.stats?.totalFee || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                                     </span>
                                 </div>
-                                <div style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
-                                    <span>⏰</span>
-                                    <span>เริ่มนับยอดเมื่อ: {account.stats?.firstActiveAt ? new Date(account.stats.firstActiveAt).toLocaleString("th-TH", { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : "-"}</span>
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                        <span style={{ fontSize: 13 }}>⏱️</span>
+                                        <span style={{ fontSize: 11, color: "var(--tenant-text-muted)" }}>เริ่มนับ:</span>
+                                    </div>
+                                    <span style={{ fontSize: 11, color: "var(--tenant-text-muted)" }}>
+                                        {account.stats?.firstActiveAt ? new Date(account.stats.firstActiveAt).toLocaleDateString("th-TH", { day: 'numeric', month: 'short', year: '2-digit' }) : "-"}
+                                    </span>
                                 </div>
                             </div>
 
                             <div className="wallet-actions">
                                 <button
-                                    className="tenant-btn tenant-btn-success"
+                                    className="tenant-btn tenant-btn-success tenant-btn-sm"
                                     style={{ flex: 1 }}
                                     onClick={() => handleCheckBalance(account.id)}
                                     disabled={checkingId === account.id}
                                 >
-                                    {checkingId === account.id ? "⏳ กำลังเช็ค..." : "🔄 เช็คยอด"}
+                                    {checkingId === account.id ? "⏳" : "🔄 เช็คยอด"}
                                 </button>
                                 <button
-                                    className="tenant-btn tenant-btn-secondary"
+                                    className="tenant-btn tenant-btn-secondary tenant-btn-sm"
                                     onClick={() => handleToggle(account)}
+                                    title={account.isActive ? "ปิดใช้งาน" : "เปิดใช้งาน"}
                                 >
                                     {account.isActive ? "⏸️" : "▶️"}
                                 </button>
                                 <button
-                                    className="tenant-btn tenant-btn-secondary"
+                                    className="tenant-btn tenant-btn-secondary tenant-btn-sm"
                                     onClick={() => handleEdit(account)}
+                                    title="แก้ไข"
                                 >
                                     ✏️
                                 </button>
                                 <button
-                                    className="tenant-btn tenant-btn-secondary"
+                                    className="tenant-btn tenant-btn-secondary tenant-btn-sm"
                                     style={{ background: "rgba(239, 68, 68, 0.2)", color: "var(--error)" }}
                                     onClick={() => handleDelete(account.id)}
+                                    title="ลบ"
                                 >
                                     🗑️
                                 </button>
