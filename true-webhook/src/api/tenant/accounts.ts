@@ -66,7 +66,7 @@ router.get("/", async (req: Request<{ prefix: string }>, res: Response, next: Ne
             const txDate = oldestTxs.find((t: any) => t.accountId === account.id)?._min?.timestamp;
             const snapDate = oldestSnaps.find((s: any) => s.accountId === account.id)?._min?.checkedAt;
 
-            let firstActiveAt = account.createdAt; // Default to creation time
+            let firstActiveAt: Date | null = null;
             if (txDate && snapDate) {
                 firstActiveAt = txDate < snapDate ? txDate : snapDate;
             } else if (txDate) {
