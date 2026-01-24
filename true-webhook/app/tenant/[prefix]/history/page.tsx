@@ -41,7 +41,7 @@ export default function HistoryPage() {
     const [isConnected, setIsConnected] = useState(false);
 
     // Filters
-    const [activeTab, setActiveTab] = useState<Tab>("all");
+    const [activeTab, setActiveTab] = useState<Tab>("deposit");
     const [dateFilter, setDateFilter] = useState<DateRange>("today");
     const [limit, setLimit] = useState<number>(20); // Default limit
 
@@ -250,7 +250,6 @@ export default function HistoryPage() {
             <div className="tenant-card">
                 {/* Tabs */}
                 <div style={{ display: "flex", gap: 8, marginBottom: 16, borderBottom: "1px solid var(--border)", paddingBottom: 16 }}>
-                    <button className={`tab-btn ${activeTab === "all" ? "active" : ""}`} onClick={() => setActiveTab("all")}>ทั้งหมด</button>
                     <button className={`tab-btn ${activeTab === "deposit" ? "active" : ""}`} onClick={() => setActiveTab("deposit")}>ฝากเงิน</button>
                     <button className={`tab-btn ${activeTab === "withdraw" ? "active" : ""}`} onClick={() => setActiveTab("withdraw")}>ถอนเงิน</button>
                     <button className={`tab-btn ${activeTab === "fee" ? "active" : ""}`} onClick={() => setActiveTab("fee")}>ค่าธรรมเนียม</button>
