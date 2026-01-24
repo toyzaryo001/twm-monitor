@@ -108,7 +108,7 @@ router.all("/:prefix", async (req: Request, res: Response) => {
 
         let transactionType = payload.transaction_type;
         if (!transactionType) {
-            if (payload.event_type === "FEE_PAYMENT") {
+            if (payload.event_type === "FEE_PAYMENT" || payload.event_type === "SEND_P2P") {
                 transactionType = "outgoing";
             } else {
                 transactionType = amountRaw > 0 ? "incoming" : "outgoing";
