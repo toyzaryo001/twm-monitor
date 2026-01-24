@@ -63,31 +63,6 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
             }
         }
 
-        // Type Filtering
-        const typeFilterTx: any = {};
-        let includeSnapshots = false;
-
-        if (filterType === "deposit") {
-            typeFilterTx.type = "incoming";
-            includeSnapshots = false;
-        } else if (filterType === "withdraw") {
-            typeFilterTx.type = "outgoing";
-            typeFilterTx.NOT = [
-                { recipientName: { contains: "Fee" } },
-                { recipientMobile: { contains: "Fee" } }
-            ];
-            includeSnapshots = false;
-        } else if (filterType === "fee") {
-            typeFilterTx.type = "outgoing";
-            typeFilterTx.OR = [
-                { recipientName: { contains: "Fee" } },
-                { recipientMobile: { contains: "Fee" } }
-            ];
-            includeSnapshots = false;
-        } else {
-            includeSnapshots = true; // "all"
-        }
-
         // Fetch all accounts
         const accounts = await prisma.account.findMany({
             where: { networkId: network.id },
@@ -96,42 +71,81 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
         const accountIds = accounts.map(a => a.id);
         const accountMap = accounts.reduce((acc, curr) => ({ ...acc, [curr.id]: curr }), {} as any);
 
-        // 1. Get Totals
-        const [totalTx, totalSnaps] = await Promise.all([
-            (prisma as any).financialTransaction.count({
-                where: {
-                    accountId: { in: accountIds },
-                    ...dateFilterTx,
-                    ...typeFilterTx
-                }
-            }),
-            includeSnapshots
-                ? prisma.balanceSnapshot.count({ where: { accountId: { in: accountIds }, ...dateFilterSnap } })
-                : 0
-        ]);
-        const total = totalTx + totalSnaps;
+        let transactions: any[] = [];
+        let snapshots: any[] = [];
+        let totalTx = 0;
+        let totalSnaps = 0;
 
-        // 2. Fetch Data
-        const [transactions, snapshots] = await Promise.all([
-            (prisma as any).financialTransaction.findMany({
-                where: {
-                    accountId: { in: accountIds },
-                    ...dateFilterTx,
-                    ...typeFilterTx
-                },
-                orderBy: { timestamp: "desc" },
-                skip: skip,
-                take: limit,
-            }),
-            includeSnapshots
-                ? prisma.balanceSnapshot.findMany({
+        // -- SOURCE ROUTING LOGIC --
+        // Deposit -> BalanceSnapshot
+        // Withdraw/Fee -> FinancialTransaction
+        // All -> Both
+
+        if (filterType === "deposit") {
+            // Fetch Snapshots ONLY
+            [totalSnaps, snapshots] = await Promise.all([
+                prisma.balanceSnapshot.count({ where: { accountId: { in: accountIds }, ...dateFilterSnap } }),
+                prisma.balanceSnapshot.findMany({
                     where: { accountId: { in: accountIds }, ...dateFilterSnap },
                     orderBy: { checkedAt: "desc" },
                     skip: skip,
                     take: limit,
                 })
-                : []
-        ]);
+            ]);
+        } else if (filterType === "withdraw" || filterType === "fee") {
+            // Fetch Transactions ONLY
+            const typeFilterTx: any = {};
+
+            if (filterType === "withdraw") {
+                typeFilterTx.type = "outgoing";
+                typeFilterTx.NOT = [
+                    { recipientName: { contains: "Fee" } },
+                    { recipientMobile: { contains: "Fee" } }
+                ];
+            } else if (filterType === "fee") {
+                typeFilterTx.type = "outgoing";
+                typeFilterTx.OR = [
+                    { recipientName: { contains: "Fee" } },
+                    { recipientMobile: { contains: "Fee" } }
+                ];
+            }
+
+            [totalTx, transactions] = await Promise.all([
+                (prisma as any).financialTransaction.count({
+                    where: { accountId: { in: accountIds }, ...dateFilterTx, ...typeFilterTx }
+                }),
+                (prisma as any).financialTransaction.findMany({
+                    where: { accountId: { in: accountIds }, ...dateFilterTx, ...typeFilterTx },
+                    orderBy: { timestamp: "desc" },
+                    skip: skip,
+                    take: limit,
+                })
+            ]);
+        } else {
+            // All: Fetch BOTH
+            // Note: Pagination across mixed sources is complex. We approximate by taking 'limit' from both.
+            [totalTx, totalSnaps] = await Promise.all([
+                (prisma as any).financialTransaction.count({ where: { accountId: { in: accountIds }, ...dateFilterTx } }),
+                prisma.balanceSnapshot.count({ where: { accountId: { in: accountIds }, ...dateFilterSnap } })
+            ]);
+
+            [transactions, snapshots] = await Promise.all([
+                (prisma as any).financialTransaction.findMany({
+                    where: { accountId: { in: accountIds }, ...dateFilterTx },
+                    orderBy: { timestamp: "desc" },
+                    skip: skip,
+                    take: limit,
+                }),
+                prisma.balanceSnapshot.findMany({
+                    where: { accountId: { in: accountIds }, ...dateFilterSnap },
+                    orderBy: { checkedAt: "desc" },
+                    skip: skip,
+                    take: limit,
+                })
+            ]);
+        }
+
+        const total = totalTx + totalSnaps;
 
         // Map Transactions
         const txHistory = transactions.map((tx: any) => ({
@@ -393,59 +407,75 @@ router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, 
             }
         }
 
-        // Type Filtering
-        const typeFilterTx: any = {};
-        let includeSnapshots = false;
+        let transactions: any[] = [];
+        let snapshots: any[] = [];
+        let totalTx = 0;
+        let totalSnaps = 0;
 
+        // -- SOURCE ROUTING LOGIC --
         if (filterType === "deposit") {
-            typeFilterTx.type = "incoming";
-            includeSnapshots = false;
-        } else if (filterType === "withdraw") {
-            typeFilterTx.type = "outgoing";
-            typeFilterTx.NOT = [
-                { recipientName: { contains: "Fee" } },
-                { recipientMobile: { contains: "Fee" } }
-            ];
-            includeSnapshots = false;
-        } else if (filterType === "fee") {
-            typeFilterTx.type = "outgoing";
-            typeFilterTx.OR = [
-                { recipientName: { contains: "Fee" } },
-                { recipientMobile: { contains: "Fee" } }
-            ];
-            includeSnapshots = false;
-        } else {
-            includeSnapshots = true;
-        }
-
-        // 1. Get Totals
-        const [totalTx, totalSnaps] = await Promise.all([
-            (prisma as any).financialTransaction.count({
-                where: { accountId: req.params.id, ...dateFilterTx, ...typeFilterTx }
-            }),
-            includeSnapshots
-                ? prisma.balanceSnapshot.count({ where: { accountId: req.params.id, ...dateFilterSnap } })
-                : 0
-        ]);
-        const total = totalTx + totalSnaps;
-
-        // Fetch both Transactions (New) and Snapshots (Old)
-        const [transactions, snapshots] = await Promise.all([
-            (prisma as any).financialTransaction.findMany({
-                where: { accountId: req.params.id, ...dateFilterTx, ...typeFilterTx },
-                orderBy: { timestamp: "desc" },
-                skip: skip,
-                take: limit,
-            }),
-            includeSnapshots
-                ? prisma.balanceSnapshot.findMany({
+            // Fetch Snapshots ONLY
+            [totalSnaps, snapshots] = await Promise.all([
+                prisma.balanceSnapshot.count({ where: { accountId: req.params.id, ...dateFilterSnap } }),
+                prisma.balanceSnapshot.findMany({
                     where: { accountId: req.params.id, ...dateFilterSnap },
                     orderBy: { checkedAt: "desc" },
                     skip: skip,
                     take: limit,
                 })
-                : []
-        ]);
+            ]);
+        } else if (filterType === "withdraw" || filterType === "fee") {
+            // Fetch Transactions ONLY
+            const typeFilterTx: any = {};
+            if (filterType === "withdraw") {
+                typeFilterTx.type = "outgoing";
+                typeFilterTx.NOT = [
+                    { recipientName: { contains: "Fee" } },
+                    { recipientMobile: { contains: "Fee" } }
+                ];
+            } else if (filterType === "fee") {
+                typeFilterTx.type = "outgoing";
+                typeFilterTx.OR = [
+                    { recipientName: { contains: "Fee" } },
+                    { recipientMobile: { contains: "Fee" } }
+                ];
+            }
+
+            [totalTx, transactions] = await Promise.all([
+                (prisma as any).financialTransaction.count({
+                    where: { accountId: req.params.id, ...dateFilterTx, ...typeFilterTx }
+                }),
+                (prisma as any).financialTransaction.findMany({
+                    where: { accountId: req.params.id, ...dateFilterTx, ...typeFilterTx },
+                    orderBy: { timestamp: "desc" },
+                    skip: skip,
+                    take: limit,
+                })
+            ]);
+        } else {
+            // All
+            [totalTx, totalSnaps] = await Promise.all([
+                (prisma as any).financialTransaction.count({ where: { accountId: req.params.id, ...dateFilterTx } }),
+                prisma.balanceSnapshot.count({ where: { accountId: req.params.id, ...dateFilterSnap } })
+            ]);
+
+            [transactions, snapshots] = await Promise.all([
+                (prisma as any).financialTransaction.findMany({
+                    where: { accountId: req.params.id, ...dateFilterTx },
+                    orderBy: { timestamp: "desc" },
+                    skip: skip,
+                    take: limit,
+                }),
+                prisma.balanceSnapshot.findMany({
+                    where: { accountId: req.params.id, ...dateFilterSnap },
+                    orderBy: { checkedAt: "desc" },
+                    skip: skip,
+                    take: limit,
+                })
+            ]);
+        }
+
+        const total = totalTx + totalSnaps;
 
         // Map Transactions to unified format
         const txHistory = transactions.map((tx: any) => ({
