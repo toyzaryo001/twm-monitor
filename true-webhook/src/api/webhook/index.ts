@@ -171,31 +171,40 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         const amount = typeof amountRaw === 'string' ? parseFloat(amountRaw) : amountRaw;
         const fee = typeof feeRaw === 'string' ? parseFloat(feeRaw) : feeRaw;
 
+        console.log(`[Webhook] Saving Transaction: ID=${transactionId}, Acc=${account.id}, Amt=${amount}, Fee=${fee}`);
+
         // Check if transaction already exists (idempotency)
         const existingTx = await prisma.financialTransaction.findUnique({
             where: { transactionId: String(transactionId) }
         });
 
         if (existingTx) {
+            console.log(`[Webhook] Transaction ${transactionId} already exists. Skipping.`);
             return res.status(200).json({ status: "ok", message: "Transaction already processed" });
         }
 
-        await prisma.financialTransaction.create({
-            data: {
-                transactionId: String(transactionId),
-                accountId: account.id,
-                amount: amount,
-                fee: fee,
-                type: transactionType,
-                status: payload.status || "SUCCESS",
-                senderMobile: payload.sender_mobile,
-                senderName: payload.sender_name,
-                recipientMobile: payload.recipient_mobile,
-                recipientName: payload.recipient_name,
-                rawPayload: payload,
-                timestamp: payload.transaction_date ? new Date(payload.transaction_date) : new Date(),
-            }
-        });
+        try {
+            await prisma.financialTransaction.create({
+                data: {
+                    transactionId: String(transactionId),
+                    accountId: account.id,
+                    amount: amount,
+                    fee: fee,
+                    type: transactionType,
+                    status: payload.status || "SUCCESS",
+                    senderMobile: payload.sender_mobile,
+                    senderName: payload.sender_name,
+                    recipientMobile: payload.recipient_mobile,
+                    recipientName: payload.recipient_name,
+                    rawPayload: payload,
+                    timestamp: payload.transaction_date ? new Date(payload.transaction_date) : new Date(),
+                }
+            });
+            console.log(`[Webhook] Transaction saved successfully!`);
+        } catch (saveErr) {
+            console.error(`[Webhook] DB Save Failed:`, saveErr);
+            throw saveErr;
+        }
 
         // 5. Update Balance Snapshot (Optional but recommended for consistency)
         // We can't know the *exact* total balance from just a transaction webhook usually
