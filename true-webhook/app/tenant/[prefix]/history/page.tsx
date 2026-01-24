@@ -165,14 +165,20 @@ export default function HistoryPage() {
 
     const getFilteredHistory = () => {
         return history.filter(entry => {
-            // 1. Date Filter (Apply to ALL tabs or just Fee? User asked for Fee, but useful for all)
+            // 1. Date Filter
             if (!filterDate(entry)) return false;
 
             // 2. Tab Filter
-            if (activeTab === "all") return true; // Show everything in All? Or maybe exclude fees? Let's show all.
+            if (activeTab === "all") return true;
+
+            // Deposit: Show all positive changes (Snapshots + Transactions)
             if (activeTab === "deposit") return entry.change > 0;
-            if (activeTab === "fee") return isFee(entry);
-            if (activeTab === "withdraw") return entry.change < 0 && !isFee(entry);
+
+            // Fee: Show ONLY Webhook fees (type='transaction' AND isFee)
+            if (activeTab === "fee") return entry.type === 'transaction' && isFee(entry);
+
+            // Withdraw: Show ONLY Webhook withdrawals (type='transaction' AND negative change AND not fee)
+            if (activeTab === "withdraw") return entry.type === 'transaction' && entry.change < 0 && !isFee(entry);
 
             return true;
         });
