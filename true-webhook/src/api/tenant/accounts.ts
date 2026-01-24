@@ -45,7 +45,27 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
         const page = parseInt(req.query.page as string, 10) || 1;
         const skip = (page - 1) * limit;
 
-        // Fetch all accounts for this network to filter
+        // Date Filtering
+        const fromDate = req.query.from ? new Date(req.query.from as string) : null;
+        const toDate = req.query.to ? new Date(req.query.to as string) : null;
+
+        const dateFilterTx: any = {};
+        const dateFilterSnap: any = {};
+
+        if (fromDate || toDate) {
+            dateFilterTx.timestamp = {};
+            dateFilterSnap.checkedAt = {};
+            if (fromDate) {
+                dateFilterTx.timestamp.gte = fromDate;
+                dateFilterSnap.checkedAt.gte = fromDate;
+            }
+            if (toDate) {
+                dateFilterTx.timestamp.lte = toDate;
+                dateFilterSnap.checkedAt.lte = toDate;
+            }
+        }
+
+        // Fetch all accounts
         const accounts = await prisma.account.findMany({
             where: { networkId: network.id },
             select: { id: true, name: true, phoneNumber: true }
@@ -53,25 +73,39 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
         const accountIds = accounts.map(a => a.id);
         const accountMap = accounts.reduce((acc, curr) => ({ ...acc, [curr.id]: curr }), {} as any);
 
-        // 1. Get Totals (for pagination UI)
+        // 1. Get Totals
         const [totalTx, totalSnaps] = await Promise.all([
-            (prisma as any).financialTransaction.count({ where: { accountId: { in: accountIds } } }),
-            prisma.balanceSnapshot.count({ where: { accountId: { in: accountIds } } })
+            (prisma as any).financialTransaction.count({
+                where: {
+                    accountId: { in: accountIds },
+                    ...dateFilterTx
+                }
+            }),
+            prisma.balanceSnapshot.count({
+                where: {
+                    accountId: { in: accountIds },
+                    ...dateFilterSnap
+                }
+            })
         ]);
         const total = totalTx + totalSnaps;
 
-        // 2. Fetch Data (Approximation: fetch 'limit' from both, merge, sort, take 'limit')
-        // Ideally we'd use cursor-based or union, but this is sufficient for basic browsing
-        // To make page 2 work "okay", we skip 'skip' in both. It's not perfect but consistent enough.
+        // 2. Fetch Data
         const [transactions, snapshots] = await Promise.all([
             (prisma as any).financialTransaction.findMany({
-                where: { accountId: { in: accountIds } },
+                where: {
+                    accountId: { in: accountIds },
+                    ...dateFilterTx
+                },
                 orderBy: { timestamp: "desc" },
                 skip: skip,
                 take: limit,
             }),
             prisma.balanceSnapshot.findMany({
-                where: { accountId: { in: accountIds } },
+                where: {
+                    accountId: { in: accountIds },
+                    ...dateFilterSnap
+                },
                 orderBy: { checkedAt: "desc" },
                 skip: skip,
                 take: limit,
@@ -112,7 +146,7 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
             };
         });
 
-        // Merge and Sort and Slice to Ensure Limit
+        // Merge and Sort
         const mergedHistory = [...txHistory, ...snapshotHistory]
             .sort((a, b) => new Date(b.checkedAt).getTime() - new Date(a.checkedAt).getTime())
             .slice(0, limit);
@@ -120,12 +154,7 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
         return res.json({
             ok: true,
             data: mergedHistory,
-            pagination: {
-                page,
-                limit,
-                total,
-                totalPages: Math.ceil(total / limit)
-            }
+            pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
         });
     } catch (err) {
         next(err);
@@ -326,23 +355,47 @@ router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, 
         const page = parseInt(req.query.page as string, 10) || 1;
         const skip = (page - 1) * limit;
 
+        // Date Filtering
+        const fromDate = req.query.from ? new Date(req.query.from as string) : null;
+        const toDate = req.query.to ? new Date(req.query.to as string) : null;
+
+        const dateFilterTx: any = {};
+        const dateFilterSnap: any = {};
+
+        if (fromDate || toDate) {
+            dateFilterTx.timestamp = {};
+            dateFilterSnap.checkedAt = {};
+            if (fromDate) {
+                dateFilterTx.timestamp.gte = fromDate;
+                dateFilterSnap.checkedAt.gte = fromDate;
+            }
+            if (toDate) {
+                dateFilterTx.timestamp.lte = toDate;
+                dateFilterSnap.checkedAt.lte = toDate;
+            }
+        }
+
         // 1. Get Totals
         const [totalTx, totalSnaps] = await Promise.all([
-            (prisma as any).financialTransaction.count({ where: { accountId: req.params.id } }),
-            prisma.balanceSnapshot.count({ where: { accountId: req.params.id } })
+            (prisma as any).financialTransaction.count({
+                where: { accountId: req.params.id, ...dateFilterTx }
+            }),
+            prisma.balanceSnapshot.count({
+                where: { accountId: req.params.id, ...dateFilterSnap }
+            })
         ]);
         const total = totalTx + totalSnaps;
 
         // Fetch both Transactions (New) and Snapshots (Old)
         const [transactions, snapshots] = await Promise.all([
             (prisma as any).financialTransaction.findMany({
-                where: { accountId: req.params.id },
+                where: { accountId: req.params.id, ...dateFilterTx },
                 orderBy: { timestamp: "desc" },
                 skip: skip,
                 take: limit,
             }),
             prisma.balanceSnapshot.findMany({
-                where: { accountId: req.params.id },
+                where: { accountId: req.params.id, ...dateFilterSnap },
                 orderBy: { checkedAt: "desc" },
                 skip: skip,
                 take: limit,
@@ -391,12 +444,7 @@ router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, 
         return res.json({
             ok: true,
             data: mergedHistory,
-            pagination: {
-                page,
-                limit,
-                total,
-                totalPages: Math.ceil(total / limit)
-            }
+            pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
         });
     } catch (err) {
         next(err);

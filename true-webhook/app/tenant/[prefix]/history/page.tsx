@@ -43,7 +43,7 @@ export default function HistoryPage() {
     // Filters
     const [activeTab, setActiveTab] = useState<Tab>("deposit");
     const [dateFilter, setDateFilter] = useState<DateRange>("today");
-    const [limit, setLimit] = useState<number>(20); // Default limit
+    const [limit, setLimit] = useState<number>(20);
     const [page, setPage] = useState<number>(1);
     const [totalPages, setTotalPages] = useState<number>(1);
     const [totalItems, setTotalItems] = useState<number>(0);
@@ -52,6 +52,44 @@ export default function HistoryPage() {
 
     const getToken = () => localStorage.getItem("tenantToken") || "";
 
+    const getDateRangeParams = (filter: DateRange) => {
+        const now = new Date();
+        const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+
+        if (filter === "today") {
+            return `&from=${startOfDay.toISOString()}&to=${endOfDay.toISOString()}`;
+        }
+        if (filter === "yesterday") {
+            const startYest = new Date(startOfDay);
+            startYest.setDate(startYest.getDate() - 1);
+            const endYest = new Date(startYest);
+            endYest.setHours(23, 59, 59, 999);
+            return `&from=${startYest.toISOString()}&to=${endYest.toISOString()}`;
+        }
+        if (filter === "3d") {
+            const start = new Date(startOfDay);
+            start.setDate(start.getDate() - 3);
+            return `&from=${start.toISOString()}&to=${endOfDay.toISOString()}`;
+        }
+        if (filter === "7d") {
+            const start = new Date(startOfDay);
+            start.setDate(start.getDate() - 7);
+            return `&from=${start.toISOString()}&to=${endOfDay.toISOString()}`;
+        }
+        if (filter === "15d") {
+            const start = new Date(startOfDay);
+            start.setDate(start.getDate() - 15);
+            return `&from=${start.toISOString()}&to=${endOfDay.toISOString()}`;
+        }
+        if (filter === "30d") {
+            const start = new Date(startOfDay);
+            start.setDate(start.getDate() - 30);
+            return `&from=${start.toISOString()}&to=${endOfDay.toISOString()}`;
+        }
+        return ""; // All
+    };
+
     const fetchHistory = useCallback(async (showLoading = false) => {
         if (!selectedAccount) return;
 
@@ -59,11 +97,12 @@ export default function HistoryPage() {
         const token = getToken();
 
         try {
+            const dateParams = getDateRangeParams(dateFilter);
             let url = "";
             if (selectedAccount === "all") {
-                url = `/api/tenant/${prefix}/accounts/all-history?limit=${limit}&page=${page}`;
+                url = `/api/tenant/${prefix}/accounts/all-history?limit=${limit}&page=${page}${dateParams}`;
             } else {
-                url = `/api/tenant/${prefix}/accounts/${selectedAccount}/history?limit=${limit}&page=${page}`;
+                url = `/api/tenant/${prefix}/accounts/${selectedAccount}/history?limit=${limit}&page=${page}${dateParams}`;
             }
 
             const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
@@ -79,12 +118,12 @@ export default function HistoryPage() {
             console.error("Error fetching history", e);
         }
         setLoadingHistory(false);
-    }, [selectedAccount, prefix, limit, page]);
+    }, [selectedAccount, prefix, limit, page, dateFilter]);
 
-    // Reset page when filters change (account or limit)
+    // Reset page when filters change
     useEffect(() => {
         setPage(1);
-    }, [selectedAccount, limit]);
+    }, [selectedAccount, limit, dateFilter]);
 
     // Fetch accounts
     useEffect(() => {
@@ -99,7 +138,6 @@ export default function HistoryPage() {
                 const data = await res.json();
                 if (data.ok && data.data.length > 0) {
                     setAccounts(data.data);
-                    // Default to first account if nothing selected
                     if (!selectedAccount) {
                         setSelectedAccount(data.data[0].id);
                     }
@@ -113,7 +151,7 @@ export default function HistoryPage() {
         fetchAccounts();
     }, [prefix]);
 
-    // Fetch history on change
+    // Fetch history
     useEffect(() => {
         if (selectedAccount) {
             fetchHistory(true);
@@ -124,7 +162,7 @@ export default function HistoryPage() {
     useEffect(() => {
         if (!selectedAccount || selectedAccount === "all") {
             if (eventSourceRef.current) eventSourceRef.current.close();
-            setIsConnected(false); // No live for All view yet
+            setIsConnected(false);
             return;
         }
 
@@ -155,37 +193,8 @@ export default function HistoryPage() {
         return false;
     };
 
-    const filterDate = (entry: HistoryEntry) => {
-        if (dateFilter === "all") return true;
-
-        const txDate = new Date(entry.checkedAt);
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const entryDay = new Date(txDate.getFullYear(), txDate.getMonth(), txDate.getDate());
-
-        if (dateFilter === "today") return entryDay.getTime() === today.getTime();
-
-        if (dateFilter === "yesterday") {
-            const yest = new Date(today);
-            yest.setDate(yest.getDate() - 1);
-            return entryDay.getTime() === yest.getTime();
-        }
-
-        const diffTime = Math.abs(today.getTime() - entryDay.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-        if (dateFilter === "3d") return diffDays <= 3;
-        if (dateFilter === "7d") return diffDays <= 7;
-        if (dateFilter === "15d") return diffDays <= 15;
-        if (dateFilter === "30d") return diffDays <= 30;
-
-        return true;
-    };
-
     const getFilteredHistory = () => {
         return history.filter(entry => {
-            if (!filterDate(entry)) return false;
-
             if (activeTab === "all") return true;
 
             if (activeTab === "deposit") return entry.change > 0;
