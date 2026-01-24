@@ -23,6 +23,7 @@ interface HistoryEntry {
     sender?: string;
     recipient?: string;
     status?: string;
+    accountName?: string; // New field from backend
 }
 
 type Tab = "all" | "deposit" | "withdraw" | "fee";
@@ -33,7 +34,7 @@ export default function HistoryPage() {
     const params = useParams();
     const prefix = params.prefix as string;
     const [accounts, setAccounts] = useState<Account[]>([]);
-    const [selectedAccount, setSelectedAccount] = useState<string>("");
+    const [selectedAccount, setSelectedAccount] = useState<string>("all"); // Default to ALL
     const [history, setHistory] = useState<HistoryEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadingHistory, setLoadingHistory] = useState(false);
@@ -48,7 +49,7 @@ export default function HistoryPage() {
     const getToken = () => localStorage.getItem("tenantToken") || "";
 
     const fetchHistory = useCallback(async (showLoading = false) => {
-        if (!selectedAccount) return;
+        // if (!selectedAccount) return; // Allow "all" which is truthy string
 
         if (showLoading) setLoadingHistory(true);
         const token = getToken();
@@ -56,7 +57,14 @@ export default function HistoryPage() {
         try {
             // Fetch more items to support client-side filtering
             const limit = 200;
-            const res = await fetch(`/api/tenant/${prefix}/accounts/${selectedAccount}/history?limit=${limit}`, {
+            let url = "";
+            if (selectedAccount === "all") {
+                url = `/api/tenant/${prefix}/accounts/all-history?limit=${limit}`;
+            } else {
+                url = `/api/tenant/${prefix}/accounts/${selectedAccount}/history?limit=${limit}`;
+            }
+
+            const res = await fetch(url, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await res.json();
@@ -82,7 +90,7 @@ export default function HistoryPage() {
                 const data = await res.json();
                 if (data.ok && data.data.length > 0) {
                     setAccounts(data.data);
-                    setSelectedAccount(data.data[0].id);
+                    // Don't force select first account, keep "all" default
                 }
             } catch (e) {
                 console.error("Error fetching accounts", e);
@@ -283,11 +291,29 @@ export default function HistoryPage() {
                                 <div style={{ flex: 1 }}>
                                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                                         <div>
-                                            <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>
-                                                {entry.type === 'transaction'
-                                                    ? `฿ ${(entry.amount || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
-                                                    : `฿ ${entry.balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
-                                                }
+                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                                <div style={{
+                                                    fontSize: 20,
+                                                    fontWeight: 700,
+                                                    color: "var(--text-primary)"
+                                                }}>
+                                                    {entry.type === 'transaction'
+                                                        ? `฿ ${(entry.amount || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
+                                                        : `฿ ${entry.balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
+                                                    }
+                                                </div>
+                                                {selectedAccount === "all" && entry.accountName && (
+                                                    <div style={{
+                                                        fontSize: 11,
+                                                        background: "var(--bg-secondary)",
+                                                        padding: "2px 8px",
+                                                        borderRadius: 12,
+                                                        color: "var(--text-muted)",
+                                                        border: "1px solid var(--border)"
+                                                    }}>
+                                                        {entry.accountName}
+                                                    </div>
+                                                )}
                                             </div>
                                             <div style={{ marginTop: 4 }}>
                                                 {isFee(entry) ? (

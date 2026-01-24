@@ -33,6 +33,87 @@ router.get("/", async (req: Request<{ prefix: string }>, res: Response, next: Ne
     }
 });
 
+// Get GLOBAL history (All accounts)
+router.get("/all-history", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
+    try {
+        const network = await getNetwork(req.params.prefix);
+        if (!network) {
+            return res.status(404).json({ ok: false, error: "NETWORK_NOT_FOUND" });
+        }
+
+        const limit = parseInt(req.query.limit as string, 10) || 100;
+
+        // Fetch all accounts for this network to filter
+        const accounts = await prisma.account.findMany({
+            where: { networkId: network.id },
+            select: { id: true, name: true, phoneNumber: true }
+        });
+        const accountIds = accounts.map(a => a.id);
+        const accountMap = accounts.reduce((acc, curr) => ({ ...acc, [curr.id]: curr }), {} as any);
+
+        // Fetch both Transactions and Snapshots for ALL accounts
+        const [transactions, snapshots] = await Promise.all([
+            (prisma as any).financialTransaction.findMany({
+                where: { accountId: { in: accountIds } },
+                orderBy: { timestamp: "desc" },
+                take: limit,
+            }),
+            prisma.balanceSnapshot.findMany({
+                where: { accountId: { in: accountIds } },
+                orderBy: { checkedAt: "desc" },
+                take: limit,
+            })
+        ]);
+
+        // Map Transactions
+        const txHistory = transactions.map((tx: any) => ({
+            id: tx.id,
+            type: "transaction",
+            amount: tx.amount,
+            fee: tx.fee,
+            direction: tx.type,
+            sender: tx.senderMobile || tx.senderName || "Unknown",
+            recipient: tx.recipientMobile || tx.recipientName || "Unknown",
+            status: tx.status,
+            checkedAt: tx.timestamp,
+            change: tx.type === 'outgoing' ? -tx.amount : tx.amount,
+            changeSatang: (tx.type === 'outgoing' ? -tx.amount : tx.amount) * 100,
+            accountName: accountMap[tx.accountId]?.name || "Unknown",
+            accountId: tx.accountId
+        }));
+
+        // Map Snapshots
+        const snapshotHistory = snapshots.map((snapshot: any) => {
+            // Logic for change calculation across different accounts is tricky for global view
+            // We'll just show snapshot state or rely on internal logic if possible
+            // For global view, snapshots are less useful as "change" logs unless linked to prev snapshot of SAME account
+            // But let's include them for completeness
+            return {
+                id: snapshot.id,
+                type: "snapshot",
+                balance: snapshot.balanceSatang / 100,
+                balanceSatang: snapshot.balanceSatang,
+                change: 0, // Hard to calc efficiently in batch without grouping
+                changeSatang: 0,
+                mobileNo: snapshot.mobileNo,
+                source: snapshot.source,
+                checkedAt: snapshot.checkedAt,
+                accountName: accountMap[snapshot.accountId]?.name || "Unknown",
+                accountId: snapshot.accountId
+            };
+        });
+
+        // Merge and Sort
+        const mergedHistory = [...txHistory, ...snapshotHistory]
+            .sort((a, b) => new Date(b.checkedAt).getTime() - new Date(a.checkedAt).getTime())
+            .slice(0, limit);
+
+        return res.json({ ok: true, data: mergedHistory });
+    } catch (err) {
+        next(err);
+    }
+});
+
 // Create account
 router.post("/", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     try {
