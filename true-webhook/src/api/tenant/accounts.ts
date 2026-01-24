@@ -78,20 +78,22 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
 
         // -- SOURCE ROUTING LOGIC --
         if (filterType === "deposit") {
-            // Fetch Snapshots ONLY
+            // Fetch Snapshots for 'limit' + 1 to calculate change
+            // We fetch slightly more to compensate for filtered items? No, that's complex paging.
+            // Just fetch 'take: limit + 1' to ensure we can calculate change for the 'limit' items.
+            // Filtering negative changes happens in-memory, so result size might be < limit.
             [totalSnaps, snapshots] = await Promise.all([
                 prisma.balanceSnapshot.count({ where: { accountId: { in: accountIds }, ...dateFilterSnap } }),
                 prisma.balanceSnapshot.findMany({
                     where: { accountId: { in: accountIds }, ...dateFilterSnap },
                     orderBy: { checkedAt: "desc" },
                     skip: skip,
-                    take: limit,
+                    take: limit + 5, // Fetch a few extra to try filling the gap
                 })
             ]);
         } else if (filterType === "withdraw" || filterType === "fee") {
-            // Fetch Transactions ONLY
+            // ... (Same as before)
             const typeFilterTx: any = {};
-
             if (filterType === "withdraw") {
                 typeFilterTx.type = "outgoing";
                 typeFilterTx.NOT = [
@@ -162,14 +164,17 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
         }));
 
         // Map Snapshots
-        const snapshotHistory = snapshots.map((snapshot: any) => {
+        let snapshotHistory = snapshots.map((snapshot: any, index: number) => {
+            const prevSnapshot = snapshots[index + 1];
+            // If prevSnapshot is undefined (end of fetched list), change is 0 (neutral)
+            const change = prevSnapshot ? snapshot.balanceSatang - prevSnapshot.balanceSatang : 0;
             return {
                 id: snapshot.id,
                 type: "snapshot",
                 balance: snapshot.balanceSatang / 100,
                 balanceSatang: snapshot.balanceSatang,
-                change: 0,
-                changeSatang: 0,
+                change: change / 100,
+                changeSatang: change,
                 mobileNo: snapshot.mobileNo,
                 source: snapshot.source,
                 checkedAt: snapshot.checkedAt,
@@ -177,6 +182,14 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
                 accountId: snapshot.accountId
             };
         });
+
+        // Filter Negatives for Deposit Tab
+        if (filterType === "deposit") {
+            snapshotHistory = snapshotHistory.filter(s => s.change >= 0);
+            // We might return fewer than 'limit' here. That's a tradeoff for correctness.
+            // Also slice to original limit just in case we fetched extras
+            snapshotHistory = snapshotHistory.slice(0, limit);
+        }
 
         // Merge and Sort
         const mergedHistory = [...txHistory, ...snapshotHistory]
@@ -195,6 +208,7 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
 
 // Create account
 router.post("/", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
+    // ... (unchanged)
     try {
         const network = await getNetwork(req.params.prefix);
         if (!network) {
@@ -222,6 +236,7 @@ router.post("/", async (req: Request<{ prefix: string }>, res: Response, next: N
 
 // Update account
 router.put("/:id", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
+    // ... (unchanged)
     try {
         const schema = z.object({
             name: z.string().optional(),
@@ -258,8 +273,9 @@ router.delete("/:id", async (req: Request<{ prefix: string; id: string }>, res: 
     }
 });
 
-// Check balance from external wallet API
+// Check balance
 router.post("/:id/balance", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
+    // ... (unchanged)
     try {
         const account = await prisma.account.findUnique({
             where: { id: req.params.id },
@@ -285,7 +301,6 @@ router.post("/:id/balance", async (req: Request<{ prefix: string; id: string }>,
 
             const walletData = await walletRes.json();
 
-            // Parse balance from API response
             let balanceSatang = 0;
             let mobileNo = account.phoneNumber || "";
 
@@ -297,7 +312,6 @@ router.post("/:id/balance", async (req: Request<{ prefix: string; id: string }>,
                 mobileNo = walletData.mobile_no || walletData.mobileNo || account.phoneNumber || "";
             }
 
-            // Check if balance changed from last snapshot
             const lastSnapshot = await prisma.balanceSnapshot.findFirst({
                 where: { accountId: account.id },
                 orderBy: { checkedAt: "desc" },
@@ -305,7 +319,6 @@ router.post("/:id/balance", async (req: Request<{ prefix: string; id: string }>,
 
             const balanceChanged = !lastSnapshot || lastSnapshot.balanceSatang !== balanceSatang;
 
-            // Only save snapshot if balance changed
             let checkedAt = new Date();
             if (balanceChanged) {
                 const snapshot = await prisma.balanceSnapshot.create({
@@ -322,7 +335,6 @@ router.post("/:id/balance", async (req: Request<{ prefix: string; id: string }>,
                 checkedAt = lastSnapshot?.checkedAt || new Date();
             }
 
-            // Broadcast update via SSE
             const change = balanceSatang - (lastSnapshot?.balanceSatang || 0);
             broadcastBalanceUpdate(account.id, {
                 balance: balanceSatang / 100,
@@ -334,7 +346,7 @@ router.post("/:id/balance", async (req: Request<{ prefix: string; id: string }>,
             return res.json({
                 ok: true,
                 data: {
-                    balance: balanceSatang / 100, // Convert satang to baht
+                    balance: balanceSatang / 100,
                     balanceSatang,
                     mobileNo,
                     checkedAt,
@@ -350,7 +362,7 @@ router.post("/:id/balance", async (req: Request<{ prefix: string; id: string }>,
     }
 });
 
-// Get latest balance for an account
+// Get latest balance
 router.get("/:id/balance", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
     try {
         const snapshot = await prisma.balanceSnapshot.findFirst({
@@ -379,6 +391,16 @@ router.get("/:id/balance", async (req: Request<{ prefix: string; id: string }>, 
 // Get balance history for an account (timeline)
 router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
     try {
+        // Fetch account to ensure existence and get name
+        const account = await prisma.account.findUnique({
+            where: { id: req.params.id },
+            select: { id: true, name: true }
+        });
+
+        if (!account) {
+            return res.status(404).json({ ok: false, error: "ACCOUNT_NOT_FOUND" });
+        }
+
         const limit = parseInt(req.query.limit as string, 10) || 50;
         const page = parseInt(req.query.page as string, 10) || 1;
         const skip = (page - 1) * limit;
@@ -411,18 +433,18 @@ router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, 
 
         // -- SOURCE ROUTING LOGIC --
         if (filterType === "deposit") {
-            // Fetch Snapshots ONLY
+            // Fetch Snapshots for 'limit' + extra
             [totalSnaps, snapshots] = await Promise.all([
                 prisma.balanceSnapshot.count({ where: { accountId: req.params.id, ...dateFilterSnap } }),
                 prisma.balanceSnapshot.findMany({
                     where: { accountId: req.params.id, ...dateFilterSnap },
                     orderBy: { checkedAt: "desc" },
                     skip: skip,
-                    take: limit,
+                    take: limit + 5,
                 })
             ]);
         } else if (filterType === "withdraw" || filterType === "fee") {
-            // Fetch Transactions ONLY
+            // ... (Same as before)
             const typeFilterTx: any = {};
             if (filterType === "withdraw") {
                 typeFilterTx.type = "outgoing";
@@ -494,7 +516,7 @@ router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, 
         }));
 
         // Map Snapshots to unified format
-        const snapshotHistory = snapshots.map((snapshot: any, index: number) => {
+        let snapshotHistory = snapshots.map((snapshot: any, index: number) => {
             const prevSnapshot = snapshots[index + 1];
             const change = prevSnapshot ? snapshot.balanceSatang - prevSnapshot.balanceSatang : 0;
             return {
@@ -504,11 +526,18 @@ router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, 
                 balanceSatang: snapshot.balanceSatang,
                 change: change / 100,
                 changeSatang: change,
-                mobileNo: snapshot.mobileNo,
                 source: snapshot.source,
                 checkedAt: snapshot.checkedAt,
+                accountName: account?.name || "Unknown",
+                accountId: snapshot.accountId
             };
         });
+
+        // Filter Negatives for Deposit Tab
+        if (filterType === "deposit") {
+            snapshotHistory = snapshotHistory.filter(s => s.change >= 0);
+            snapshotHistory = snapshotHistory.slice(0, limit);
+        }
 
         // Merge and Sort
         const mergedHistory = [...txHistory, ...snapshotHistory]

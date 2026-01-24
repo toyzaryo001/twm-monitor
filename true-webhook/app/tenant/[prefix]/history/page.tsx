@@ -16,7 +16,7 @@ interface HistoryEntry {
     mobileNo?: string;
     source?: string;
     checkedAt: string;
-    type?: string;
+    type?: string; // 'transaction' or 'snapshot'
     amount?: number;
     fee?: number;
     direction?: string;
@@ -192,12 +192,20 @@ export default function HistoryPage() {
     const isFee = (entry: HistoryEntry) => {
         if (entry.recipient && (entry.recipient.includes("Fee") || entry.recipient.includes("P2P Fee"))) return true;
         if (entry.fee && entry.fee > 0 && entry.amount === entry.fee) return true;
+        // Check raw payload event type if mapped differently, but usually 'type' field is reliable enough for now
+        // if (entry.rawPayload && entry.rawPayload.event_type === 'FEE_PAYMENT') return true;
+        if (entry.recipient === "System Fee") return true;
         return false;
     };
 
     // Use raw history as it is already filtered by server
     const filteredHistory = history;
-    const totalAmount = filteredHistory.reduce((sum, entry) => sum + Math.abs(entry.type === 'transaction' && entry.amount ? entry.amount : entry.change), 0);
+
+    // Calculate total amount for display
+    const totalAmount = filteredHistory.reduce((sum, entry) => {
+        const val = entry.type === 'transaction' && entry.amount ? entry.amount : Math.abs(entry.change);
+        return sum + val;
+    }, 0);
 
     const formatDate = (dateStr: string) => {
         return new Date(dateStr).toLocaleDateString("th-TH", { day: "2-digit", month: "short", year: "numeric" });
@@ -332,6 +340,8 @@ export default function HistoryPage() {
                                                     </div>
                                                 )}
                                             </div>
+
+                                            {/* DISPLAY LOGIC UPDATE: Simplified for positive changes */}
                                             <div style={{ marginTop: 4 }}>
                                                 {isFee(entry) ? (
                                                     <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-muted)" }}>
@@ -339,16 +349,24 @@ export default function HistoryPage() {
                                                     </div>
                                                 ) : (
                                                     <div style={{ fontSize: 14, fontWeight: 600, color: entry.change > 0 ? "var(--success)" : "var(--error)", display: "flex", alignItems: "center", gap: 8 }}>
-                                                        <span>{entry.change > 0 ? "รับเงินจาก" : "โอนเงินไป"}</span>
-                                                        <span style={{ color: "var(--text-primary)" }}>
-                                                            {entry.change > 0
-                                                                ? (entry.sender || "Unknown")
-                                                                : (entry.recipient || "Unknown")
-                                                            }
-                                                        </span>
+                                                        <span>{entry.change > 0 ? "ยอดเงินเพิ่มขึ้น" : (entry.type === 'snapshot' ? "ยอดเงินลดลง" : "โอนเงินไป")}</span>
+
+                                                        {entry.change > 0 ? (
+                                                            <span style={{ color: "var(--text-primary)" }}>
+                                                                +{Math.abs(entry.change).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                                                            </span>
+                                                        ) : (
+                                                            <span style={{ color: "var(--text-primary)" }}>
+                                                                {entry.type === 'transaction'
+                                                                    ? (entry.recipient || "Unknown")
+                                                                    : `-${Math.abs(entry.change).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
+                                                                }
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
+
                                         </div>
                                         <div style={{ textAlign: "right" }}>
                                             <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>{formatDate(entry.checkedAt)}</div>
