@@ -225,49 +225,41 @@ router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, 
     try {
         const limit = parseInt(req.query.limit as string, 10) || 50;
 
-        // Fetch transactions from the new system
-        const transactions = await (prisma as any).financialTransaction.findMany({
-            where: { accountId: req.params.id },
-            orderBy: { timestamp: "desc" },
-            take: limit,
-        });
+        // Fetch both Transactions (New) and Snapshots (Old)
+        const [transactions, snapshots] = await Promise.all([
+            (prisma as any).financialTransaction.findMany({
+                where: { accountId: req.params.id },
+                orderBy: { timestamp: "desc" },
+                take: limit,
+            }),
+            prisma.balanceSnapshot.findMany({
+                where: { accountId: req.params.id },
+                orderBy: { checkedAt: "desc" },
+                take: limit,
+            })
+        ]);
 
-        if (transactions.length > 0) {
-            // Use new transaction data
-            return res.json({
-                ok: true,
-                data: transactions.map((tx: any) => ({
-                    id: tx.id,
-                    type: "transaction", // Mark as real transaction
-                    amount: tx.amount,
-                    fee: tx.fee,
-                    direction: tx.type, // incoming/outgoing
-                    sender: tx.senderMobile || tx.senderName || "Unknown",
-                    recipient: tx.recipientMobile || tx.recipientName || "Unknown",
-                    status: tx.status,
-                    timestamp: tx.timestamp,
-                    // Backward compatibility fields for frontend
-                    balance: 0, // We might not know balance at this exact tx if we don't snapshot
-                    change: tx.type === 'outgoing' ? -tx.amount : tx.amount,
-                    checkedAt: tx.timestamp
-                }))
-            });
-        }
+        // Map Transactions to unified format
+        const txHistory = transactions.map((tx: any) => ({
+            id: tx.id,
+            type: "transaction",
+            amount: tx.amount, // Net change magnitude
+            fee: tx.fee,
+            direction: tx.type, // "incoming" or "outgoing"
+            sender: tx.senderMobile || tx.senderName || "Unknown",
+            recipient: tx.recipientMobile || tx.recipientName || "Unknown",
+            status: tx.status,
+            checkedAt: tx.timestamp, // Use timestamp as sort key
+            // Derived fields for frontend compatibility
+            balance: 0, // We don't track running balance in transactions yet
+            change: tx.type === 'outgoing' ? -tx.amount : tx.amount,
+            changeSatang: (tx.type === 'outgoing' ? -tx.amount : tx.amount) * 100,
+        }));
 
-        // Fallback to old snapshot system if no transactions found
-        const snapshots = await prisma.balanceSnapshot.findMany({
-            where: { accountId: req.params.id },
-            orderBy: { checkedAt: "desc" },
-            take: limit,
-        });
-
-        // Calculate change from previous snapshot
-        const history = snapshots.map((snapshot, index) => {
+        // Map Snapshots to unified format
+        const snapshotHistory = snapshots.map((snapshot: any, index: number) => {
             const prevSnapshot = snapshots[index + 1];
-            const change = prevSnapshot
-                ? snapshot.balanceSatang - prevSnapshot.balanceSatang
-                : 0;
-
+            const change = prevSnapshot ? snapshot.balanceSatang - prevSnapshot.balanceSatang : 0;
             return {
                 id: snapshot.id,
                 type: "snapshot",
@@ -281,7 +273,12 @@ router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, 
             };
         });
 
-        return res.json({ ok: true, data: history });
+        // Merge and Sort
+        const mergedHistory = [...txHistory, ...snapshotHistory]
+            .sort((a, b) => new Date(b.checkedAt).getTime() - new Date(a.checkedAt).getTime())
+            .slice(0, limit);
+
+        return res.json({ ok: true, data: mergedHistory });
     } catch (err) {
         next(err);
     }
