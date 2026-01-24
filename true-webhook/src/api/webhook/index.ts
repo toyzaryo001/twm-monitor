@@ -7,7 +7,6 @@ import { broadcastBalanceUpdate } from "../sse";
 const router = Router({ mergeParams: true });
 
 // TrueMoney Webhook Payload Schema
-// Based on typical webhook payloads (adjust as needed based on actual TrueMoney spec)
 const webhookSchema = z.object({
     transaction_id: z.string(),
     amount: z.number().or(z.string()),
@@ -46,9 +45,9 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         }
 
         // 2. Parse Payload
-        // Check if payload is wrapped in JWT "message" field
         let payload = req.body;
 
+        // Check if payload is wrapped in JWT "message" field
         if (req.body.message && typeof req.body.message === 'string') {
             try {
                 // Initial JWT decode (header.body.signature)
@@ -82,40 +81,41 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         }
 
         // Extract fields from mapped payload
+        // TrueMoney sends empty transaction_id for Fee events, so we generate a robust unique fallback
         const transactionId = payload.transaction_id ||
             (payload.event_type === 'FEE_PAYMENT' ? `fee-${payload.iat}-${payload.amount}` : null) ||
             payload.ref_id ||
             `unknown-${Date.now()}`;
-        // Amount might be in Baht or Satang? TrueMoney typically uses Baht in some APIs, Satang in others.
-        // Assuming payload.amount is in Baht based on "545" being likely 5.45 fee? Or 545 baht fee?
-        // Wait, "545" for a fee? If transfer is 201 baht. Fee 545 is impossible.
-        // Fee 5.45 baht? 545 satang = 5.45 baht.
-        // So amount is likely in SATANG? Or 545 is decimal?
-        // Let's assume input needs normalization.
 
+        // Amount/Fee is in Satang (Integer), convert to Baht (Float)
         let amountRaw = payload.amount || payload.amount_net || 0;
         let feeRaw = payload.fee || payload.transaction_fee || 0;
 
-        // Amount/Fee is in Satang (Integer), convert to Baht (Float)
         if (amountRaw > 0) amountRaw = amountRaw / 100.0;
         if (feeRaw > 0) feeRaw = feeRaw / 100.0;
 
         // Fee adjustment logic based on event type
         if (payload.event_type === "FEE_PAYMENT") {
-            // For fee payment, the 'amount' in payload IS the fee.
+            // For fee payment, the 'amount' in payload IS the fee expense.
             feeRaw = amountRaw;
-            amountRaw = 0;
+            // Keep amountRaw same as feeRaw so it shows as a negative change in history
         }
 
         const mobileNo = payload.mobile_no || payload.recipient_mobile || payload.sender_mobile;
-        const transactionType = payload.transaction_type || (amountRaw > 0 ? "incoming" : "outgoing");
 
-        if (!mobileNo) {
-            console.log(`[Webhook] Missing mobile_no in payload. Likely a verification test. Payload:`, JSON.stringify(payload));
-            return res.status(200).json({ status: "ignored", message: "Missing mobile_no, assuming verification" });
+        let transactionType = payload.transaction_type;
+        if (!transactionType) {
+            if (payload.event_type === "FEE_PAYMENT") {
+                transactionType = "outgoing";
+            } else {
+                transactionType = amountRaw > 0 ? "incoming" : "outgoing";
+            }
         }
 
-        // 3. Find Account in Network
+        if (!mobileNo) {
+            console.log(`[Webhook] Missing mobile_no in payload. Payload:`, JSON.stringify(payload));
+        }
+
         // 3. Find Account in Network
         // Strategy: Check if any of the numbers in payload belong to an account in this network
         let account = null;
@@ -154,15 +154,25 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         }
 
         // Final Fallback: If no mobile found, but we are in a valid network prefix
-        // checking the first account (Useful for FEE_PAYMENT which has no mobile info)
         if (!account && network) {
-            console.log(`[Webhook] No mobile match, using default account for network ${prefix}`);
+            console.log(`[Webhook] No mobile match, attempting default account for network ${prefix} (ID: ${network.id})`);
             account = await prisma.account.findFirst({
                 where: { networkId: network.id }
             });
+            if (account) console.log(`[Webhook] Fallback found account: ${account.id} (${account.name})`);
         }
 
         if (!account) {
+            await prisma.notificationLog.create({
+                data: {
+                    type: "webhook_debug" as any,
+                    message: "Account NOT found",
+                    payload: {
+                        reason: "No matching mobile and no default account",
+                        mobiles: [payload.recipient_mobile, payload.sender_mobile, payload.mobile_no]
+                    } as any
+                }
+            });
             console.log(`[Webhook] Account not found. Payload mobiles: ${payload.recipient_mobile}, ${payload.sender_mobile}, ${payload.mobile_no}`);
             return res.status(200).json({ status: "ignored", reason: "Account not found" });
         }
@@ -200,9 +210,26 @@ router.all("/:prefix", async (req: Request, res: Response) => {
                     timestamp: payload.transaction_date ? new Date(payload.transaction_date) : new Date(),
                 }
             });
+
+            await prisma.notificationLog.create({
+                data: {
+                    type: "webhook_debug" as any,
+                    message: "Transaction Saved Successfully",
+                    accountId: account.id,
+                    payload: { transactionId, amount, fee, type: transactionType } as any
+                }
+            });
             console.log(`[Webhook] Transaction saved successfully!`);
-        } catch (saveErr) {
+        } catch (saveErr: any) {
             console.error(`[Webhook] DB Save Failed:`, saveErr);
+
+            await prisma.notificationLog.create({
+                data: {
+                    type: "webhook_debug" as any,
+                    message: "DB Save ERROR",
+                    payload: { error: saveErr.message, stack: saveErr.stack } as any
+                }
+            });
             throw saveErr;
         }
 
