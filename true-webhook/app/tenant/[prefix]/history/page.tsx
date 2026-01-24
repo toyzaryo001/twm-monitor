@@ -23,7 +23,7 @@ interface HistoryEntry {
     sender?: string;
     recipient?: string;
     status?: string;
-    accountName?: string; // New field from backend
+    accountName?: string;
 }
 
 type Tab = "all" | "deposit" | "withdraw" | "fee";
@@ -34,7 +34,7 @@ export default function HistoryPage() {
     const params = useParams();
     const prefix = params.prefix as string;
     const [accounts, setAccounts] = useState<Account[]>([]);
-    const [selectedAccount, setSelectedAccount] = useState<string>("all"); // Default to ALL
+    const [selectedAccount, setSelectedAccount] = useState<string>(""); // Default empty, load first later
     const [history, setHistory] = useState<HistoryEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadingHistory, setLoadingHistory] = useState(false);
@@ -43,20 +43,19 @@ export default function HistoryPage() {
     // Filters
     const [activeTab, setActiveTab] = useState<Tab>("all");
     const [dateFilter, setDateFilter] = useState<DateRange>("today");
+    const [limit, setLimit] = useState<number>(20); // Default limit
 
     const eventSourceRef = useRef<EventSource | null>(null);
 
     const getToken = () => localStorage.getItem("tenantToken") || "";
 
     const fetchHistory = useCallback(async (showLoading = false) => {
-        // if (!selectedAccount) return; // Allow "all" which is truthy string
+        if (!selectedAccount) return;
 
         if (showLoading) setLoadingHistory(true);
         const token = getToken();
 
         try {
-            // Fetch more items to support client-side filtering
-            const limit = 200;
             let url = "";
             if (selectedAccount === "all") {
                 url = `/api/tenant/${prefix}/accounts/all-history?limit=${limit}`;
@@ -64,9 +63,7 @@ export default function HistoryPage() {
                 url = `/api/tenant/${prefix}/accounts/${selectedAccount}/history?limit=${limit}`;
             }
 
-            const res = await fetch(url, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
             const data = await res.json();
             if (data.ok) {
                 setHistory(data.data);
@@ -75,7 +72,7 @@ export default function HistoryPage() {
             console.error("Error fetching history", e);
         }
         setLoadingHistory(false);
-    }, [selectedAccount, prefix]);
+    }, [selectedAccount, prefix, limit]);
 
     // Fetch accounts
     useEffect(() => {
@@ -90,7 +87,10 @@ export default function HistoryPage() {
                 const data = await res.json();
                 if (data.ok && data.data.length > 0) {
                     setAccounts(data.data);
-                    // Don't force select first account, keep "all" default
+                    // Default to first account if nothing selected
+                    if (!selectedAccount) {
+                        setSelectedAccount(data.data[0].id);
+                    }
                 }
             } catch (e) {
                 console.error("Error fetching accounts", e);
@@ -101,7 +101,7 @@ export default function HistoryPage() {
         fetchAccounts();
     }, [prefix]);
 
-    // Fetch history
+    // Fetch history on change
     useEffect(() => {
         if (selectedAccount) {
             fetchHistory(true);
@@ -110,7 +110,12 @@ export default function HistoryPage() {
 
     // SSE
     useEffect(() => {
-        if (!selectedAccount) return;
+        if (!selectedAccount || selectedAccount === "all") {
+            if (eventSourceRef.current) eventSourceRef.current.close();
+            setIsConnected(false); // No live for All view yet
+            return;
+        }
+
         if (eventSourceRef.current) eventSourceRef.current.close();
 
         const eventSource = new EventSource(`/api/sse/balance/${selectedAccount}`);
@@ -133,10 +138,6 @@ export default function HistoryPage() {
 
     // Helpers
     const isFee = (entry: HistoryEntry) => {
-        // Identify fee transaction: 
-        // 1. Explicitly named "Fee" in recipient
-        // 2. Or Amount matches Fee (pure fee deduction)
-        // 3. Or P2P Fee Collection
         if (entry.recipient && (entry.recipient.includes("Fee") || entry.recipient.includes("P2P Fee"))) return true;
         if (entry.fee && entry.fee > 0 && entry.amount === entry.fee) return true;
         return false;
@@ -150,9 +151,7 @@ export default function HistoryPage() {
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const entryDay = new Date(txDate.getFullYear(), txDate.getMonth(), txDate.getDate());
 
-        if (dateFilter === "today") {
-            return entryDay.getTime() === today.getTime();
-        }
+        if (dateFilter === "today") return entryDay.getTime() === today.getTime();
 
         if (dateFilter === "yesterday") {
             const yest = new Date(today);
@@ -173,19 +172,14 @@ export default function HistoryPage() {
 
     const getFilteredHistory = () => {
         return history.filter(entry => {
-            // 1. Date Filter
             if (!filterDate(entry)) return false;
 
-            // 2. Tab Filter
             if (activeTab === "all") return true;
 
-            // Deposit: Show all positive changes (Snapshots + Transactions)
             if (activeTab === "deposit") return entry.change > 0;
 
-            // Fee: Show ONLY Webhook fees (type='transaction' AND isFee)
             if (activeTab === "fee") return entry.type === 'transaction' && isFee(entry);
 
-            // Withdraw: Show ONLY Webhook withdrawals (type='transaction' AND negative change AND not fee)
             if (activeTab === "withdraw") return entry.type === 'transaction' && entry.change < 0 && !isFee(entry);
 
             return true;
@@ -211,18 +205,36 @@ export default function HistoryPage() {
                 <h1 className="tenant-page-title">ประวัติยอดเงิน</h1>
                 <div className="flex-center gap-16">
                     {/* Live Status */}
-                    <div className="flex-center gap-6">
-                        <div style={{ width: 8, height: 8, borderRadius: "50%", background: isConnected ? "#22c55e" : "#ef4444", animation: isConnected ? "pulse 2s infinite" : "none" }} />
-                        <span style={{ fontSize: 12, color: isConnected ? "#22c55e" : "#ef4444" }}>{isConnected ? "LIVE" : "OFFLINE"}</span>
-                    </div>
+                    {selectedAccount !== 'all' && (
+                        <div className="flex-center gap-6">
+                            <div style={{ width: 8, height: 8, borderRadius: "50%", background: isConnected ? "#22c55e" : "#ef4444", animation: isConnected ? "pulse 2s infinite" : "none" }} />
+                            <span style={{ fontSize: 12, color: isConnected ? "#22c55e" : "#ef4444" }}>{isConnected ? "LIVE" : "OFFLINE"}</span>
+                        </div>
+                    )}
+
                     {/* Account Select */}
                     {accounts.length > 0 && (
                         <select className="tenant-form-input w-auto min-w-200" value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)}>
+                            <option value="all">ทั้งหมด (รวมทุกวอลเล็ท)</option>
                             {accounts.map((acc) => (
                                 <option key={acc.id} value={acc.id}>{acc.name} {acc.phoneNumber ? `(${acc.phoneNumber})` : ""}</option>
                             ))}
                         </select>
                     )}
+
+                    {/* Limit Select */}
+                    <select
+                        className="tenant-form-input w-auto"
+                        value={limit}
+                        onChange={(e) => setLimit(Number(e.target.value))}
+                        style={{ cursor: "pointer" }}
+                    >
+                        <option value={20}>20 รายการ</option>
+                        <option value={50}>50 รายการ</option>
+                        <option value={100}>100 รายการ</option>
+                        <option value={300}>300 รายการ</option>
+                        <option value={500}>500 รายการ</option>
+                    </select>
                 </div>
             </div>
 
@@ -244,7 +256,7 @@ export default function HistoryPage() {
                     <button className={`tab-btn ${activeTab === "fee" ? "active" : ""}`} onClick={() => setActiveTab("fee")}>ค่าธรรมเนียม</button>
                 </div>
 
-                {/* Date Filters (Always visible for better UX, or just fee? User asked for fee, but helpful especially for All/Deposit too) */}
+                {/* Date Filters */}
                 <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
                     <span style={{ fontSize: 13, color: "var(--text-muted)", marginRight: 8 }}>ช่วงเวลา:</span>
                     <button className={`date-btn ${dateFilter === "today" ? "active" : ""}`} onClick={() => setDateFilter("today")}>วันนี้</button>
@@ -265,7 +277,7 @@ export default function HistoryPage() {
                         </div>
                     </div>
                     <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                        {filteredHistory.length} รายการ
+                        {filteredHistory.length} รายการ (จากทั้งหมด {limit})
                     </div>
                 </div>
 
@@ -292,11 +304,7 @@ export default function HistoryPage() {
                                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                                         <div>
                                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                                <div style={{
-                                                    fontSize: 20,
-                                                    fontWeight: 700,
-                                                    color: "var(--text-primary)"
-                                                }}>
+                                                <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)" }}>
                                                     {entry.type === 'transaction'
                                                         ? `฿ ${(entry.amount || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
                                                         : `฿ ${entry.balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
