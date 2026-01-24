@@ -146,13 +146,14 @@ export default function TenantSettingsPage() {
                             gap: 10
                         }}>
                             <span style={{ color: "var(--accent)" }}>
-                                {typeof window !== 'undefined' ? `${window.location.origin}/api/webhook/${prefix}` : `/api/webhook/${prefix}`}
+                                {typeof window !== 'undefined' ? `${window.location.origin}/api/webhook/${prefix}?mobile=` : `/api/webhook/${prefix}?mobile=`}
+                                <span style={{ opacity: 0.5 }}>08x...</span>
                             </span>
                             <button
                                 onClick={() => {
-                                    const url = `${window.location.origin}/api/webhook/${prefix}`;
+                                    const url = `${window.location.origin}/api/webhook/${prefix}?mobile=098xxxxxxx`;
                                     navigator.clipboard.writeText(url);
-                                    alert("คัดลอกลิ้งก์แล้ว!");
+                                    alert("คัดลอกลิ้งก์แล้ว! (อย่าลืมเปลี่ยนเบอร์โทรเป็นเบอร์จริงของวอลเล็ทนั้นๆ)");
                                 }}
                                 style={{
                                     background: "var(--tenant-primary)",
