@@ -101,7 +101,10 @@ router.all("/:prefix", async (req: Request, res: Response) => {
             // Keep amountRaw same as feeRaw so it shows as a negative change in history
         }
 
-        const mobileNo = payload.mobile_no || payload.recipient_mobile || payload.sender_mobile;
+        const mobileNo = payload.mobile_no ||
+            payload.recipient_mobile ||
+            payload.sender_mobile ||
+            (req.query.mobile as string); // Support ?mobile=08x on URL
 
         let transactionType = payload.transaction_type;
         if (!transactionType) {
@@ -113,7 +116,7 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         }
 
         if (!mobileNo) {
-            console.log(`[Webhook] Missing mobile_no in payload. Payload:`, JSON.stringify(payload));
+            console.log(`[Webhook] Missing mobile_no in payload/query. Payload:`, JSON.stringify(payload));
         }
 
         // 3. Find Account in Network
@@ -143,24 +146,17 @@ router.all("/:prefix", async (req: Request, res: Response) => {
             if (account) determinedType = "outgoing";
         }
 
-        // Fallback to generic mobile_no
-        if (!account && payload.mobile_no) {
+        // Fallback to generic mobile_no or query param
+        if (!account && mobileNo) {
             account = await prisma.account.findFirst({
                 where: {
                     networkId: network.id,
-                    phoneNumber: { contains: payload.mobile_no }
+                    phoneNumber: { contains: mobileNo }
                 }
             });
         }
 
-        // Final Fallback: If no mobile found, but we are in a valid network prefix
-        if (!account && network) {
-            console.log(`[Webhook] No mobile match, attempting default account for network ${prefix} (ID: ${network.id})`);
-            account = await prisma.account.findFirst({
-                where: { networkId: network.id }
-            });
-            if (account) console.log(`[Webhook] Fallback found account: ${account.id} (${account.name})`);
-        }
+        // NOTE: REMOVED unsafe fallback to first account to prevent wrong wallet assignment
 
         if (!account) {
             await prisma.notificationLog.create({
@@ -168,8 +164,8 @@ router.all("/:prefix", async (req: Request, res: Response) => {
                     type: "webhook_debug" as any,
                     message: "Account NOT found",
                     payload: {
-                        reason: "No matching mobile and no default account",
-                        mobiles: [payload.recipient_mobile, payload.sender_mobile, payload.mobile_no]
+                        reason: "No matching mobile in payload or query params",
+                        mobiles: [payload.recipient_mobile, payload.sender_mobile, payload.mobile_no, req.query.mobile]
                     } as any
                 }
             });
