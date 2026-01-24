@@ -303,17 +303,18 @@ export default function WalletsPage() {
                                         ฿ {(account.stats?.totalFee || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                                     </span>
                                 </div>
-                                {account.stats?.firstActiveAt && (
-                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                            <span style={{ fontSize: 13 }}>⏱️</span>
-                                            <span style={{ fontSize: 11, color: "var(--tenant-text-muted)" }}>เริ่มนับ:</span>
-                                        </div>
-                                        <span style={{ fontSize: 11, color: "var(--tenant-text-muted)" }}>
-                                            {new Date(account.stats.firstActiveAt).toLocaleDateString("th-TH", { day: 'numeric', month: 'short', year: '2-digit' })}
-                                        </span>
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                        <span style={{ fontSize: 13 }}>⏱️</span>
+                                        <span style={{ fontSize: 11, color: "var(--tenant-text-muted)" }}>เริ่มนับ:</span>
                                     </div>
-                                )}
+                                    <span style={{ fontSize: 11, color: "var(--tenant-text-muted)" }}>
+                                        {(account.stats?.totalFee || 0) > 0 && account.stats?.firstActiveAt
+                                            ? new Date(account.stats.firstActiveAt).toLocaleDateString("th-TH", { day: 'numeric', month: 'short', year: '2-digit' })
+                                            : "-- -- --"
+                                        }
+                                    </span>
+                                </div>
                             </div>
 
                             <div className="wallet-actions">
