@@ -82,7 +82,10 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         }
 
         // Extract fields from mapped payload
-        const transactionId = payload.transaction_id || payload.ref_id || payload.id || `unknown-${Date.now()}`;
+        const transactionId = payload.transaction_id ||
+            (payload.event_type === 'FEE_PAYMENT' ? `fee-${payload.iat}-${payload.amount}` : null) ||
+            payload.ref_id ||
+            `unknown-${Date.now()}`;
         // Amount might be in Baht or Satang? TrueMoney typically uses Baht in some APIs, Satang in others.
         // Assuming payload.amount is in Baht based on "545" being likely 5.45 fee? Or 545 baht fee?
         // Wait, "545" for a fee? If transfer is 201 baht. Fee 545 is impossible.
@@ -93,12 +96,15 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         let amountRaw = payload.amount || payload.amount_net || 0;
         let feeRaw = payload.fee || payload.transaction_fee || 0;
 
+        // Amount/Fee is in Satang (Integer), convert to Baht (Float)
+        if (amountRaw > 0) amountRaw = amountRaw / 100.0;
+        if (feeRaw > 0) feeRaw = feeRaw / 100.0;
+
         // Fee adjustment logic based on event type
         if (payload.event_type === "FEE_PAYMENT") {
             // For fee payment, the 'amount' in payload IS the fee.
             feeRaw = amountRaw;
-            amountRaw = 0; // It's just a fee record?
-            // Or better: mark it as internal fee transaction?
+            amountRaw = 0;
         }
 
         const mobileNo = payload.mobile_no || payload.recipient_mobile || payload.sender_mobile;
