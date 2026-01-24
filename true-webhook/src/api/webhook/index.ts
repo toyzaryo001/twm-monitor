@@ -200,8 +200,8 @@ router.all("/:prefix", async (req: Request, res: Response) => {
                     status: payload.status || "SUCCESS",
                     senderMobile: payload.sender_mobile,
                     senderName: payload.sender_name,
-                    recipientMobile: payload.recipient_mobile,
-                    recipientName: payload.recipient_name,
+                    recipientMobile: payload.recipient_mobile || (payload.event_type === 'SEND_P2P' ? payload.merchant_name : null),
+                    recipientName: payload.recipient_name || (payload.event_type === 'SEND_P2P' ? payload.merchant_name : null),
                     rawPayload: payload,
                     timestamp: payload.transaction_date ? new Date(payload.transaction_date) : new Date(),
                 }
