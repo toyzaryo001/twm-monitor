@@ -34,7 +34,7 @@ export default function HistoryPage() {
     const params = useParams();
     const prefix = params.prefix as string;
     const [accounts, setAccounts] = useState<Account[]>([]);
-    const [selectedAccount, setSelectedAccount] = useState<string>(""); // Default empty, load first later
+    const [selectedAccount, setSelectedAccount] = useState<string>("");
     const [history, setHistory] = useState<HistoryEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadingHistory, setLoadingHistory] = useState(false);
@@ -44,6 +44,9 @@ export default function HistoryPage() {
     const [activeTab, setActiveTab] = useState<Tab>("deposit");
     const [dateFilter, setDateFilter] = useState<DateRange>("today");
     const [limit, setLimit] = useState<number>(20); // Default limit
+    const [page, setPage] = useState<number>(1);
+    const [totalPages, setTotalPages] = useState<number>(1);
+    const [totalItems, setTotalItems] = useState<number>(0);
 
     const eventSourceRef = useRef<EventSource | null>(null);
 
@@ -58,21 +61,30 @@ export default function HistoryPage() {
         try {
             let url = "";
             if (selectedAccount === "all") {
-                url = `/api/tenant/${prefix}/accounts/all-history?limit=${limit}`;
+                url = `/api/tenant/${prefix}/accounts/all-history?limit=${limit}&page=${page}`;
             } else {
-                url = `/api/tenant/${prefix}/accounts/${selectedAccount}/history?limit=${limit}`;
+                url = `/api/tenant/${prefix}/accounts/${selectedAccount}/history?limit=${limit}&page=${page}`;
             }
 
             const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
             const data = await res.json();
             if (data.ok) {
                 setHistory(data.data);
+                if (data.pagination) {
+                    setTotalPages(data.pagination.totalPages);
+                    setTotalItems(data.pagination.total);
+                }
             }
         } catch (e) {
             console.error("Error fetching history", e);
         }
         setLoadingHistory(false);
-    }, [selectedAccount, prefix, limit]);
+    }, [selectedAccount, prefix, limit, page]);
+
+    // Reset page when filters change (account or limit)
+    useEffect(() => {
+        setPage(1);
+    }, [selectedAccount, limit]);
 
     // Fetch accounts
     useEffect(() => {
@@ -276,7 +288,7 @@ export default function HistoryPage() {
                         </div>
                     </div>
                     <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                        {filteredHistory.length} รายการ (จากทั้งหมด {limit})
+                        {filteredHistory.length} รายการ (จากทั้งหมด {totalItems})
                     </div>
                 </div>
 
@@ -348,6 +360,59 @@ export default function HistoryPage() {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                )}
+
+                {/* Pagination Controls */}
+                {!loadingHistory && (totalPages > 1 || page > 1) && (
+                    <div style={{
+                        marginTop: 20,
+                        display: "flex",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        gap: 16,
+                        paddingTop: 16,
+                        borderTop: "1px solid var(--border)"
+                    }}>
+                        <button
+                            disabled={page <= 1}
+                            onClick={() => setPage(p => Math.max(1, p - 1))}
+                            className="tenant-btn-secondary"
+                            style={{
+                                padding: "6px 12px",
+                                fontSize: 13,
+                                opacity: page <= 1 ? 0.5 : 1,
+                                cursor: page <= 1 ? "not-allowed" : "pointer",
+                                border: "1px solid var(--border)",
+                                background: "var(--bg-card)",
+                                color: "var(--text-primary)",
+                                borderRadius: 4
+                            }}
+                        >
+                            &lt; ก่อนหน้า
+                        </button>
+
+                        <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+                            หน้า {page} จาก {totalPages || 1}
+                        </span>
+
+                        <button
+                            disabled={page >= totalPages}
+                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                            className="tenant-btn-secondary"
+                            style={{
+                                padding: "6px 12px",
+                                fontSize: 13,
+                                opacity: page >= totalPages ? 0.5 : 1,
+                                cursor: page >= totalPages ? "not-allowed" : "pointer",
+                                border: "1px solid var(--border)",
+                                background: "var(--bg-card)",
+                                color: "var(--text-primary)",
+                                borderRadius: 4
+                            }}
+                        >
+                            ถัดไป &gt;
+                        </button>
                     </div>
                 )}
             </div>

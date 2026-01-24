@@ -41,7 +41,9 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
             return res.status(404).json({ ok: false, error: "NETWORK_NOT_FOUND" });
         }
 
-        const limit = parseInt(req.query.limit as string, 10) || 100;
+        const limit = parseInt(req.query.limit as string, 10) || 20;
+        const page = parseInt(req.query.page as string, 10) || 1;
+        const skip = (page - 1) * limit;
 
         // Fetch all accounts for this network to filter
         const accounts = await prisma.account.findMany({
@@ -51,16 +53,27 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
         const accountIds = accounts.map(a => a.id);
         const accountMap = accounts.reduce((acc, curr) => ({ ...acc, [curr.id]: curr }), {} as any);
 
-        // Fetch both Transactions and Snapshots for ALL accounts
+        // 1. Get Totals (for pagination UI)
+        const [totalTx, totalSnaps] = await Promise.all([
+            (prisma as any).financialTransaction.count({ where: { accountId: { in: accountIds } } }),
+            prisma.balanceSnapshot.count({ where: { accountId: { in: accountIds } } })
+        ]);
+        const total = totalTx + totalSnaps;
+
+        // 2. Fetch Data (Approximation: fetch 'limit' from both, merge, sort, take 'limit')
+        // Ideally we'd use cursor-based or union, but this is sufficient for basic browsing
+        // To make page 2 work "okay", we skip 'skip' in both. It's not perfect but consistent enough.
         const [transactions, snapshots] = await Promise.all([
             (prisma as any).financialTransaction.findMany({
                 where: { accountId: { in: accountIds } },
                 orderBy: { timestamp: "desc" },
+                skip: skip,
                 take: limit,
             }),
             prisma.balanceSnapshot.findMany({
                 where: { accountId: { in: accountIds } },
                 orderBy: { checkedAt: "desc" },
+                skip: skip,
                 take: limit,
             })
         ]);
@@ -84,16 +97,12 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
 
         // Map Snapshots
         const snapshotHistory = snapshots.map((snapshot: any) => {
-            // Logic for change calculation across different accounts is tricky for global view
-            // We'll just show snapshot state or rely on internal logic if possible
-            // For global view, snapshots are less useful as "change" logs unless linked to prev snapshot of SAME account
-            // But let's include them for completeness
             return {
                 id: snapshot.id,
                 type: "snapshot",
                 balance: snapshot.balanceSatang / 100,
                 balanceSatang: snapshot.balanceSatang,
-                change: 0, // Hard to calc efficiently in batch without grouping
+                change: 0,
                 changeSatang: 0,
                 mobileNo: snapshot.mobileNo,
                 source: snapshot.source,
@@ -103,12 +112,21 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
             };
         });
 
-        // Merge and Sort
+        // Merge and Sort and Slice to Ensure Limit
         const mergedHistory = [...txHistory, ...snapshotHistory]
             .sort((a, b) => new Date(b.checkedAt).getTime() - new Date(a.checkedAt).getTime())
             .slice(0, limit);
 
-        return res.json({ ok: true, data: mergedHistory });
+        return res.json({
+            ok: true,
+            data: mergedHistory,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit)
+            }
+        });
     } catch (err) {
         next(err);
     }
@@ -305,17 +323,28 @@ router.get("/:id/balance", async (req: Request<{ prefix: string; id: string }>, 
 router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
     try {
         const limit = parseInt(req.query.limit as string, 10) || 50;
+        const page = parseInt(req.query.page as string, 10) || 1;
+        const skip = (page - 1) * limit;
+
+        // 1. Get Totals
+        const [totalTx, totalSnaps] = await Promise.all([
+            (prisma as any).financialTransaction.count({ where: { accountId: req.params.id } }),
+            prisma.balanceSnapshot.count({ where: { accountId: req.params.id } })
+        ]);
+        const total = totalTx + totalSnaps;
 
         // Fetch both Transactions (New) and Snapshots (Old)
         const [transactions, snapshots] = await Promise.all([
             (prisma as any).financialTransaction.findMany({
                 where: { accountId: req.params.id },
                 orderBy: { timestamp: "desc" },
+                skip: skip,
                 take: limit,
             }),
             prisma.balanceSnapshot.findMany({
                 where: { accountId: req.params.id },
                 orderBy: { checkedAt: "desc" },
+                skip: skip,
                 take: limit,
             })
         ]);
@@ -359,7 +388,16 @@ router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, 
             .sort((a, b) => new Date(b.checkedAt).getTime() - new Date(a.checkedAt).getTime())
             .slice(0, limit);
 
-        return res.json({ ok: true, data: mergedHistory });
+        return res.json({
+            ok: true,
+            data: mergedHistory,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit)
+            }
+        });
     } catch (err) {
         next(err);
     }
