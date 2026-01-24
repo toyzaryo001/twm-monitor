@@ -1,17 +1,14 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { z } from "zod";
 import { prisma } from "../../lib/prisma";
-import { requireAuth, requireNetworkAccess } from "../../middleware/auth";
+import { z } from "zod";
 import { broadcastBalanceUpdate } from "../sse";
 
 const router = Router({ mergeParams: true });
 
-router.use(requireAuth, requireNetworkAccess);
-
-// Get network from prefix
-async function getNetwork(prefix: string) {
+// Helper to check network exists
+const getNetwork = async (prefix: string) => {
     return prisma.network.findUnique({ where: { prefix } });
-}
+};
 
 // List accounts
 router.get("/", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
@@ -44,6 +41,7 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
         const limit = parseInt(req.query.limit as string, 10) || 20;
         const page = parseInt(req.query.page as string, 10) || 1;
         const skip = (page - 1) * limit;
+        const filterType = req.query.filter as string || "all";
 
         // Date Filtering
         const fromDate = req.query.from ? new Date(req.query.from as string) : null;
@@ -65,6 +63,31 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
             }
         }
 
+        // Type Filtering
+        const typeFilterTx: any = {};
+        let includeSnapshots = false;
+
+        if (filterType === "deposit") {
+            typeFilterTx.type = "incoming";
+            includeSnapshots = false;
+        } else if (filterType === "withdraw") {
+            typeFilterTx.type = "outgoing";
+            typeFilterTx.NOT = [
+                { recipientName: { contains: "Fee" } },
+                { recipientMobile: { contains: "Fee" } }
+            ];
+            includeSnapshots = false;
+        } else if (filterType === "fee") {
+            typeFilterTx.type = "outgoing";
+            typeFilterTx.OR = [
+                { recipientName: { contains: "Fee" } },
+                { recipientMobile: { contains: "Fee" } }
+            ];
+            includeSnapshots = false;
+        } else {
+            includeSnapshots = true; // "all"
+        }
+
         // Fetch all accounts
         const accounts = await prisma.account.findMany({
             where: { networkId: network.id },
@@ -78,15 +101,13 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
             (prisma as any).financialTransaction.count({
                 where: {
                     accountId: { in: accountIds },
-                    ...dateFilterTx
+                    ...dateFilterTx,
+                    ...typeFilterTx
                 }
             }),
-            prisma.balanceSnapshot.count({
-                where: {
-                    accountId: { in: accountIds },
-                    ...dateFilterSnap
-                }
-            })
+            includeSnapshots
+                ? prisma.balanceSnapshot.count({ where: { accountId: { in: accountIds }, ...dateFilterSnap } })
+                : 0
         ]);
         const total = totalTx + totalSnaps;
 
@@ -95,21 +116,21 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
             (prisma as any).financialTransaction.findMany({
                 where: {
                     accountId: { in: accountIds },
-                    ...dateFilterTx
+                    ...dateFilterTx,
+                    ...typeFilterTx
                 },
                 orderBy: { timestamp: "desc" },
                 skip: skip,
                 take: limit,
             }),
-            prisma.balanceSnapshot.findMany({
-                where: {
-                    accountId: { in: accountIds },
-                    ...dateFilterSnap
-                },
-                orderBy: { checkedAt: "desc" },
-                skip: skip,
-                take: limit,
-            })
+            includeSnapshots
+                ? prisma.balanceSnapshot.findMany({
+                    where: { accountId: { in: accountIds }, ...dateFilterSnap },
+                    orderBy: { checkedAt: "desc" },
+                    skip: skip,
+                    take: limit,
+                })
+                : []
         ]);
 
         // Map Transactions
@@ -254,16 +275,13 @@ router.post("/:id/balance", async (req: Request<{ prefix: string; id: string }>,
             const walletData = await walletRes.json();
 
             // Parse balance from API response
-            // Format: { status: "ok", data: { balance: "20010", mobile_no: "0801234567", updated_at: "..." } }
             let balanceSatang = 0;
             let mobileNo = account.phoneNumber || "";
 
             if (walletData.data) {
-                // Balance is a string in satang
                 balanceSatang = parseInt(walletData.data.balance, 10) || 0;
                 mobileNo = walletData.data.mobile_no || account.phoneNumber || "";
             } else if (walletData.balance) {
-                // Fallback format
                 balanceSatang = parseInt(walletData.balance, 10) || 0;
                 mobileNo = walletData.mobile_no || walletData.mobileNo || account.phoneNumber || "";
             }
@@ -290,7 +308,6 @@ router.post("/:id/balance", async (req: Request<{ prefix: string; id: string }>,
                 });
                 checkedAt = snapshot.checkedAt;
             } else {
-                // Use last snapshot time if no change
                 checkedAt = lastSnapshot?.checkedAt || new Date();
             }
 
@@ -354,6 +371,7 @@ router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, 
         const limit = parseInt(req.query.limit as string, 10) || 50;
         const page = parseInt(req.query.page as string, 10) || 1;
         const skip = (page - 1) * limit;
+        const filterType = req.query.filter as string || "all";
 
         // Date Filtering
         const fromDate = req.query.from ? new Date(req.query.from as string) : null;
@@ -375,31 +393,58 @@ router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, 
             }
         }
 
+        // Type Filtering
+        const typeFilterTx: any = {};
+        let includeSnapshots = false;
+
+        if (filterType === "deposit") {
+            typeFilterTx.type = "incoming";
+            includeSnapshots = false;
+        } else if (filterType === "withdraw") {
+            typeFilterTx.type = "outgoing";
+            typeFilterTx.NOT = [
+                { recipientName: { contains: "Fee" } },
+                { recipientMobile: { contains: "Fee" } }
+            ];
+            includeSnapshots = false;
+        } else if (filterType === "fee") {
+            typeFilterTx.type = "outgoing";
+            typeFilterTx.OR = [
+                { recipientName: { contains: "Fee" } },
+                { recipientMobile: { contains: "Fee" } }
+            ];
+            includeSnapshots = false;
+        } else {
+            includeSnapshots = true;
+        }
+
         // 1. Get Totals
         const [totalTx, totalSnaps] = await Promise.all([
             (prisma as any).financialTransaction.count({
-                where: { accountId: req.params.id, ...dateFilterTx }
+                where: { accountId: req.params.id, ...dateFilterTx, ...typeFilterTx }
             }),
-            prisma.balanceSnapshot.count({
-                where: { accountId: req.params.id, ...dateFilterSnap }
-            })
+            includeSnapshots
+                ? prisma.balanceSnapshot.count({ where: { accountId: req.params.id, ...dateFilterSnap } })
+                : 0
         ]);
         const total = totalTx + totalSnaps;
 
         // Fetch both Transactions (New) and Snapshots (Old)
         const [transactions, snapshots] = await Promise.all([
             (prisma as any).financialTransaction.findMany({
-                where: { accountId: req.params.id, ...dateFilterTx },
+                where: { accountId: req.params.id, ...dateFilterTx, ...typeFilterTx },
                 orderBy: { timestamp: "desc" },
                 skip: skip,
                 take: limit,
             }),
-            prisma.balanceSnapshot.findMany({
-                where: { accountId: req.params.id, ...dateFilterSnap },
-                orderBy: { checkedAt: "desc" },
-                skip: skip,
-                take: limit,
-            })
+            includeSnapshots
+                ? prisma.balanceSnapshot.findMany({
+                    where: { accountId: req.params.id, ...dateFilterSnap },
+                    orderBy: { checkedAt: "desc" },
+                    skip: skip,
+                    take: limit,
+                })
+                : []
         ]);
 
         // Map Transactions to unified format
@@ -452,5 +497,3 @@ router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, 
 });
 
 export default router;
-
-

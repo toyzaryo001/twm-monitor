@@ -98,11 +98,13 @@ export default function HistoryPage() {
 
         try {
             const dateParams = getDateRangeParams(dateFilter);
+            const filterParam = `&filter=${activeTab}`;
+
             let url = "";
             if (selectedAccount === "all") {
-                url = `/api/tenant/${prefix}/accounts/all-history?limit=${limit}&page=${page}${dateParams}`;
+                url = `/api/tenant/${prefix}/accounts/all-history?limit=${limit}&page=${page}${dateParams}${filterParam}`;
             } else {
-                url = `/api/tenant/${prefix}/accounts/${selectedAccount}/history?limit=${limit}&page=${page}${dateParams}`;
+                url = `/api/tenant/${prefix}/accounts/${selectedAccount}/history?limit=${limit}&page=${page}${dateParams}${filterParam}`;
             }
 
             const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
@@ -118,12 +120,12 @@ export default function HistoryPage() {
             console.error("Error fetching history", e);
         }
         setLoadingHistory(false);
-    }, [selectedAccount, prefix, limit, page, dateFilter]);
+    }, [selectedAccount, prefix, limit, page, dateFilter, activeTab]);
 
     // Reset page when filters change
     useEffect(() => {
         setPage(1);
-    }, [selectedAccount, limit, dateFilter]);
+    }, [selectedAccount, limit, dateFilter, activeTab]);
 
     // Fetch accounts
     useEffect(() => {
@@ -193,21 +195,8 @@ export default function HistoryPage() {
         return false;
     };
 
-    const getFilteredHistory = () => {
-        return history.filter(entry => {
-            if (activeTab === "all") return true;
-
-            if (activeTab === "deposit") return entry.change > 0;
-
-            if (activeTab === "fee") return entry.type === 'transaction' && isFee(entry);
-
-            if (activeTab === "withdraw") return entry.type === 'transaction' && entry.change < 0 && !isFee(entry);
-
-            return true;
-        });
-    };
-
-    const filteredHistory = getFilteredHistory();
+    // Use raw history as it is already filtered by server
+    const filteredHistory = history;
     const totalAmount = filteredHistory.reduce((sum, entry) => sum + Math.abs(entry.type === 'transaction' && entry.amount ? entry.amount : entry.change), 0);
 
     const formatDate = (dateStr: string) => {
