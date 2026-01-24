@@ -77,10 +77,6 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
         let totalSnaps = 0;
 
         // -- SOURCE ROUTING LOGIC --
-        // Deposit -> BalanceSnapshot
-        // Withdraw/Fee -> FinancialTransaction
-        // All -> Both
-
         if (filterType === "deposit") {
             // Fetch Snapshots ONLY
             [totalSnaps, snapshots] = await Promise.all([
@@ -100,13 +96,15 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
                 typeFilterTx.type = "outgoing";
                 typeFilterTx.NOT = [
                     { recipientName: { contains: "Fee" } },
-                    { recipientMobile: { contains: "Fee" } }
+                    { recipientMobile: { contains: "Fee" } },
+                    { rawPayload: { path: ['event_type'], equals: 'FEE_PAYMENT' } }
                 ];
             } else if (filterType === "fee") {
                 typeFilterTx.type = "outgoing";
                 typeFilterTx.OR = [
                     { recipientName: { contains: "Fee" } },
-                    { recipientMobile: { contains: "Fee" } }
+                    { recipientMobile: { contains: "Fee" } },
+                    { rawPayload: { path: ['event_type'], equals: 'FEE_PAYMENT' } }
                 ];
             }
 
@@ -122,8 +120,7 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
                 })
             ]);
         } else {
-            // All: Fetch BOTH
-            // Note: Pagination across mixed sources is complex. We approximate by taking 'limit' from both.
+            // All
             [totalTx, totalSnaps] = await Promise.all([
                 (prisma as any).financialTransaction.count({ where: { accountId: { in: accountIds }, ...dateFilterTx } }),
                 prisma.balanceSnapshot.count({ where: { accountId: { in: accountIds }, ...dateFilterSnap } })
@@ -431,13 +428,15 @@ router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, 
                 typeFilterTx.type = "outgoing";
                 typeFilterTx.NOT = [
                     { recipientName: { contains: "Fee" } },
-                    { recipientMobile: { contains: "Fee" } }
+                    { recipientMobile: { contains: "Fee" } },
+                    { rawPayload: { path: ['event_type'], equals: 'FEE_PAYMENT' } }
                 ];
             } else if (filterType === "fee") {
                 typeFilterTx.type = "outgoing";
                 typeFilterTx.OR = [
                     { recipientName: { contains: "Fee" } },
-                    { recipientMobile: { contains: "Fee" } }
+                    { recipientMobile: { contains: "Fee" } },
+                    { rawPayload: { path: ['event_type'], equals: 'FEE_PAYMENT' } }
                 ];
             }
 

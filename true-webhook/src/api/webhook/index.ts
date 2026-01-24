@@ -156,7 +156,23 @@ router.all("/:prefix", async (req: Request, res: Response) => {
             });
         }
 
-        // NOTE: REMOVED unsafe fallback to first account to prevent wrong wallet assignment
+        // 3.5 SMART FALLBACK: Single Account Network
+        // Some events (like SEND_P2P) do not contain the sender's mobile number.
+        // If the network has exactly ONE account, it's safe to assume the event belongs to it.
+        if (!account) {
+            const accounts = await prisma.account.findMany({
+                where: { networkId: network.id },
+                select: { id: true, phoneNumber: true }, // Lightweight fetch
+                take: 2
+            });
+
+            if (accounts.length === 1) {
+                account = accounts[0];
+                console.log(`[Webhook] Account not matched by mobile, but network has single account. Using it: ${account.id} (${account.phoneNumber})`);
+
+                // If type wasn't determined by direction matching, rely on payload type (already set)
+            }
+        }
 
         if (!account) {
             await prisma.notificationLog.create({
@@ -201,7 +217,9 @@ router.all("/:prefix", async (req: Request, res: Response) => {
                     senderMobile: payload.sender_mobile,
                     senderName: payload.sender_name,
                     recipientMobile: payload.recipient_mobile || (payload.event_type === 'SEND_P2P' ? payload.merchant_name : null),
-                    recipientName: payload.recipient_name || (payload.event_type === 'SEND_P2P' ? payload.merchant_name : null),
+                    recipientName:
+                        payload.event_type === 'FEE_PAYMENT' ? 'System Fee' :
+                            (payload.recipient_name || (payload.event_type === 'SEND_P2P' ? payload.merchant_name : null)),
                     rawPayload: payload,
                     timestamp: payload.transaction_date ? new Date(payload.transaction_date) : new Date(),
                 }
