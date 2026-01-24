@@ -24,7 +24,67 @@ router.get("/", async (req: Request<{ prefix: string }>, res: Response, next: Ne
             include: { telegramConfig: true },
         });
 
-        return res.json({ ok: true, data: accounts });
+        // Calculate stats for each account
+        const accountIds = accounts.map(a => a.id);
+
+        // 1. Total Fees (Outgoing transactions designated as fee)
+        // Note: We need to match the same logic as the History Page filter
+        const feeStats = await (prisma as any).financialTransaction.findMany({
+            where: {
+                accountId: { in: accountIds },
+                type: "outgoing",
+                OR: [
+                    { recipientName: { contains: "Fee" } },
+                    { recipientMobile: { contains: "Fee" } },
+                    { rawPayload: { path: ['event_type'], equals: 'FEE_PAYMENT' } }
+                ]
+            },
+            select: { accountId: true, amount: true }
+        });
+
+        // 2. First Active Time (Oldest Transaction or Snapshot)
+        const [oldestTxs, oldestSnaps] = await Promise.all([
+            (prisma as any).financialTransaction.groupBy({
+                by: ['accountId'],
+                _min: { timestamp: true },
+                where: { accountId: { in: accountIds } }
+            }),
+            prisma.balanceSnapshot.groupBy({
+                by: ['accountId'],
+                _min: { checkedAt: true },
+                where: { accountId: { in: accountIds } }
+            })
+        ]);
+
+        const accountsWithStats = accounts.map(account => {
+            // Sum fees
+            const fees = feeStats
+                .filter((f: any) => f.accountId === account.id)
+                .reduce((sum: number, f: any) => sum + (f.amount || 0), 0);
+
+            // Find oldest date
+            const txDate = oldestTxs.find((t: any) => t.accountId === account.id)?._min?.timestamp;
+            const snapDate = oldestSnaps.find((s: any) => s.accountId === account.id)?._min?.checkedAt;
+
+            let firstActiveAt = account.createdAt; // Default to creation time
+            if (txDate && snapDate) {
+                firstActiveAt = txDate < snapDate ? txDate : snapDate;
+            } else if (txDate) {
+                firstActiveAt = txDate;
+            } else if (snapDate) {
+                firstActiveAt = snapDate;
+            }
+
+            return {
+                ...account,
+                stats: {
+                    totalFee: fees,
+                    firstActiveAt: firstActiveAt
+                }
+            };
+        });
+
+        return res.json({ ok: true, data: accountsWithStats });
     } catch (err) {
         next(err);
     }
