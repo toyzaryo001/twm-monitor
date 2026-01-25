@@ -37,7 +37,7 @@ router.post("/login", async (req, res, next) => {
             email: user.email,
             role: user.role,
             networkId: user.networkId,
-        });
+        }, 12 * 60 * 60 * 1000); // 12 hours expiration
 
         await prisma.user.update({
             where: { id: user.id },
@@ -94,7 +94,7 @@ router.post("/setup", async (req, res, next) => {
             email: user.email,
             role: user.role,
             networkId: null,
-        });
+        }, 12 * 60 * 60 * 1000); // 12 hours expiration
 
         return res.status(201).json({
             ok: true,
