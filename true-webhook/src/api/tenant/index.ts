@@ -445,4 +445,210 @@ router.post("/fix-transactions", async (req: Request<{ prefix: string }>, res: R
     }
 });
 
+// Force recover all transactions from 18:18 using log ID as unique key
+router.post("/force-recover", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
+    try {
+        const network = await prisma.network.findUnique({
+            where: { prefix: req.params.prefix },
+        });
+
+        if (!network) {
+            return res.status(404).json({ ok: false, error: "NETWORK_NOT_FOUND" });
+        }
+
+        const accounts = await prisma.account.findMany({
+            where: { networkId: network.id },
+            select: { id: true, name: true, phoneNumber: true }
+        });
+
+        // Target account (โสวัฒน์ = 0985082838)
+        const targetAccountId = accounts.find(a => a.phoneNumber?.includes("985082838"))?.id;
+        if (!targetAccountId) {
+            return res.status(400).json({ ok: false, error: "Target account not found" });
+        }
+
+        // Start from 18:18 today
+        const startTime = new Date();
+        startTime.setHours(18, 18, 0, 0);
+
+        // Get all logs from 18:18 onwards
+        const logs = await prisma.notificationLog.findMany({
+            where: {
+                message: { contains: "Decoded Payload" },
+                createdAt: { gte: startTime },
+            },
+            orderBy: { createdAt: "asc" }
+        });
+
+        let recovered = 0;
+        let skipped = 0;
+        const details: any[] = [];
+
+        for (const log of logs) {
+            try {
+                const payload = log.payload as any;
+                if (!payload || !payload.amount) {
+                    skipped++;
+                    continue;
+                }
+
+                // Use log ID as unique transaction ID to avoid duplicates
+                const transactionId = `log-${log.id}`;
+
+                // Check if already exists
+                const exists = await prisma.financialTransaction.findUnique({
+                    where: { transactionId: transactionId }
+                });
+
+                if (exists) {
+                    skipped++;
+                    continue;
+                }
+
+                // Parse amount (satang to baht)
+                let amount = payload.amount || 0;
+                if (amount > 0) amount = amount / 100.0;
+
+                let txType = "incoming";
+                if (payload.event_type === "FEE_PAYMENT" || payload.event_type === "SEND_P2P") {
+                    txType = "outgoing";
+                }
+
+                await prisma.financialTransaction.create({
+                    data: {
+                        transactionId: transactionId,
+                        accountId: targetAccountId,
+                        amount: amount,
+                        fee: payload.event_type === "FEE_PAYMENT" ? amount : 0,
+                        type: txType,
+                        status: payload.status || "SUCCESS",
+                        senderMobile: payload.sender_mobile,
+                        senderName: payload.sender_name,
+                        recipientMobile: payload.recipient_mobile,
+                        recipientName: payload.event_type === 'FEE_PAYMENT' ? 'System Fee' : payload.recipient_name,
+                        rawPayload: payload,
+                        timestamp: new Date(payload.transaction_date || log.createdAt),
+                    }
+                });
+
+                recovered++;
+                details.push({
+                    time: payload.transaction_date,
+                    amount: amount,
+                    type: payload.event_type
+                });
+            } catch (err: any) {
+                details.push({ error: err.message, logId: log.id });
+            }
+        }
+
+        return res.json({
+            ok: true,
+            data: {
+                totalLogs: logs.length,
+                recovered,
+                skipped,
+                targetAccountId,
+                details: details.slice(0, 20)
+            }
+        });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// Move transactions from อรปภา to โสวัฒน์
+router.post("/move-transactions", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
+    try {
+        const network = await prisma.network.findUnique({
+            where: { prefix: req.params.prefix },
+        });
+
+        if (!network) {
+            return res.status(404).json({ ok: false, error: "NETWORK_NOT_FOUND" });
+        }
+
+        const accounts = await prisma.account.findMany({
+            where: { networkId: network.id },
+            select: { id: true, name: true, phoneNumber: true }
+        });
+
+        // Source: อรปภา (0957831757)
+        const sourceAccountId = accounts.find(a => a.phoneNumber?.includes("957831757"))?.id;
+        // Target: โสวัฒน์ (0985082838)
+        const targetAccountId = accounts.find(a => a.phoneNumber?.includes("985082838"))?.id;
+
+        if (!sourceAccountId || !targetAccountId) {
+            return res.status(400).json({ ok: false, error: "Accounts not found" });
+        }
+
+        // Start from 18:27 today (earliest in user's list)
+        const startTime = new Date();
+        startTime.setHours(18, 27, 0, 0);
+
+        // Get transactions to move
+        const transactionsToMove = await prisma.financialTransaction.findMany({
+            where: {
+                accountId: sourceAccountId,
+                timestamp: { gte: startTime },
+                type: "outgoing" // Only fees/withdrawals
+            },
+            select: { id: true, amount: true, timestamp: true, transactionId: true }
+        });
+
+        // Check which already exist in target account (by amount and timestamp)
+        const existingInTarget = await prisma.financialTransaction.findMany({
+            where: {
+                accountId: targetAccountId,
+                timestamp: { gte: startTime }
+            },
+            select: { amount: true, timestamp: true }
+        });
+
+        // Create a set of existing keys
+        const existingKeys = new Set(
+            existingInTarget.map(t => `${t.amount}-${t.timestamp.getTime()}`)
+        );
+
+        // Filter out duplicates
+        const toMove = transactionsToMove.filter(t =>
+            !existingKeys.has(`${t.amount}-${t.timestamp.getTime()}`)
+        );
+
+        // Move transactions by updating accountId
+        let moved = 0;
+        for (const tx of toMove) {
+            await prisma.financialTransaction.update({
+                where: { id: tx.id },
+                data: { accountId: targetAccountId }
+            });
+            moved++;
+        }
+
+        // Delete duplicates that remain in source
+        const duplicates = transactionsToMove.filter(t =>
+            existingKeys.has(`${t.amount}-${t.timestamp.getTime()}`)
+        );
+
+        for (const tx of duplicates) {
+            await prisma.financialTransaction.delete({
+                where: { id: tx.id }
+            });
+        }
+
+        return res.json({
+            ok: true,
+            data: {
+                sourceAccount: "อรปภา",
+                targetAccount: "โสวัฒน์",
+                totalFound: transactionsToMove.length,
+                moved: moved,
+                deletedDuplicates: duplicates.length
+            }
+        });
+    } catch (err) {
+        next(err);
+    }
+});
+
 export default router;
