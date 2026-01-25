@@ -11,6 +11,10 @@ export default function SettingsPage() {
     const [copied, setCopied] = useState(false);
     const [loading, setLoading] = useState(true);
 
+    // Webhook Feature Toggle
+    const [savedWebhookEnabled, setSavedWebhookEnabled] = useState("true");
+    const [toggling, setToggling] = useState(false);
+
     const getToken = () => typeof window !== "undefined" ? localStorage.getItem("token") : "";
 
     const fetchSettings = async () => {
@@ -25,6 +29,7 @@ export default function SettingsPage() {
             if (data.ok) {
                 if (data.data.JWT_SECRET) setSavedSecret(data.data.JWT_SECRET);
                 if (data.data.currentJwtSecret) setCurrentEnvSecret(data.data.currentJwtSecret);
+                if (data.data.WEBHOOK_FEATURE_ENABLED) setSavedWebhookEnabled(data.data.WEBHOOK_FEATURE_ENABLED);
             }
         } catch (e) {
             console.error("Error fetching settings", e);
@@ -65,6 +70,33 @@ export default function SettingsPage() {
         } catch (e) {
             showToast({ type: "error", title: "ข้อผิดพลาด", message: "เกิดข้อผิดพลาดในการเชื่อมต่อ" });
         }
+    };
+
+    const toggleWebhookFeature = async () => {
+        const newValue = savedWebhookEnabled === "true" ? "false" : "true";
+        setToggling(true);
+        const token = getToken();
+
+        try {
+            const res = await fetch("/api/master/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({ key: "WEBHOOK_FEATURE_ENABLED", value: newValue })
+            });
+            const data = await res.json();
+            if (data.ok) {
+                setSavedWebhookEnabled(newValue);
+                showToast({ type: "success", title: "สำเร็จ", message: `บันทึกสถานะ: ${newValue === "true" ? "เปิดใช้งาน" : "ปิดใช้งาน"} เรียบร้อย` });
+            } else {
+                showToast({ type: "error", title: "ผิดพลาด", message: "บันทึกไม่สำเร็จ" });
+            }
+        } catch (e) {
+            showToast({ type: "error", title: "ผิดพลาด", message: "เกิดข้อผิดพลาด" });
+        }
+        setToggling(false);
     };
 
     const copyToClipboard = (text: string) => {
@@ -147,6 +179,36 @@ export default function SettingsPage() {
                         </tr>
                     </tbody>
                 </table>
+            </div>
+
+            {/* Feature Toggles */}
+            <div className="card" style={{ marginTop: 24 }}>
+                <div className="card-title">Feature Toggles (เปิด/ปิดฟีเจอร์)</div>
+                <div className="form-group">
+                    <label className="form-label">Auto Receive Balance (รับยอดอัตโนมัติ)</label>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{
+                            padding: "6px 12px",
+                            borderRadius: "20px",
+                            fontSize: "13px",
+                            fontWeight: 600,
+                            background: savedWebhookEnabled === "true" ? "var(--success-light)" : "var(--danger-light)",
+                            color: savedWebhookEnabled === "true" ? "var(--success)" : "var(--danger)"
+                        }}>
+                            {savedWebhookEnabled === "true" ? "✓ เปิดใช้งาน" : "✕ ปิดใช้งาน"}
+                        </div>
+                        <button
+                            className="btn btn-secondary"
+                            onClick={toggleWebhookFeature}
+                            disabled={toggling}
+                        >
+                            {toggling ? "กำลังบันทึก..." : (savedWebhookEnabled === "true" ? "ปิดการใช้งาน" : "เปิดการใช้งาน")}
+                        </button>
+                    </div>
+                    <p style={{ fontSize: "13px", color: "var(--text-secondary)", marginTop: 8 }}>
+                        เมื่อปิดใช้งาน เมนู "Webhook (รับยอดอัตโนมัติ)" ในหน้าตั้งค่าของ Tenant จะถูกซ่อน
+                    </p>
+                </div>
             </div>
         </div>
     );

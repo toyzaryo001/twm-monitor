@@ -26,9 +26,10 @@ router.get("/stats", async (req: Request<{ prefix: string }>, res: Response, nex
             return res.status(404).json({ ok: false, error: "NETWORK_NOT_FOUND" });
         }
 
-        const [accountCount, activeAccounts] = await Promise.all([
+        const [accountCount, activeAccounts, webhookSetting] = await Promise.all([
             prisma.account.count({ where: { networkId: network.id } }),
             prisma.account.count({ where: { networkId: network.id, isActive: true } }),
+            prisma.systemSetting.findUnique({ where: { key: "WEBHOOK_FEATURE_ENABLED" } })
         ]);
 
         return res.json({
@@ -48,6 +49,8 @@ router.get("/stats", async (req: Request<{ prefix: string }>, res: Response, nex
                     notifyMoneyIn: network.notifyMoneyIn,
                     notifyMoneyOut: network.notifyMoneyOut,
                     notifyMinAmount: network.notifyMinAmount,
+                    // Inject Global Setting
+                    isAutoReceiveEnabled: webhookSetting?.value !== "false" // Default to true if not set
                 },
                 stats: { total: accountCount, active: activeAccounts },
             },
