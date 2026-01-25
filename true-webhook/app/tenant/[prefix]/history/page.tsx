@@ -287,16 +287,16 @@ export default function HistoryPage() {
                 </div>
 
                 <div className="flex-center gap-16">
-                    {/* Live Status - Hide on Fee Tab SUMMARY mode */}
-                    {(activeTab !== 'fee' || viewMode === 'detail') && selectedAccount !== 'all' && (
+                    {/* Live Status - Hide on Fee Tab (All modes) */}
+                    {activeTab !== 'fee' && selectedAccount !== 'all' && (
                         <div className="flex-center gap-6">
                             <div style={{ width: 8, height: 8, borderRadius: "50%", background: isConnected ? "#22c55e" : "#ef4444", animation: isConnected ? "pulse 2s infinite" : "none" }} />
                             <span style={{ fontSize: 12, color: isConnected ? "#22c55e" : "#ef4444" }}>{isConnected ? "LIVE" : "OFFLINE"}</span>
                         </div>
                     )}
 
-                    {/* Account Select - Hide on Fee Tab SUMMARY mode */}
-                    {(activeTab !== 'fee' || viewMode === 'detail') && accounts.length > 0 && (
+                    {/* Account Select - Hide on Fee Tab (All modes) */}
+                    {activeTab !== 'fee' && accounts.length > 0 && (
                         <select className="tenant-form-input w-auto min-w-200" value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)}>
                             <option value="all">ทั้งหมด (รวมทุกวอลเล็ท)</option>
                             {accounts.map((acc) => (
