@@ -283,4 +283,165 @@ router.get("/debug-missing", async (req: Request<{ prefix: string }>, res: Respo
     }
 });
 
+// Fix misassigned transactions
+router.post("/fix-transactions", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
+    try {
+        const network = await prisma.network.findUnique({
+            where: { prefix: req.params.prefix },
+        });
+
+        if (!network) {
+            return res.status(404).json({ ok: false, error: "NETWORK_NOT_FOUND" });
+        }
+
+        // Get accounts
+        const accounts = await prisma.account.findMany({
+            where: { networkId: network.id },
+            select: { id: true, name: true, phoneNumber: true }
+        });
+
+        // Map phone numbers to account IDs (last 9 digits)
+        const phoneToAccountId = new Map<string, string>();
+        accounts.forEach(a => {
+            if (a.phoneNumber) {
+                phoneToAccountId.set(a.phoneNumber.slice(-9), a.id);
+                phoneToAccountId.set(a.phoneNumber, a.id);
+            }
+        });
+
+        // Get wrong account ID (อรปภา = 0957831757)
+        const wrongAccountId = accounts.find(a => a.phoneNumber?.includes("957831757"))?.id;
+        // Get correct account ID (โสวัฒน์ = 0985082838)
+        const correctAccountId = accounts.find(a => a.phoneNumber?.includes("985082838"))?.id;
+
+        if (!wrongAccountId || !correctAccountId) {
+            return res.status(400).json({ ok: false, error: "Could not find accounts" });
+        }
+
+        // Delete wrongly assigned transactions from today
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+
+        const deleted = await prisma.financialTransaction.deleteMany({
+            where: {
+                accountId: wrongAccountId,
+                timestamp: { gte: startOfDay },
+                transactionId: { startsWith: "recovered-" }
+            }
+        });
+
+        // Now get notification logs and re-assign correctly
+        const logs = await prisma.notificationLog.findMany({
+            where: {
+                message: { contains: "Decoded Payload" },
+                createdAt: { gte: startOfDay },
+            },
+            orderBy: { createdAt: "asc" }
+        });
+
+        let recovered = 0;
+        let skipped = 0;
+
+        for (const log of logs) {
+            try {
+                const payload = log.payload as any;
+                if (!payload || !payload.amount) continue;
+
+                // Determine correct account from log message (e.g., "Decoded Payload for jga88")
+                // For now, we'll use the mobile number in the message if available
+                // Or match based on the log's accountId if it was set
+                let accountId = log.accountId;
+
+                // If log message contains specific mobile number, use that
+                const logMessage = log.message || "";
+                for (const [phone, id] of phoneToAccountId.entries()) {
+                    if (logMessage.includes(phone.slice(-4))) {
+                        accountId = id;
+                        break;
+                    }
+                }
+
+                // Check payload mobiles
+                if (!accountId) {
+                    const mobiles = [payload.recipient_mobile, payload.sender_mobile, payload.mobile_no].filter(Boolean);
+                    for (const mobile of mobiles) {
+                        const key = mobile.slice(-9);
+                        if (phoneToAccountId.has(key)) {
+                            accountId = phoneToAccountId.get(key)!;
+                            break;
+                        }
+                    }
+                }
+
+                // Default to correct account for this network's main wallet
+                if (!accountId) {
+                    accountId = correctAccountId;
+                }
+
+                // Generate transaction ID
+                const transactionId = payload.transaction_id ||
+                    (payload.event_type === 'FEE_PAYMENT' ? `fee-${payload.iat}-${payload.amount}` : null) ||
+                    payload.ref_id ||
+                    `recovered-${log.id}`;
+
+                // Check if already exists
+                const exists = await prisma.financialTransaction.findUnique({
+                    where: { transactionId: String(transactionId) }
+                });
+
+                if (exists) {
+                    skipped++;
+                    continue;
+                }
+
+                // Parse amount
+                let amount = payload.amount || 0;
+                let fee = payload.fee || 0;
+                if (amount > 0) amount = amount / 100.0;
+                if (fee > 0) fee = fee / 100.0;
+                if (payload.event_type === "FEE_PAYMENT") fee = amount;
+
+                let txType = "incoming";
+                if (payload.event_type === "FEE_PAYMENT" || payload.event_type === "SEND_P2P") {
+                    txType = "outgoing";
+                }
+
+                await prisma.financialTransaction.create({
+                    data: {
+                        transactionId: String(transactionId),
+                        accountId: accountId,
+                        amount: amount,
+                        fee: fee,
+                        type: txType,
+                        status: payload.status || "SUCCESS",
+                        senderMobile: payload.sender_mobile,
+                        senderName: payload.sender_name,
+                        recipientMobile: payload.recipient_mobile,
+                        recipientName: payload.event_type === 'FEE_PAYMENT' ? 'System Fee' : payload.recipient_name,
+                        rawPayload: payload,
+                        timestamp: log.createdAt,
+                    }
+                });
+
+                recovered++;
+            } catch (err: any) {
+                // Skip individual errors
+            }
+        }
+
+        return res.json({
+            ok: true,
+            data: {
+                deleted: deleted.count,
+                recovered,
+                skipped,
+                correctAccountId,
+                wrongAccountId
+            }
+        });
+    } catch (err) {
+        next(err);
+    }
+});
+
 export default router;
