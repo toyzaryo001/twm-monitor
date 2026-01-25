@@ -227,7 +227,7 @@ router.all("/:prefix", async (req: Request, res: Response) => {
             await prisma.financialTransaction.create({
                 data: {
                     transactionId: String(transactionId),
-                    accountId: account.id,
+                    accountId: (account as any).id,
                     amount: amount,
                     fee: fee,
                     type: transactionType,
@@ -247,7 +247,7 @@ router.all("/:prefix", async (req: Request, res: Response) => {
                 data: {
                     type: "webhook_debug" as any,
                     message: "Transaction Saved Successfully",
-                    accountId: account.id,
+                    accountId: (account as any).id,
                     payload: { transactionId, amount, fee, type: transactionType } as any
                 }
             });
@@ -272,7 +272,7 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         // For now, let's trust the webhook implies activity.
 
         // 6. Broadcast Update
-        broadcastBalanceUpdate(account.id, {
+        broadcastBalanceUpdate((account as any).id, {
             balance: 0, // We don't know the new total balance unless we fetch it
             balanceSatang: 0,
             change: amount,
