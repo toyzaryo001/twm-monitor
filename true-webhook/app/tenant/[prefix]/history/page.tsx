@@ -263,6 +263,10 @@ export default function HistoryPage() {
                 .date-btn { padding: 4px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-muted); }
                 .date-btn.active { background: var(--text-primary); color: var(--bg-card); border-color: var(--text-primary); }
                 .summary-card { padding: 16px; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+                .history-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+                .history-table th { text-align: left; padding: 12px; color: var(--text-muted); font-weight: 500; border-bottom: 1px solid var(--border); }
+                .history-table td { padding: 12px; border-bottom: 1px solid var(--border); color: var(--text-primary); }
+                .history-table tr:last-child td { border-bottom: none; }
             `}</style>
 
             <div className="tenant-card">
@@ -298,13 +302,7 @@ export default function HistoryPage() {
                     </div>
                 </div>
 
-                {/* Table Styles */}
-                <style jsx>{`
-                    .history-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-                    .history-table th { text-align: left; padding: 12px; color: var(--text-muted); font-weight: 500; border-bottom: 1px solid var(--border); }
-                    .history-table td { padding: 12px; border-bottom: 1px solid var(--border); color: var(--text-primary); }
-                    .history-table tr:last-child td { border-bottom: none; }
-                `}</style>
+
 
                 {loadingHistory ? (
                     <div className="flex-center p-40"><div className="spinner" /></div>
