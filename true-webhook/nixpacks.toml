@@ -1,3 +1,9 @@
+# Enable Node.js and PHP
+providers = ["node"]
+
+[phases.setup]
+nixPkgs = ["nodejs", "php", "git"]
+
 [phases.install]
 cmds = ["npm ci"]
 
