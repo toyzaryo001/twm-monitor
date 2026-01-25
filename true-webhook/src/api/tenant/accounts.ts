@@ -428,282 +428,329 @@ router.delete("/:id", async (req: Request<{ prefix: string; id: string }>, res: 
 // Check balance
 router.post("/:id/balance", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
     // ... (unchanged)
-    try {
-        const account = await prisma.account.findUnique({
-            where: { id: req.params.id },
-        });
-
-        if (!account) {
-            return res.status(404).json({ ok: false, error: "ACCOUNT_NOT_FOUND" });
-        }
-
-        // Fetch balance from external wallet API
+    // ...
+    // Get Auto-Withdraw Config
+    router.get("/:id/auto-withdraw", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
         try {
-            const walletRes = await fetch(account.walletEndpointUrl, {
-                method: "GET",
-                headers: {
-                    "Authorization": `Bearer ${account.walletBearerToken}`,
-                    "Content-Type": "application/json",
-                },
+            const config = await prisma.autoWithdrawConfig.findUnique({
+                where: { accountId: req.params.id }
+            });
+            return res.json({ ok: true, data: config });
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    // Update Auto-Withdraw Config
+    router.put("/:id/auto-withdraw", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
+        try {
+            const schema = z.object({
+                enabled: z.boolean(),
+                triggerMinBalance: z.number(),
+                targetNumber: z.string().min(10),
+                withdrawType: z.enum(["ALL_EXCEPT", "FIXED_AMOUNT"]),
+                amountValue: z.number(),
             });
 
-            if (!walletRes.ok) {
-                return res.status(502).json({ ok: false, error: "WALLET_API_ERROR", status: walletRes.status });
+            const data = schema.parse(req.body);
+
+            const config = await prisma.autoWithdrawConfig.upsert({
+                where: { accountId: req.params.id },
+                create: {
+                    accountId: req.params.id,
+                    ...data
+                },
+                update: data
+            });
+
+            return res.json({ ok: true, data: config });
+        } catch (err: any) {
+            if (err instanceof z.ZodError) {
+                return res.status(400).json({ ok: false, error: "Validation Error: " + err.errors.map((e: any) => e.message).join(", ") });
+            }
+            next(err);
+        }
+    });
+
+    // Check balance
+    router.post("/:id/balance", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
+        // ... (unchanged)
+        try {
+            const account = await prisma.account.findUnique({
+                where: { id: req.params.id },
+            });
+
+            if (!account) {
+                return res.status(404).json({ ok: false, error: "ACCOUNT_NOT_FOUND" });
             }
 
-            const walletData = await walletRes.json();
+            // Fetch balance from external wallet API
+            try {
+                const walletRes = await fetch(account.walletEndpointUrl, {
+                    method: "GET",
+                    headers: {
+                        "Authorization": `Bearer ${account.walletBearerToken}`,
+                        "Content-Type": "application/json",
+                    },
+                });
 
-            let balanceSatang = 0;
-            let mobileNo = account.phoneNumber || "";
+                if (!walletRes.ok) {
+                    return res.status(502).json({ ok: false, error: "WALLET_API_ERROR", status: walletRes.status });
+                }
 
-            if (walletData.data) {
-                balanceSatang = parseInt(walletData.data.balance, 10) || 0;
-                mobileNo = walletData.data.mobile_no || account.phoneNumber || "";
-            } else if (walletData.balance) {
-                balanceSatang = parseInt(walletData.balance, 10) || 0;
-                mobileNo = walletData.mobile_no || walletData.mobileNo || account.phoneNumber || "";
+                const walletData = await walletRes.json();
+
+                let balanceSatang = 0;
+                let mobileNo = account.phoneNumber || "";
+
+                if (walletData.data) {
+                    balanceSatang = parseInt(walletData.data.balance, 10) || 0;
+                    mobileNo = walletData.data.mobile_no || account.phoneNumber || "";
+                } else if (walletData.balance) {
+                    balanceSatang = parseInt(walletData.balance, 10) || 0;
+                    mobileNo = walletData.mobile_no || walletData.mobileNo || account.phoneNumber || "";
+                }
+
+                const lastSnapshot = await prisma.balanceSnapshot.findFirst({
+                    where: { accountId: account.id },
+                    orderBy: { checkedAt: "desc" },
+                });
+
+                const balanceChanged = !lastSnapshot || lastSnapshot.balanceSatang !== balanceSatang;
+
+                let checkedAt = new Date();
+                if (balanceChanged) {
+                    const snapshot = await prisma.balanceSnapshot.create({
+                        data: {
+                            accountId: account.id,
+                            balanceSatang: balanceSatang,
+                            mobileNo: mobileNo,
+                            source: "manual_check",
+                            walletUpdatedAt: new Date(),
+                        },
+                    });
+                    checkedAt = snapshot.checkedAt;
+                } else {
+                    checkedAt = lastSnapshot?.checkedAt || new Date();
+                }
+
+                const change = balanceSatang - (lastSnapshot?.balanceSatang || 0);
+                broadcastBalanceUpdate(account.id, {
+                    balance: balanceSatang / 100,
+                    balanceSatang: balanceSatang,
+                    change: change,
+                    checkedAt: checkedAt,
+                });
+
+                return res.json({
+                    ok: true,
+                    data: {
+                        balance: balanceSatang / 100,
+                        balanceSatang,
+                        mobileNo,
+                        checkedAt,
+                        changed: balanceChanged,
+                    },
+                });
+            } catch (fetchErr) {
+                console.error("Wallet API fetch error:", fetchErr);
+                return res.status(502).json({ ok: false, error: "WALLET_API_UNREACHABLE" });
             }
+        } catch (err) {
+            next(err);
+        }
+    });
 
-            const lastSnapshot = await prisma.balanceSnapshot.findFirst({
-                where: { accountId: account.id },
+    // Get latest balance
+    router.get("/:id/balance", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
+        try {
+            const snapshot = await prisma.balanceSnapshot.findFirst({
+                where: { accountId: req.params.id },
                 orderBy: { checkedAt: "desc" },
             });
 
-            const balanceChanged = !lastSnapshot || lastSnapshot.balanceSatang !== balanceSatang;
-
-            let checkedAt = new Date();
-            if (balanceChanged) {
-                const snapshot = await prisma.balanceSnapshot.create({
-                    data: {
-                        accountId: account.id,
-                        balanceSatang: balanceSatang,
-                        mobileNo: mobileNo,
-                        source: "manual_check",
-                        walletUpdatedAt: new Date(),
-                    },
-                });
-                checkedAt = snapshot.checkedAt;
-            } else {
-                checkedAt = lastSnapshot?.checkedAt || new Date();
+            if (!snapshot) {
+                return res.json({ ok: true, data: null });
             }
-
-            const change = balanceSatang - (lastSnapshot?.balanceSatang || 0);
-            broadcastBalanceUpdate(account.id, {
-                balance: balanceSatang / 100,
-                balanceSatang: balanceSatang,
-                change: change,
-                checkedAt: checkedAt,
-            });
 
             return res.json({
                 ok: true,
                 data: {
-                    balance: balanceSatang / 100,
-                    balanceSatang,
-                    mobileNo,
-                    checkedAt,
-                    changed: balanceChanged,
+                    balance: snapshot.balanceSatang / 100,
+                    balanceSatang: snapshot.balanceSatang,
+                    mobileNo: snapshot.mobileNo,
+                    checkedAt: snapshot.checkedAt,
                 },
             });
-        } catch (fetchErr) {
-            console.error("Wallet API fetch error:", fetchErr);
-            return res.status(502).json({ ok: false, error: "WALLET_API_UNREACHABLE" });
+        } catch (err) {
+            next(err);
         }
-    } catch (err) {
-        next(err);
-    }
-});
+    });
 
-// Get latest balance
-router.get("/:id/balance", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
-    try {
-        const snapshot = await prisma.balanceSnapshot.findFirst({
-            where: { accountId: req.params.id },
-            orderBy: { checkedAt: "desc" },
-        });
+    // Get balance history for an account (timeline)
+    router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
+        try {
+            // Fetch account to ensure existence and get name
+            const account = await prisma.account.findUnique({
+                where: { id: req.params.id },
+                select: { id: true, name: true }
+            });
 
-        if (!snapshot) {
-            return res.json({ ok: true, data: null });
-        }
-
-        return res.json({
-            ok: true,
-            data: {
-                balance: snapshot.balanceSatang / 100,
-                balanceSatang: snapshot.balanceSatang,
-                mobileNo: snapshot.mobileNo,
-                checkedAt: snapshot.checkedAt,
-            },
-        });
-    } catch (err) {
-        next(err);
-    }
-});
-
-// Get balance history for an account (timeline)
-router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
-    try {
-        // Fetch account to ensure existence and get name
-        const account = await prisma.account.findUnique({
-            where: { id: req.params.id },
-            select: { id: true, name: true }
-        });
-
-        if (!account) {
-            return res.status(404).json({ ok: false, error: "ACCOUNT_NOT_FOUND" });
-        }
-
-        const limit = parseInt(req.query.limit as string, 10) || 50;
-        const page = parseInt(req.query.page as string, 10) || 1;
-        const skip = (page - 1) * limit;
-        const filterType = req.query.filter as string || "all";
-
-        // Date Filtering
-        const fromDate = req.query.from ? new Date(req.query.from as string) : null;
-        const toDate = req.query.to ? new Date(req.query.to as string) : null;
-
-        const dateFilterTx: any = {};
-        const dateFilterSnap: any = {};
-
-        if (fromDate || toDate) {
-            dateFilterTx.timestamp = {};
-            dateFilterSnap.checkedAt = {};
-            if (fromDate) {
-                dateFilterTx.timestamp.gte = fromDate;
-                dateFilterSnap.checkedAt.gte = fromDate;
-            }
-            if (toDate) {
-                dateFilterTx.timestamp.lte = toDate;
-                dateFilterSnap.checkedAt.lte = toDate;
-            }
-        }
-
-        let transactions: any[] = [];
-        let snapshots: any[] = [];
-        let totalTx = 0;
-        let totalSnaps = 0;
-
-        // -- SOURCE ROUTING LOGIC --
-        if (filterType === "deposit") {
-            // Fetch Snapshots for 'limit' + extra
-            [totalSnaps, snapshots] = await Promise.all([
-                prisma.balanceSnapshot.count({ where: { accountId: req.params.id, ...dateFilterSnap } }),
-                prisma.balanceSnapshot.findMany({
-                    where: { accountId: req.params.id, ...dateFilterSnap },
-                    orderBy: { checkedAt: "desc" },
-                    skip: skip,
-                    take: limit + 5,
-                })
-            ]);
-        } else if (filterType === "withdraw" || filterType === "fee") {
-            // ... (Same as before)
-            const typeFilterTx: any = {};
-            if (filterType === "withdraw") {
-                typeFilterTx.type = "outgoing";
-                typeFilterTx.NOT = [
-                    { recipientName: { contains: "Fee" } },
-                    { recipientMobile: { contains: "Fee" } },
-                    { rawPayload: { path: ['event_type'], equals: 'FEE_PAYMENT' } }
-                ];
-            } else if (filterType === "fee") {
-                typeFilterTx.type = "outgoing";
-                typeFilterTx.OR = [
-                    { recipientName: { contains: "Fee" } },
-                    { recipientMobile: { contains: "Fee" } },
-                    { rawPayload: { path: ['event_type'], equals: 'FEE_PAYMENT' } }
-                ];
+            if (!account) {
+                return res.status(404).json({ ok: false, error: "ACCOUNT_NOT_FOUND" });
             }
 
-            [totalTx, transactions] = await Promise.all([
-                (prisma as any).financialTransaction.count({
-                    where: { accountId: req.params.id, ...dateFilterTx, ...typeFilterTx }
-                }),
-                (prisma as any).financialTransaction.findMany({
-                    where: { accountId: req.params.id, ...dateFilterTx, ...typeFilterTx },
-                    orderBy: { timestamp: "desc" },
-                    skip: skip,
-                    take: limit,
-                })
-            ]);
-        } else {
-            // All
-            [totalTx, totalSnaps] = await Promise.all([
-                (prisma as any).financialTransaction.count({ where: { accountId: req.params.id, ...dateFilterTx } }),
-                prisma.balanceSnapshot.count({ where: { accountId: req.params.id, ...dateFilterSnap } })
-            ]);
+            const limit = parseInt(req.query.limit as string, 10) || 50;
+            const page = parseInt(req.query.page as string, 10) || 1;
+            const skip = (page - 1) * limit;
+            const filterType = req.query.filter as string || "all";
 
-            [transactions, snapshots] = await Promise.all([
-                (prisma as any).financialTransaction.findMany({
-                    where: { accountId: req.params.id, ...dateFilterTx },
-                    orderBy: { timestamp: "desc" },
-                    skip: skip,
-                    take: limit,
-                }),
-                prisma.balanceSnapshot.findMany({
-                    where: { accountId: req.params.id, ...dateFilterSnap },
-                    orderBy: { checkedAt: "desc" },
-                    skip: skip,
-                    take: limit,
-                })
-            ]);
+            // Date Filtering
+            const fromDate = req.query.from ? new Date(req.query.from as string) : null;
+            const toDate = req.query.to ? new Date(req.query.to as string) : null;
+
+            const dateFilterTx: any = {};
+            const dateFilterSnap: any = {};
+
+            if (fromDate || toDate) {
+                dateFilterTx.timestamp = {};
+                dateFilterSnap.checkedAt = {};
+                if (fromDate) {
+                    dateFilterTx.timestamp.gte = fromDate;
+                    dateFilterSnap.checkedAt.gte = fromDate;
+                }
+                if (toDate) {
+                    dateFilterTx.timestamp.lte = toDate;
+                    dateFilterSnap.checkedAt.lte = toDate;
+                }
+            }
+
+            let transactions: any[] = [];
+            let snapshots: any[] = [];
+            let totalTx = 0;
+            let totalSnaps = 0;
+
+            // -- SOURCE ROUTING LOGIC --
+            if (filterType === "deposit") {
+                // Fetch Snapshots for 'limit' + extra
+                [totalSnaps, snapshots] = await Promise.all([
+                    prisma.balanceSnapshot.count({ where: { accountId: req.params.id, ...dateFilterSnap } }),
+                    prisma.balanceSnapshot.findMany({
+                        where: { accountId: req.params.id, ...dateFilterSnap },
+                        orderBy: { checkedAt: "desc" },
+                        skip: skip,
+                        take: limit + 5,
+                    })
+                ]);
+            } else if (filterType === "withdraw" || filterType === "fee") {
+                // ... (Same as before)
+                const typeFilterTx: any = {};
+                if (filterType === "withdraw") {
+                    typeFilterTx.type = "outgoing";
+                    typeFilterTx.NOT = [
+                        { recipientName: { contains: "Fee" } },
+                        { recipientMobile: { contains: "Fee" } },
+                        { rawPayload: { path: ['event_type'], equals: 'FEE_PAYMENT' } }
+                    ];
+                } else if (filterType === "fee") {
+                    typeFilterTx.type = "outgoing";
+                    typeFilterTx.OR = [
+                        { recipientName: { contains: "Fee" } },
+                        { recipientMobile: { contains: "Fee" } },
+                        { rawPayload: { path: ['event_type'], equals: 'FEE_PAYMENT' } }
+                    ];
+                }
+
+                [totalTx, transactions] = await Promise.all([
+                    (prisma as any).financialTransaction.count({
+                        where: { accountId: req.params.id, ...dateFilterTx, ...typeFilterTx }
+                    }),
+                    (prisma as any).financialTransaction.findMany({
+                        where: { accountId: req.params.id, ...dateFilterTx, ...typeFilterTx },
+                        orderBy: { timestamp: "desc" },
+                        skip: skip,
+                        take: limit,
+                    })
+                ]);
+            } else {
+                // All
+                [totalTx, totalSnaps] = await Promise.all([
+                    (prisma as any).financialTransaction.count({ where: { accountId: req.params.id, ...dateFilterTx } }),
+                    prisma.balanceSnapshot.count({ where: { accountId: req.params.id, ...dateFilterSnap } })
+                ]);
+
+                [transactions, snapshots] = await Promise.all([
+                    (prisma as any).financialTransaction.findMany({
+                        where: { accountId: req.params.id, ...dateFilterTx },
+                        orderBy: { timestamp: "desc" },
+                        skip: skip,
+                        take: limit,
+                    }),
+                    prisma.balanceSnapshot.findMany({
+                        where: { accountId: req.params.id, ...dateFilterSnap },
+                        orderBy: { checkedAt: "desc" },
+                        skip: skip,
+                        take: limit,
+                    })
+                ]);
+            }
+
+            const total = totalTx + totalSnaps;
+
+            // Map Transactions to unified format
+            const txHistory = transactions.map((tx: any) => ({
+                id: tx.id,
+                type: "transaction",
+                amount: tx.amount, // Net change magnitude
+                fee: tx.fee,
+                direction: tx.type, // "incoming" or "outgoing"
+                sender: tx.senderMobile || tx.senderName || "Unknown",
+                recipient: tx.recipientMobile || tx.recipientName || "Unknown",
+                status: tx.status,
+                checkedAt: tx.timestamp, // Use timestamp as sort key
+                // Derived fields for frontend compatibility
+                balance: 0, // We don't track running balance in transactions yet
+                change: tx.type === 'outgoing' ? -tx.amount : tx.amount,
+                changeSatang: (tx.type === 'outgoing' ? -tx.amount : tx.amount) * 100,
+            }));
+
+            // Map Snapshots to unified format
+            let snapshotHistory = snapshots.map((snapshot: any, index: number) => {
+                const prevSnapshot = snapshots[index + 1];
+                const change = prevSnapshot ? snapshot.balanceSatang - prevSnapshot.balanceSatang : 0;
+                return {
+                    id: snapshot.id,
+                    type: "snapshot",
+                    balance: snapshot.balanceSatang / 100,
+                    balanceSatang: snapshot.balanceSatang,
+                    change: change / 100,
+                    changeSatang: change,
+                    source: snapshot.source,
+                    checkedAt: snapshot.checkedAt,
+                    accountName: account?.name || "Unknown",
+                    accountId: snapshot.accountId
+                };
+            });
+
+            // Filter Negatives for Deposit Tab
+            if (filterType === "deposit") {
+                snapshotHistory = snapshotHistory.filter(s => s.change >= 0);
+                snapshotHistory = snapshotHistory.slice(0, limit);
+            }
+
+            // Merge and Sort
+            const mergedHistory = [...txHistory, ...snapshotHistory]
+                .sort((a, b) => new Date(b.checkedAt).getTime() - new Date(a.checkedAt).getTime())
+                .slice(0, limit);
+
+            return res.json({
+                ok: true,
+                data: mergedHistory,
+                pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
+            });
+        } catch (err) {
+            next(err);
         }
+    });
 
-        const total = totalTx + totalSnaps;
-
-        // Map Transactions to unified format
-        const txHistory = transactions.map((tx: any) => ({
-            id: tx.id,
-            type: "transaction",
-            amount: tx.amount, // Net change magnitude
-            fee: tx.fee,
-            direction: tx.type, // "incoming" or "outgoing"
-            sender: tx.senderMobile || tx.senderName || "Unknown",
-            recipient: tx.recipientMobile || tx.recipientName || "Unknown",
-            status: tx.status,
-            checkedAt: tx.timestamp, // Use timestamp as sort key
-            // Derived fields for frontend compatibility
-            balance: 0, // We don't track running balance in transactions yet
-            change: tx.type === 'outgoing' ? -tx.amount : tx.amount,
-            changeSatang: (tx.type === 'outgoing' ? -tx.amount : tx.amount) * 100,
-        }));
-
-        // Map Snapshots to unified format
-        let snapshotHistory = snapshots.map((snapshot: any, index: number) => {
-            const prevSnapshot = snapshots[index + 1];
-            const change = prevSnapshot ? snapshot.balanceSatang - prevSnapshot.balanceSatang : 0;
-            return {
-                id: snapshot.id,
-                type: "snapshot",
-                balance: snapshot.balanceSatang / 100,
-                balanceSatang: snapshot.balanceSatang,
-                change: change / 100,
-                changeSatang: change,
-                source: snapshot.source,
-                checkedAt: snapshot.checkedAt,
-                accountName: account?.name || "Unknown",
-                accountId: snapshot.accountId
-            };
-        });
-
-        // Filter Negatives for Deposit Tab
-        if (filterType === "deposit") {
-            snapshotHistory = snapshotHistory.filter(s => s.change >= 0);
-            snapshotHistory = snapshotHistory.slice(0, limit);
-        }
-
-        // Merge and Sort
-        const mergedHistory = [...txHistory, ...snapshotHistory]
-            .sort((a, b) => new Date(b.checkedAt).getTime() - new Date(a.checkedAt).getTime())
-            .slice(0, limit);
-
-        return res.json({
-            ok: true,
-            data: mergedHistory,
-            pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
-        });
-    } catch (err) {
-        next(err);
-    }
-});
-
-export default router;
+    export default router;

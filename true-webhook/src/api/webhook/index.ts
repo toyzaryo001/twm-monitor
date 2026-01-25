@@ -191,15 +191,25 @@ router.all("/:prefix", async (req: Request, res: Response) => {
 
         // [SECURE] Verify Authorization Header
         if ((account as any).webhookSecret) {
-            const authHeader = req.headers.authorization;
-            if (authHeader !== (account as any).webhookSecret) {
-                console.warn(`[Webhook] Unauthorized access attempt for account ${account.id}. Expected: ${(account as any).webhookSecret}, Got: ${authHeader}`);
+            const authHeader = req.headers.authorization || "";
+            const token = authHeader.replace(/^Bearer\s+/i, ""); // Remove Bearer if present
+
+            if (token !== (account as any).webhookSecret) {
+                console.warn(`[Webhook] Unauthorized access attempt for account ${account.id}.`);
+                console.warn(`Expected: ${(account as any).webhookSecret}`);
+                console.warn(`Got Header: ${authHeader}`);
+                console.warn(`Parsed Token: ${token}`);
+
                 await prisma.notificationLog.create({
                     data: {
                         type: "webhook_debug" as any,
                         message: "Unauthorized Webhook Access",
                         accountId: (account as any).id,
-                        payload: { expected: "***", got: authHeader } as any
+                        payload: {
+                            expected: "***",
+                            got_full: authHeader,
+                            got_parsed: token
+                        } as any
                     }
                 });
                 return res.status(401).json({ error: "Unauthorized: Invalid Webhook Secret" });
