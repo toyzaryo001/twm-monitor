@@ -36,6 +36,7 @@ model Network {
   realtimeEnabled         Boolean   @default(true)
   checkIntervalMs         Int       @default(2000)  // Milliseconds between checks
   featureWebhookEnabled   Boolean   @default(true)
+  featureAutoWithdraw     Boolean   @default(false)
   
   // Telegram notification settings
   telegramBotToken        String?
@@ -90,6 +91,7 @@ model Account {
   network                    Network          @relation(fields: [networkId], references: [id], onDelete: Cascade)
   
   telegramConfig             TelegramConfig?
+  autoWithdrawConfig         AutoWithdrawConfig?
   balanceSnapshots           BalanceSnapshot[]
   notificationLogs           NotificationLog[]
   transactions               FinancialTransaction[]
@@ -178,6 +180,39 @@ model FinancialTransaction {
   
   account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
   
-  @@index([accountId, timestamp])
   @@index([transactionId])
+}
+
+// ========== AUTO WITHDRAW ==========
+
+enum WithdrawType {
+  ALL_EXCEPT
+  FIXED_AMOUNT
+}
+
+model AutoWithdrawConfig {
+  id                String       @id @default(cuid())
+  accountId         String       @unique
+  enabled           Boolean      @default(false)
+  triggerMinBalance Float        @default(1000)
+  targetNumber      String
+  withdrawType      WithdrawType @default(ALL_EXCEPT)
+  amountValue       Float        @default(0) // If ALL_EXCEPT, keep this amount. If FIXED_AMOUNT, withdraw this amount.
+  
+  account           Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  updatedAt         DateTime     @updatedAt
+}
+
+model AutoWithdrawLog {
+  id             String   @id @default(cuid())
+  accountId      String
+  amount         Float
+  targetNumber   String
+  status         String   // SUCCESS, FAILED
+  message        String?  // Error message or Ref ID
+  
+  createdAt      DateTime @default(now())
+  
+  @@index([accountId, createdAt])
 }

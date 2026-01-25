@@ -48,9 +48,11 @@ router.get("/stats", async (req: Request<{ prefix: string }>, res: Response, nex
                     notifyMoneyIn: network.notifyMoneyIn,
                     notifyMoneyOut: network.notifyMoneyOut,
                     notifyMinAmount: network.notifyMinAmount,
-                    // Inject Network Specific Setting
+                    // Inject Network Specific Settings
                     // @ts-ignore
-                    isAutoReceiveEnabled: network.featureWebhookEnabled ?? true // Default to true if not set
+                    isAutoReceiveEnabled: network.featureWebhookEnabled ?? true,
+                    // @ts-ignore
+                    featureAutoWithdraw: network.featureAutoWithdraw ?? false
                 },
                 stats: { total: accountCount, active: activeAccounts },
             },

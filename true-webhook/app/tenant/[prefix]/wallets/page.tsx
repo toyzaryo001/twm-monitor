@@ -102,8 +102,24 @@ export default function WalletsPage() {
         setCheckingId(null);
     };
 
+    const [featureAutoWithdrawEnabled, setFeatureAutoWithdrawEnabled] = useState(false);
+
     useEffect(() => {
         fetchAccounts();
+
+        // Fetch Network Config to check Feature Flag
+        const fetchNetworkConfig = async () => {
+            const token = getToken();
+            if (!token) return;
+            try {
+                const res = await fetch(`/api/tenant/${prefix}/stats`, { headers: { Authorization: `Bearer ${token}` } });
+                const data = await res.json();
+                if (data.ok && data.data.network) {
+                    setFeatureAutoWithdrawEnabled(data.data.network.featureAutoWithdraw === true);
+                }
+            } catch (e) { console.error("Error fetching network config", e); }
+        };
+        fetchNetworkConfig();
     }, [prefix]);
 
     // Real-time balance updates via SSE
@@ -217,6 +233,85 @@ export default function WalletsPage() {
         }
     };
 
+    // Auto Withdraw System
+    interface AutoWithdrawSettings {
+        enabled: boolean;
+        triggerMinBalance: number;
+        targetNumber: string;
+        withdrawType: string;
+        amountValue: number;
+    }
+
+    const [showAutoWithdrawModal, setShowAutoWithdrawModal] = useState(false);
+    const [editingAutoWithdrawId, setEditingAutoWithdrawId] = useState<string | null>(null);
+    const [autoWithdrawForm, setAutoWithdrawForm] = useState<AutoWithdrawSettings>({
+        enabled: false,
+        triggerMinBalance: 1000,
+        targetNumber: "",
+        withdrawType: "ALL_EXCEPT",
+        amountValue: 0
+    });
+
+    const handleOpenAutoWithdraw = async (account: Account) => {
+        setEditingAutoWithdrawId(account.id);
+        const token = getToken();
+        // Fetch existing config
+        try {
+            const res = await fetch(`/api/tenant/${prefix}/accounts/${account.id}/auto-withdraw`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (data.ok && data.data) {
+                setAutoWithdrawForm({
+                    enabled: data.data.enabled,
+                    triggerMinBalance: data.data.triggerMinBalance,
+                    targetNumber: data.data.targetNumber,
+                    withdrawType: data.data.withdrawType,
+                    amountValue: data.data.amountValue
+                });
+            } else {
+                // Default
+                setAutoWithdrawForm({
+                    enabled: false,
+                    triggerMinBalance: 1000,
+                    targetNumber: "",
+                    withdrawType: "ALL_EXCEPT",
+                    amountValue: 0
+                });
+            }
+        } catch (e) {
+            console.error("Error fetching config", e);
+        }
+        setShowAutoWithdrawModal(true);
+    };
+
+    const handleSaveAutoWithdraw = async () => {
+        if (!editingAutoWithdrawId) return;
+        const token = getToken();
+
+        if (!autoWithdrawForm.targetNumber) {
+            alert("กรุณาระบุเบอร์ปลายทาง");
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/tenant/${prefix}/accounts/${editingAutoWithdrawId}/auto-withdraw`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify(autoWithdrawForm)
+            });
+            const data = await res.json();
+            if (data.ok) {
+                showToast({ type: "success", title: "บันทึกสำเร็จ", message: "ตั้งค่าโอนอัตโนมัติเรียบร้อยแล้ว" });
+                setShowAutoWithdrawModal(false);
+            } else {
+                showToast({ type: "error", title: "ผิดพลาด", message: "ไม่สามารถบันทึกได้" });
+            }
+        } catch (e) {
+            showToast({ type: "error", title: "ผิดพลาด", message: "เกิดข้อผิดพลาดในการเชื่อมต่อ" });
+        }
+    };
+
     if (loading) {
         return (
             <div style={{ display: "flex", justifyContent: "center", padding: 60 }}>
@@ -326,6 +421,15 @@ export default function WalletsPage() {
                                 >
                                     {checkingId === account.id ? "⏳" : "🔄 เช็คยอด"}
                                 </button>
+                                {featureAutoWithdrawEnabled && (
+                                    <button
+                                        className="tenant-btn tenant-btn-secondary tenant-btn-sm"
+                                        onClick={() => handleOpenAutoWithdraw(account)}
+                                        title="ตั้งค่าโอนอัตโนมัติ"
+                                    >
+                                        ⚙️ Auto
+                                    </button>
+                                )}
                                 <button
                                     className="tenant-btn tenant-btn-secondary tenant-btn-sm"
                                     onClick={() => handleToggle(account)}
@@ -443,6 +547,134 @@ export default function WalletsPage() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Auto Withdraw Modal */}
+            {showAutoWithdrawModal && (
+                <div
+                    style={{
+                        position: "fixed",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: "rgba(0,0,0,0.7)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 1000,
+                        padding: 20
+                    }}
+                    onClick={() => setShowAutoWithdrawModal(false)}
+                >
+                    <div
+                        className="tenant-card"
+                        style={{ maxWidth: 480, width: "100%" }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="tenant-card-title" style={{ marginBottom: 24 }}>
+                            ⚙️ ตั้งค่าโอนเงินอัตโนมัติ (Auto Withdraw)
+                        </div>
+
+                        <div className="tenant-form-group">
+                            <label className="tenant-form-label">สถานะการทำงาน</label>
+                            <label className="switch" style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                                <input
+                                    type="checkbox"
+                                    checked={autoWithdrawForm.enabled}
+                                    onChange={(e) => setAutoWithdrawForm({ ...autoWithdrawForm, enabled: e.target.checked })}
+                                    style={{ width: 20, height: 20 }}
+                                />
+                                <span style={{ color: autoWithdrawForm.enabled ? "var(--success)" : "var(--text-muted)" }}>
+                                    {autoWithdrawForm.enabled ? "เปิดใช้งาน" : "ปิด"}
+                                </span>
+                            </label>
+                        </div>
+
+                        <div className="tenant-form-group">
+                            <label className="tenant-form-label">เงื่อนไข (ยอดเงินขั้นต่ำ)</label>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ color: "var(--text-muted)" }}>เมื่อยอดเงินมากกว่า</span>
+                                <input
+                                    type="number"
+                                    className="tenant-form-input"
+                                    style={{ width: 120, textAlign: 'right' }}
+                                    value={autoWithdrawForm.triggerMinBalance}
+                                    onChange={(e) => setAutoWithdrawForm({ ...autoWithdrawForm, triggerMinBalance: Number(e.target.value) })}
+                                />
+                                <span style={{ color: "var(--text-muted)" }}>บาท</span>
+                            </div>
+                            <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                                * จะทำการโอนออกจนเหลือ 0 (หรือตามที่กำหนด) เมื่อยอดถึงกำหนด
+                            </div>
+                        </div>
+
+                        <div className="tenant-form-group">
+                            <label className="tenant-form-label">เบอร์ปลายทางที่รับเงิน</label>
+                            <input
+                                type="text"
+                                className="tenant-form-input"
+                                value={autoWithdrawForm.targetNumber}
+                                onChange={(e) => setAutoWithdrawForm({ ...autoWithdrawForm, targetNumber: e.target.value })}
+                                placeholder="0xx-xxx-xxxx"
+                            />
+                        </div>
+
+                        <div className="tenant-form-group">
+                            <label className="tenant-form-label">รูปแบบการถอน</label>
+                            <select
+                                className="tenant-form-input"
+                                value={autoWithdrawForm.withdrawType}
+                                onChange={(e) => setAutoWithdrawForm({ ...autoWithdrawForm, withdrawType: e.target.value })}
+                            >
+                                <option value="ALL_EXCEPT">ถอนทั้งหมด (เหลือติดบัญชี)</option>
+                                <option value="FIXED_AMOUNT">ถอนยอดคงที่ (ครั้งละ)</option>
+                            </select>
+                        </div>
+
+                        {autoWithdrawForm.withdrawType === 'ALL_EXCEPT' && (
+                            <div className="tenant-form-group">
+                                <label className="tenant-form-label">เหลือเงินติดบัญชีไว้ (บาท)</label>
+                                <input
+                                    type="number"
+                                    className="tenant-form-input"
+                                    value={autoWithdrawForm.amountValue}
+                                    onChange={(e) => setAutoWithdrawForm({ ...autoWithdrawForm, amountValue: Number(e.target.value) })}
+                                />
+                            </div>
+                        )}
+
+                        {autoWithdrawForm.withdrawType === 'FIXED_AMOUNT' && (
+                            <div className="tenant-form-group">
+                                <label className="tenant-form-label">จำนวนเงินที่ถอน (บาท)</label>
+                                <input
+                                    type="number"
+                                    className="tenant-form-input"
+                                    value={autoWithdrawForm.amountValue}
+                                    onChange={(e) => setAutoWithdrawForm({ ...autoWithdrawForm, amountValue: Number(e.target.value) })}
+                                />
+                            </div>
+                        )}
+
+                        <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
+                            <button
+                                type="button"
+                                className="tenant-btn tenant-btn-secondary"
+                                style={{ flex: 1 }}
+                                onClick={() => setShowAutoWithdrawModal(false)}
+                            >
+                                ยกเลิก
+                            </button>
+                            <button
+                                onClick={handleSaveAutoWithdraw}
+                                className="tenant-btn tenant-btn-primary"
+                                style={{ flex: 1 }}
+                            >
+                                บันทึกการตั้งค่า
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

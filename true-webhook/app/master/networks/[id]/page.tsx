@@ -14,6 +14,7 @@ interface Network {
     realtimeEnabled: boolean;
     checkIntervalMs: number;
     featureWebhookEnabled: boolean;
+    featureAutoWithdraw: boolean;
     telegramBotToken: string | null;
     telegramChatId: string | null;
     telegramEnabled: boolean;
@@ -40,6 +41,7 @@ export default function NetworkSettingsPage() {
         realtimeEnabled: true,
         checkIntervalMs: 2000,
         featureWebhookEnabled: true,
+        featureAutoWithdraw: false,
         telegramBotToken: "",
         telegramChatId: "",
         telegramEnabled: false,
@@ -68,6 +70,7 @@ export default function NetworkSettingsPage() {
                     realtimeEnabled: data.data.realtimeEnabled ?? true,
                     checkIntervalMs: data.data.checkIntervalMs ?? 2000,
                     featureWebhookEnabled: data.data.featureWebhookEnabled ?? true,
+                    featureAutoWithdraw: data.data.featureAutoWithdraw ?? false,
                     telegramBotToken: data.data.telegramBotToken || "",
                     telegramChatId: data.data.telegramChatId || "",
                     telegramEnabled: data.data.telegramEnabled ?? false,
@@ -264,7 +267,7 @@ export default function NetworkSettingsPage() {
 
                 {/* Feature Toggles */}
                 <div className="card" style={{ marginBottom: 24 }}>
-                    <h2 style={{ fontSize: 18, marginBottom: 20, color: "#a5b4fc" }}>🔗 การเชื่อมต่อ Webhook</h2>
+                    <h2 style={{ fontSize: 18, marginBottom: 20, color: "#a5b4fc" }}>🔗 การเชื่อมต่อ & ฟีเจอร์</h2>
                     <div className="form-group">
                         <label style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
                             <input
@@ -277,6 +280,21 @@ export default function NetworkSettingsPage() {
                         </label>
                         <p style={{ color: "#9ca3af", fontSize: 13, marginTop: 6 }}>
                             เมื่อปิดใช้งาน เมนู "Webhook" ในหน้าตั้งค่าของ Tenant จะถูกซ่อน
+                        </p>
+                    </div>
+
+                    <div className="form-group" style={{ marginTop: 24 }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
+                            <input
+                                type="checkbox"
+                                checked={form.featureAutoWithdraw}
+                                onChange={(e) => setForm({ ...form, featureAutoWithdraw: e.target.checked })}
+                                style={{ width: 20, height: 20 }}
+                            />
+                            <span>เปิดใช้งานระบบ Auto-Withdraw (ถอนเงินอัตโนมัติ)</span>
+                        </label>
+                        <p style={{ color: "#9ca3af", fontSize: 13, marginTop: 6 }}>
+                            อนุญาตให้เครือข่ายนี้ใช้งานระบบถอนเงินอัตโนมัติได้
                         </p>
                     </div>
                 </div>
