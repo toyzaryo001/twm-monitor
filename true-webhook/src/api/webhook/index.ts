@@ -162,7 +162,7 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         if (!account) {
             const accounts = await prisma.account.findMany({
                 where: { networkId: network.id },
-                select: { id: true, phoneNumber: true, webhookSecret: true }, // Lightweight fetch
+                select: { id: true, phoneNumber: true, webhookSecret: true } as any, // Lightweight fetch
                 take: 2
             });
 
