@@ -19,6 +19,8 @@ const navItems = [
     { href: "/master/settings", label: "ตั้งค่า", icon: "⚙️" },
 ];
 
+import { isTokenExpired } from "../lib/clientAuth";
+
 export default function MasterLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
@@ -29,7 +31,9 @@ export default function MasterLayout({ children }: { children: React.ReactNode }
         const token = localStorage.getItem("token");
         const storedUser = localStorage.getItem("user");
 
-        if (!token) {
+        if (!token || isTokenExpired(token)) {
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
             router.push("/master/login");
             return;
         }

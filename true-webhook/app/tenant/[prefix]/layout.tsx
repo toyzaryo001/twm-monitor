@@ -6,6 +6,8 @@ import Link from "next/link";
 import { ToastProvider } from "../../components/Toast";
 import "../tenant-theme.css";
 
+import { isTokenExpired } from "../../lib/clientAuth";
+
 export default function TenantLayout({ children }: { children: React.ReactNode }) {
     const params = useParams();
     const router = useRouter();
@@ -15,10 +17,18 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
     const [network, setNetwork] = useState<any>(null);
 
     useEffect(() => {
+        const token = localStorage.getItem("tenantToken");
+
+        if (!token || isTokenExpired(token)) {
+            localStorage.removeItem("tenantToken");
+            router.push(`/tenant/${prefix}/login`);
+            return;
+        }
+
         // Simple auth check or network info fetch could go here
         // For now, we assume middleware handles protection
         setLoading(false);
-    }, []);
+    }, [prefix, router]);
 
     if (loading) return null;
 
