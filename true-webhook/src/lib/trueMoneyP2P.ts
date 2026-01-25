@@ -3,6 +3,8 @@
  * Replaces php-engine/TrueMoneyP2P.php
  */
 
+import fetch from 'node-fetch';
+
 const API_GATEWAY = 'https://mobile-api-gateway.truemoney.com/mobile-api-gateway';
 
 interface ApiResponse {
@@ -41,6 +43,7 @@ async function request(token: string, method: 'GET' | 'POST', uri: string, data?
             raw
         };
     } catch (error: any) {
+        console.error('[TrueMoneyP2P] Request error:', error.message);
         return {
             code: 0,
             body: { error: error.message },
