@@ -90,6 +90,16 @@ export default function HistoryPage() {
         return ""; // All
     };
 
+    interface FeeSummary {
+        accountId: string;
+        accountName: string;
+        phoneNumber?: string;
+        totalFee: number;
+        firstActiveAt: string | null;
+    }
+
+    const [feeSummary, setFeeSummary] = useState<FeeSummary[]>([]);
+
     const fetchHistory = useCallback(async (showLoading = false) => {
         if (!selectedAccount) return;
 
@@ -98,22 +108,36 @@ export default function HistoryPage() {
 
         try {
             const dateParams = getDateRangeParams(dateFilter);
-            const filterParam = `&filter=${activeTab}`;
 
-            let url = "";
-            if (selectedAccount === "all") {
-                url = `/api/tenant/${prefix}/accounts/all-history?limit=${limit}&page=${page}${dateParams}${filterParam}`;
+            // IF FEE TAB -> Fetch Summary instead
+            if (activeTab === "fee") {
+                const url = `/api/tenant/${prefix}/accounts/fee-summary?${dateParams.replace('&', '')}`; // remove leading & if any
+                const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+                const data = await res.json();
+                if (data.ok) {
+                    setFeeSummary(data.data);
+                    // Reset pagination for consistency (though not used)
+                    setTotalPages(1);
+                    setTotalItems(data.data.length);
+                }
             } else {
-                url = `/api/tenant/${prefix}/accounts/${selectedAccount}/history?limit=${limit}&page=${page}${dateParams}${filterParam}`;
-            }
+                // Existing Logic for Deposit/Withdraw
+                const filterParam = `&filter=${activeTab}`;
+                let url = "";
+                if (selectedAccount === "all") {
+                    url = `/api/tenant/${prefix}/accounts/all-history?limit=${limit}&page=${page}${dateParams}${filterParam}`;
+                } else {
+                    url = `/api/tenant/${prefix}/accounts/${selectedAccount}/history?limit=${limit}&page=${page}${dateParams}${filterParam}`;
+                }
 
-            const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-            const data = await res.json();
-            if (data.ok) {
-                setHistory(data.data);
-                if (data.pagination) {
-                    setTotalPages(data.pagination.totalPages);
-                    setTotalItems(data.pagination.total);
+                const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+                const data = await res.json();
+                if (data.ok) {
+                    setHistory(data.data);
+                    if (data.pagination) {
+                        setTotalPages(data.pagination.totalPages);
+                        setTotalItems(data.pagination.total);
+                    }
                 }
             }
         } catch (e) {
@@ -130,6 +154,7 @@ export default function HistoryPage() {
     // Fetch accounts
     useEffect(() => {
         const fetchAccounts = async () => {
+            // ... existing code ...
             const token = getToken();
             if (!token) return;
 
@@ -160,8 +185,9 @@ export default function HistoryPage() {
         }
     }, [selectedAccount, fetchHistory]);
 
-    // SSE
+    // SSE (Keep existing)
     useEffect(() => {
+        // ... existing code ...
         if (!selectedAccount || selectedAccount === "all") {
             if (eventSourceRef.current) eventSourceRef.current.close();
             setIsConnected(false);
@@ -192,8 +218,6 @@ export default function HistoryPage() {
     const isFee = (entry: HistoryEntry) => {
         if (entry.recipient && (entry.recipient.includes("Fee") || entry.recipient.includes("P2P Fee"))) return true;
         if (entry.fee && entry.fee > 0 && entry.amount === entry.fee) return true;
-        // Check raw payload event type if mapped differently, but usually 'type' field is reliable enough for now
-        // if (entry.rawPayload && entry.rawPayload.event_type === 'FEE_PAYMENT') return true;
         if (entry.recipient === "System Fee") return true;
         return false;
     };
@@ -202,10 +226,12 @@ export default function HistoryPage() {
     const filteredHistory = history;
 
     // Calculate total amount for display
-    const totalAmount = filteredHistory.reduce((sum, entry) => {
-        const val = entry.type === 'transaction' && entry.amount ? entry.amount : Math.abs(entry.change);
-        return sum + val;
-    }, 0);
+    const totalAmount = activeTab === 'fee'
+        ? feeSummary.reduce((sum, item) => sum + item.totalFee, 0)
+        : filteredHistory.reduce((sum, entry) => {
+            const val = entry.type === 'transaction' && entry.amount ? entry.amount : Math.abs(entry.change);
+            return sum + val;
+        }, 0);
 
     const formatDate = (dateStr: string) => {
         return new Date(dateStr).toLocaleDateString("th-TH", { day: "2-digit", month: "short", year: "numeric" });
@@ -213,6 +239,12 @@ export default function HistoryPage() {
 
     const formatTime = (dateStr: string) => {
         return new Date(dateStr).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    };
+
+    const formatDateTime = (dateStr: string | null) => {
+        if (!dateStr) return "-";
+        const d = new Date(dateStr);
+        return `${d.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "2-digit" })} ${d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}`;
     };
 
     if (loading) return <div className="flex-center p-60"><div className="spinner" /></div>;
@@ -240,19 +272,21 @@ export default function HistoryPage() {
                         </select>
                     )}
 
-                    {/* Limit Select */}
-                    <select
-                        className="tenant-form-input w-auto"
-                        value={limit}
-                        onChange={(e) => setLimit(Number(e.target.value))}
-                        style={{ cursor: "pointer" }}
-                    >
-                        <option value={20}>20 รายการ</option>
-                        <option value={50}>50 รายการ</option>
-                        <option value={100}>100 รายการ</option>
-                        <option value={300}>300 รายการ</option>
-                        <option value={500}>500 รายการ</option>
-                    </select>
+                    {/* Limit Select (Only for non-fee tabs) */}
+                    {activeTab !== 'fee' && (
+                        <select
+                            className="tenant-form-input w-auto"
+                            value={limit}
+                            onChange={(e) => setLimit(Number(e.target.value))}
+                            style={{ cursor: "pointer" }}
+                        >
+                            <option value={20}>20 รายการ</option>
+                            <option value={50}>50 รายการ</option>
+                            <option value={100}>100 รายการ</option>
+                            <option value={300}>300 รายการ</option>
+                            <option value={500}>500 รายการ</option>
+                        </select>
+                    )}
                 </div>
             </div>
 
@@ -298,15 +332,16 @@ export default function HistoryPage() {
                         </div>
                     </div>
                     <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                        {filteredHistory.length} รายการ (จากทั้งหมด {totalItems})
+                        {activeTab === 'fee'
+                            ? `${feeSummary.length} บัญชี`
+                            : `${filteredHistory.length} รายการ (จากทั้งหมด ${totalItems})`
+                        }
                     </div>
                 </div>
 
-
-
                 {loadingHistory ? (
                     <div className="flex-center p-40"><div className="spinner" /></div>
-                ) : filteredHistory.length === 0 ? (
+                ) : (activeTab === 'fee' ? feeSummary.length === 0 : filteredHistory.length === 0) ? (
                     <div className="tenant-empty">
                         <div className="tenant-empty-icon">📅</div>
                         <div className="tenant-empty-text">ไม่พบรายการในช่วงเวลานี้</div>
@@ -316,37 +351,24 @@ export default function HistoryPage() {
                         <table className="history-table">
                             <thead>
                                 <tr>
-                                    <th>วัน/เวลา</th>
-                                    {selectedAccount === "all" && <th>บัญชี</th>}
-                                    <th>รายละเอียด</th>
-                                    <th style={{ textAlign: "right" }}>จำนวนเงิน</th>
+                                    <th>บัญชี</th>
+                                    <th style={{ textAlign: "right" }}>ยอดค่าธรรมเนียม</th>
+                                    <th style={{ textAlign: "right" }}>เริ่มนับยอด</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredHistory.map((entry) => (
-                                    <tr key={entry.id}>
-                                        <td style={{ whiteSpace: "nowrap" }}>
-                                            <div style={{ fontSize: 13 }}>{formatDate(entry.checkedAt)}</div>
-                                            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{formatTime(entry.checkedAt)}</div>
-                                        </td>
-                                        {selectedAccount === "all" && (
-                                            <td>
-                                                <span style={{ fontSize: 12, background: "var(--bg-secondary)", padding: "2px 8px", borderRadius: 12, border: "1px solid var(--border)" }}>
-                                                    {entry.accountName}
-                                                </span>
-                                            </td>
-                                        )}
+                                {feeSummary.map((acc) => (
+                                    <tr key={acc.accountId}>
                                         <td>
-                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                                <div style={{
-                                                    width: 8, height: 8, borderRadius: "50%",
-                                                    background: "var(--text-muted)"
-                                                }} />
-                                                <span>หักค่าธรรมเนียม</span>
-                                            </div>
+                                            <div style={{ fontWeight: 600 }}>{acc.accountName}</div>
+                                            {acc.phoneNumber && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{acc.phoneNumber}</div>}
                                         </td>
-                                        <td style={{ textAlign: "right", fontWeight: 600 }}>
-                                            ฿ {Math.abs(entry.change).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                                        <td style={{ textAlign: "right", fontWeight: 600, color: "var(--error)" }}>
+                                            {acc.totalFee.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                                        </td>
+                                        <td style={{ textAlign: "right" }}>
+                                            <div style={{ fontSize: 13 }}>{formatDateTime(acc.firstActiveAt)}</div>
+                                            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>นับจากยอดแรก</div>
                                         </td>
                                     </tr>
                                 ))}

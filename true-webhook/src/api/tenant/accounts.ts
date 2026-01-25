@@ -90,6 +90,97 @@ router.get("/", async (req: Request<{ prefix: string }>, res: Response, next: Ne
     }
 });
 
+// Get Fee Summary (Grouped by Account)
+router.get("/fee-summary", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
+    try {
+        const network = await getNetwork(req.params.prefix);
+        if (!network) {
+            return res.status(404).json({ ok: false, error: "NETWORK_NOT_FOUND" });
+        }
+
+        // Date Filtering
+        const fromDate = req.query.from ? new Date(req.query.from as string) : null;
+        const toDate = req.query.to ? new Date(req.query.to as string) : null;
+
+        const dateFilterTx: any = {};
+        if (fromDate) dateFilterTx.timestamp = { ...dateFilterTx.timestamp, gte: fromDate };
+        if (toDate) dateFilterTx.timestamp = { ...dateFilterTx.timestamp, lte: toDate };
+
+        // 1. Get all accounts in network
+        const accounts = await prisma.account.findMany({
+            where: { networkId: network.id },
+            select: { id: true, name: true, phoneNumber: true }
+        });
+        const accountIds = accounts.map(a => a.id);
+
+        // 2. Fetch Aggregated Fee Stats
+        const typeFilterTx: any = {
+            type: "outgoing",
+            OR: [
+                { recipientName: { contains: "Fee" } },
+                { recipientMobile: { contains: "Fee" } },
+                { rawPayload: { path: ['event_type'], equals: 'FEE_PAYMENT' } }
+            ]
+        };
+
+        // We use findMany because groupBy doesn't support easy 'OR' filtering on relation fields in older prisma versions nicely, 
+        // effectively we want to aggregate manually or use findMany. 
+        // Actually, just fetching all matching fee transactions is safer for complex OR conditions and then grouping in JS if volume is reasonable.
+        // Assuming pagination is not needed for the *summary* (number of accounts is usually small < 100).
+
+        const transactions = await (prisma as any).financialTransaction.findMany({
+            where: {
+                accountId: { in: accountIds },
+                ...dateFilterTx,
+                ...typeFilterTx
+            },
+            select: {
+                accountId: true,
+                amount: true,
+                timestamp: true
+            },
+            orderBy: { timestamp: "asc" }
+        });
+
+        // 3. Group by Account
+        const statsMap = new Map<string, { totalFee: number; firstActiveAt: Date | null }>();
+
+        // Init map
+        accounts.forEach(acc => {
+            statsMap.set(acc.id, { totalFee: 0, firstActiveAt: null });
+        });
+
+        transactions.forEach((tx: any) => {
+            const current = statsMap.get(tx.accountId);
+            if (current) {
+                current.totalFee += (tx.amount || 0);
+                if (!current.firstActiveAt) {
+                    current.firstActiveAt = tx.timestamp; // Since sorted ASC, first one is oldest
+                }
+            }
+        });
+
+        // 4. Format Result
+        const result = accounts
+            .map(acc => {
+                const stats = statsMap.get(acc.id)!;
+                return {
+                    accountId: acc.id,
+                    accountName: acc.name,
+                    phoneNumber: acc.phoneNumber,
+                    totalFee: stats.totalFee,
+                    firstActiveAt: stats.firstActiveAt
+                };
+            })
+            .filter(item => item.totalFee > 0) // Only show accounts with fees
+            .sort((a, b) => b.totalFee - a.totalFee); // Sort by highest fee
+
+        return res.json({ ok: true, data: result });
+    } catch (err) {
+        next(err);
+    }
+});
+
 // Get GLOBAL history (All accounts)
 router.get("/all-history", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     try {
