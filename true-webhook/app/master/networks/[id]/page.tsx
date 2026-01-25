@@ -36,7 +36,7 @@ export default function NetworkSettingsPage() {
         name: "",
         logoUrl: "",
         isActive: true,
-        isActive: true,
+
         realtimeEnabled: true,
         checkIntervalMs: 2000,
         featureWebhookEnabled: true,
