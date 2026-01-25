@@ -35,6 +35,7 @@ model Network {
   // Real-time settings
   realtimeEnabled         Boolean   @default(true)
   checkIntervalMs         Int       @default(2000)  // Milliseconds between checks
+  featureWebhookEnabled   Boolean   @default(true)
   
   // Telegram notification settings
   telegramBotToken        String?

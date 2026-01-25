@@ -13,6 +13,7 @@ interface Network {
     isActive: boolean;
     realtimeEnabled: boolean;
     checkIntervalMs: number;
+    featureWebhookEnabled: boolean;
     telegramBotToken: string | null;
     telegramChatId: string | null;
     telegramEnabled: boolean;
@@ -35,8 +36,10 @@ export default function NetworkSettingsPage() {
         name: "",
         logoUrl: "",
         isActive: true,
+        isActive: true,
         realtimeEnabled: true,
         checkIntervalMs: 2000,
+        featureWebhookEnabled: true,
         telegramBotToken: "",
         telegramChatId: "",
         telegramEnabled: false,
@@ -64,6 +67,7 @@ export default function NetworkSettingsPage() {
                     isActive: data.data.isActive,
                     realtimeEnabled: data.data.realtimeEnabled ?? true,
                     checkIntervalMs: data.data.checkIntervalMs ?? 2000,
+                    featureWebhookEnabled: data.data.featureWebhookEnabled ?? true,
                     telegramBotToken: data.data.telegramBotToken || "",
                     telegramChatId: data.data.telegramChatId || "",
                     telegramEnabled: data.data.telegramEnabled ?? false,
@@ -256,6 +260,25 @@ export default function NetworkSettingsPage() {
                             </p>
                         </div>
                     )}
+                </div>
+
+                {/* Feature Toggles */}
+                <div className="card" style={{ marginBottom: 24 }}>
+                    <h2 style={{ fontSize: 18, marginBottom: 20, color: "#a5b4fc" }}>🔗 การเชื่อมต่อ Webhook</h2>
+                    <div className="form-group">
+                        <label style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
+                            <input
+                                type="checkbox"
+                                checked={form.featureWebhookEnabled}
+                                onChange={(e) => setForm({ ...form, featureWebhookEnabled: e.target.checked })}
+                                style={{ width: 20, height: 20 }}
+                            />
+                            <span>เปิดใช้งาน Webhook (รับยอดอัตโนมัติ)</span>
+                        </label>
+                        <p style={{ color: "#9ca3af", fontSize: 13, marginTop: 6 }}>
+                            เมื่อปิดใช้งาน เมนู "Webhook" ในหน้าตั้งค่าของ Tenant จะถูกซ่อน
+                        </p>
+                    </div>
                 </div>
 
                 {/* Telegram Settings */}

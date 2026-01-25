@@ -181,35 +181,7 @@ export default function SettingsPage() {
                 </table>
             </div>
 
-            {/* Feature Toggles */}
-            <div className="card" style={{ marginTop: 24 }}>
-                <div className="card-title">Feature Toggles (เปิด/ปิดฟีเจอร์)</div>
-                <div className="form-group">
-                    <label className="form-label">Auto Receive Balance (รับยอดอัตโนมัติ)</label>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{
-                            padding: "6px 12px",
-                            borderRadius: "20px",
-                            fontSize: "13px",
-                            fontWeight: 600,
-                            background: savedWebhookEnabled === "true" ? "var(--success-light)" : "var(--danger-light)",
-                            color: savedWebhookEnabled === "true" ? "var(--success)" : "var(--danger)"
-                        }}>
-                            {savedWebhookEnabled === "true" ? "✓ เปิดใช้งาน" : "✕ ปิดใช้งาน"}
-                        </div>
-                        <button
-                            className="btn btn-secondary"
-                            onClick={toggleWebhookFeature}
-                            disabled={toggling}
-                        >
-                            {toggling ? "กำลังบันทึก..." : (savedWebhookEnabled === "true" ? "ปิดการใช้งาน" : "เปิดการใช้งาน")}
-                        </button>
-                    </div>
-                    <p style={{ fontSize: "13px", color: "var(--text-secondary)", marginTop: 8 }}>
-                        เมื่อปิดใช้งาน เมนู "Webhook (รับยอดอัตโนมัติ)" ในหน้าตั้งค่าของ Tenant จะถูกซ่อน
-                    </p>
-                </div>
-            </div>
+
         </div>
     );
 }
