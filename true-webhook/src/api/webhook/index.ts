@@ -189,7 +189,9 @@ router.all("/:prefix", async (req: Request, res: Response) => {
             return res.status(200).json({ status: "ignored", reason: "Account not found" });
         }
 
-        // [SECURE] Verify Authorization Header
+        // [DISABLED] Webhook Authorization Key check - ยกเลิกการใช้งาน
+        // ระบบจะรับข้อมูลทั้งหมดโดยไม่ต้องตรวจสอบ Key
+        /*
         if ((account as any).webhookSecret) {
             const authHeader = req.headers.authorization || "";
             const token = authHeader.replace(/^Bearer\s+/i, ""); // Remove Bearer if present
@@ -215,6 +217,7 @@ router.all("/:prefix", async (req: Request, res: Response) => {
                 return res.status(401).json({ error: "Unauthorized: Invalid Webhook Secret" });
             }
         }
+        */
 
 
         // 4. Save Transaction
