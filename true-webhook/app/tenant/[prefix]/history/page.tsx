@@ -298,12 +298,62 @@ export default function HistoryPage() {
                     </div>
                 </div>
 
+                {/* Table Styles */}
+                <style jsx>{`
+                    .history-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+                    .history-table th { text-align: left; padding: 12px; color: var(--text-muted); font-weight: 500; border-bottom: 1px solid var(--border); }
+                    .history-table td { padding: 12px; border-bottom: 1px solid var(--border); color: var(--text-primary); }
+                    .history-table tr:last-child td { border-bottom: none; }
+                `}</style>
+
                 {loadingHistory ? (
                     <div className="flex-center p-40"><div className="spinner" /></div>
                 ) : filteredHistory.length === 0 ? (
                     <div className="tenant-empty">
                         <div className="tenant-empty-icon">📅</div>
                         <div className="tenant-empty-text">ไม่พบรายการในช่วงเวลานี้</div>
+                    </div>
+                ) : activeTab === 'fee' ? (
+                    <div style={{ overflowX: "auto" }}>
+                        <table className="history-table">
+                            <thead>
+                                <tr>
+                                    <th>วัน/เวลา</th>
+                                    {selectedAccount === "all" && <th>บัญชี</th>}
+                                    <th>รายละเอียด</th>
+                                    <th style={{ textAlign: "right" }}>จำนวนเงิน</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredHistory.map((entry) => (
+                                    <tr key={entry.id}>
+                                        <td style={{ whiteSpace: "nowrap" }}>
+                                            <div style={{ fontSize: 13 }}>{formatDate(entry.checkedAt)}</div>
+                                            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{formatTime(entry.checkedAt)}</div>
+                                        </td>
+                                        {selectedAccount === "all" && (
+                                            <td>
+                                                <span style={{ fontSize: 12, background: "var(--bg-secondary)", padding: "2px 8px", borderRadius: 12, border: "1px solid var(--border)" }}>
+                                                    {entry.accountName}
+                                                </span>
+                                            </td>
+                                        )}
+                                        <td>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                                <div style={{
+                                                    width: 8, height: 8, borderRadius: "50%",
+                                                    background: "var(--text-muted)"
+                                                }} />
+                                                <span>หักค่าธรรมเนียม</span>
+                                            </div>
+                                        </td>
+                                        <td style={{ textAlign: "right", fontWeight: 600 }}>
+                                            ฿ {Math.abs(entry.change).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 ) : (
                     <div style={{ position: "relative" }}>
