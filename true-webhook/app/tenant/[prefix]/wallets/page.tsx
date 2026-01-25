@@ -415,7 +415,7 @@ export default function WalletsPage() {
                             <div className="wallet-actions">
                                 <button
                                     className="tenant-btn tenant-btn-success tenant-btn-sm"
-                                    style={{ flex: 1 }}
+                                    style={{ flex: 1, padding: "6px 2px", fontSize: "0.7rem", whiteSpace: "nowrap" }}
                                     onClick={() => handleCheckBalance(account.id)}
                                     disabled={checkingId === account.id}
                                 >
@@ -426,6 +426,7 @@ export default function WalletsPage() {
                                         className="tenant-btn tenant-btn-secondary tenant-btn-sm"
                                         onClick={() => handleOpenAutoWithdraw(account)}
                                         title="ตั้งค่าโอนอัตโนมัติ"
+                                        style={{ padding: "6px 2px", fontSize: "0.7rem" }}
                                     >
                                         ⚙️ Auto
                                     </button>
