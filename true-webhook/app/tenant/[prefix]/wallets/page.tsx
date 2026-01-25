@@ -38,12 +38,23 @@ export default function WalletsPage() {
 
     const fetchAccounts = async () => {
         const token = getToken();
-        if (!token) return;
+        if (!token) {
+            window.location.href = `/tenant/${prefix}/login`;
+            return;
+        }
 
         try {
             const res = await fetch(`/api/tenant/${prefix}/accounts`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
+
+            // If unauthorized, redirect to login
+            if (res.status === 401) {
+                localStorage.removeItem("tenantToken");
+                window.location.href = `/tenant/${prefix}/login`;
+                return;
+            }
+
             const data = await res.json();
             if (data.ok) {
                 setAccounts(data.data);
