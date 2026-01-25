@@ -318,23 +318,24 @@ router.post("/fix-transactions", async (req: Request<{ prefix: string }>, res: R
             return res.status(400).json({ ok: false, error: "Could not find accounts" });
         }
 
-        // Delete wrongly assigned transactions from today
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
+        // Start from 18:18 today (when authorization issues started)
+        const startTime = new Date();
+        startTime.setHours(18, 18, 0, 0);
 
+        // Delete wrongly assigned transactions
         const deleted = await prisma.financialTransaction.deleteMany({
             where: {
                 accountId: wrongAccountId,
-                timestamp: { gte: startOfDay },
+                timestamp: { gte: startTime },
                 transactionId: { startsWith: "recovered-" }
             }
         });
 
-        // Now get notification logs and re-assign correctly
+        // Now get notification logs from 18:18 onwards
         const logs = await prisma.notificationLog.findMany({
             where: {
                 message: { contains: "Decoded Payload" },
-                createdAt: { gte: startOfDay },
+                createdAt: { gte: startTime },
             },
             orderBy: { createdAt: "asc" }
         });
