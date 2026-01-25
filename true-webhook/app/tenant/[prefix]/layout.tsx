@@ -38,6 +38,17 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
 
     if (loading) return null;
 
+    // Special layout for Login page (Full screen, no sidebar)
+    if (pathname?.includes("/login")) {
+        return (
+            <ToastProvider>
+                <div className="tenant-theme">
+                    {children}
+                </div>
+            </ToastProvider>
+        );
+    }
+
     return (
         <ToastProvider>
             <div className="tenant-theme">
