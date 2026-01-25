@@ -17,6 +17,12 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
     const [network, setNetwork] = useState<any>(null);
 
     useEffect(() => {
+        // Allow public pages (Login)
+        if (pathname?.includes("/login")) {
+            setLoading(false);
+            return;
+        }
+
         const token = localStorage.getItem("tenantToken");
 
         if (!token || isTokenExpired(token)) {
@@ -28,7 +34,7 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
         // Simple auth check or network info fetch could go here
         // For now, we assume middleware handles protection
         setLoading(false);
-    }, [prefix, router]);
+    }, [prefix, router, pathname]);
 
     if (loading) return null;
 
