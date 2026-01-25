@@ -162,7 +162,7 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         if (!account) {
             const accounts = await prisma.account.findMany({
                 where: { networkId: network.id },
-                select: { id: true, phoneNumber: true }, // Lightweight fetch
+                select: { id: true, phoneNumber: true, webhookSecret: true }, // Lightweight fetch
                 take: 2
             });
 
@@ -188,6 +188,24 @@ router.all("/:prefix", async (req: Request, res: Response) => {
             console.log(`[Webhook] Account not found. Payload mobiles: ${payload.recipient_mobile}, ${payload.sender_mobile}, ${payload.mobile_no}`);
             return res.status(200).json({ status: "ignored", reason: "Account not found" });
         }
+
+        // [SECURE] Verify Authorization Header
+        if (account.webhookSecret) {
+            const authHeader = req.headers.authorization;
+            if (authHeader !== account.webhookSecret) {
+                console.warn(`[Webhook] Unauthorized access attempt for account ${account.id}. Expected: ${account.webhookSecret}, Got: ${authHeader}`);
+                await prisma.notificationLog.create({
+                    data: {
+                        type: "webhook_debug" as any,
+                        message: "Unauthorized Webhook Access",
+                        accountId: account.id,
+                        payload: { expected: "***", got: authHeader } as any
+                    }
+                });
+                return res.status(401).json({ error: "Unauthorized: Invalid Webhook Secret" });
+            }
+        }
+
 
         // 4. Save Transaction
         const amount = typeof amountRaw === 'string' ? parseFloat(amountRaw) : amountRaw;

@@ -83,6 +83,7 @@ model Account {
   
   walletEndpointUrl          String
   walletBearerToken          String
+  webhookSecret              String?          // For verifying incoming webhook requests
   
   autoRefreshEnabled         Boolean          @default(true)
   autoRefreshIntervalSeconds Int              @default(60)

@@ -14,6 +14,7 @@ interface Account {
         totalFee: number;
         firstActiveAt: string | null;
     };
+    webhookSecret?: string | null;
 }
 
 interface BalanceData {
@@ -31,7 +32,7 @@ export default function WalletsPage() {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
-    const [form, setForm] = useState({ name: "", phoneNumber: "", walletEndpointUrl: "", walletBearerToken: "" });
+    const [form, setForm] = useState({ name: "", phoneNumber: "", walletEndpointUrl: "", walletBearerToken: "", webhookSecret: "" });
 
     const getToken = () => localStorage.getItem("tenantToken") || "";
 
@@ -186,7 +187,7 @@ export default function WalletsPage() {
 
             setShowModal(false);
             setEditingId(null);
-            setForm({ name: "", phoneNumber: "", walletEndpointUrl: "", walletBearerToken: "" });
+            setForm({ name: "", phoneNumber: "", walletEndpointUrl: "", walletBearerToken: "", webhookSecret: "" });
             fetchAccounts();
         } catch (e) {
             showToast({ type: "error", title: "ล้มเหลว", message: "เกิดข้อผิดพลาดในการบันทึก" });
@@ -199,6 +200,7 @@ export default function WalletsPage() {
             phoneNumber: account.phoneNumber || "",
             walletEndpointUrl: account.walletEndpointUrl,
             walletBearerToken: "", // Leave blank to keep existing
+            webhookSecret: account.webhookSecret || "",
         });
         setEditingId(account.id);
         setShowModal(true);
@@ -325,7 +327,7 @@ export default function WalletsPage() {
             <div className="tenant-page-header">
                 <h1 className="tenant-page-title">จัดการวอลเล็ท</h1>
                 <button className="tenant-btn tenant-btn-primary" onClick={() => {
-                    setForm({ name: "", phoneNumber: "", walletEndpointUrl: "", walletBearerToken: "" });
+                    setForm({ name: "", phoneNumber: "", walletEndpointUrl: "", walletBearerToken: "", webhookSecret: "" });
                     setEditingId(null);
                     setShowModal(true);
                 }}>
@@ -342,7 +344,7 @@ export default function WalletsPage() {
                             className="tenant-btn tenant-btn-primary"
                             style={{ marginTop: 16 }}
                             onClick={() => {
-                                setForm({ name: "", phoneNumber: "", walletEndpointUrl: "", walletBearerToken: "" });
+                                setForm({ name: "", phoneNumber: "", walletEndpointUrl: "", walletBearerToken: "", webhookSecret: "" });
                                 setEditingId(null);
                                 setShowModal(true);
                             }}
@@ -531,6 +533,20 @@ export default function WalletsPage() {
                                     onChange={(e) => setForm({ ...form, walletBearerToken: e.target.value })}
                                     placeholder="API Token"
                                     required={!editingId}
+                                />
+                            </div>
+
+                            <div className="tenant-form-group">
+                                <label className="tenant-form-label">Webhook Authorization Key (ถ้ามี)</label>
+                                <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
+                                    รหัสยืนยันตัวตนจาก TrueMoney App เพื่อความปลอดภัย
+                                </div>
+                                <input
+                                    type="text"
+                                    className="tenant-form-input"
+                                    value={form.webhookSecret}
+                                    onChange={(e) => setForm({ ...form, webhookSecret: e.target.value })}
+                                    placeholder="วางรหัสที่ได้จากแอปที่นี่ (c255...)"
                                 />
                             </div>
 

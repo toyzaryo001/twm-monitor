@@ -394,6 +394,7 @@ router.put("/:id", async (req: Request<{ prefix: string; id: string }>, res: Res
             phoneNumber: z.string().optional(),
             walletEndpointUrl: z.string().url().optional(),
             walletBearerToken: z.string().min(1).optional(),
+            webhookSecret: z.string().optional().or(z.literal("")),
             isActive: z.boolean().optional(),
         });
 
