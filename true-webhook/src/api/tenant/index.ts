@@ -117,12 +117,13 @@ router.post("/recover-transactions", async (req: Request<{ prefix: string }>, re
                     }
                 }
 
-                // If still no account and only one account exists, use it
-                if (!accountId && accounts.length === 1) {
+                // If still no account, use the first account in the network (assume single-account network)
+                if (!accountId && accounts.length > 0) {
                     accountId = accounts[0].id;
                 }
 
                 if (!accountId) {
+                    errors.push(`Log ${log.id}: No account found`);
                     skipped++;
                     continue;
                 }
