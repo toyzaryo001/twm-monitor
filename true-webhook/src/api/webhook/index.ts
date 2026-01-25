@@ -198,7 +198,7 @@ router.all("/:prefix", async (req: Request, res: Response) => {
                     data: {
                         type: "webhook_debug" as any,
                         message: "Unauthorized Webhook Access",
-                        accountId: account.id,
+                        accountId: (account as any).id,
                         payload: { expected: "***", got: authHeader } as any
                     }
                 });
