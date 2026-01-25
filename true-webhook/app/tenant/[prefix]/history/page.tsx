@@ -100,6 +100,8 @@ export default function HistoryPage() {
 
     const [feeSummary, setFeeSummary] = useState<FeeSummary[]>([]);
 
+    const [viewMode, setViewMode] = useState<"summary" | "detail">("summary");
+
     const fetchHistory = useCallback(async (showLoading = false) => {
         if (!selectedAccount) return;
 
@@ -109,8 +111,8 @@ export default function HistoryPage() {
         try {
             const dateParams = getDateRangeParams(dateFilter);
 
-            // IF FEE TAB -> Fetch Summary instead
-            if (activeTab === "fee") {
+            // IF FEE TAB & SUMMARY MODE -> Fetch Summary
+            if (activeTab === "fee" && viewMode === "summary") {
                 const url = `/api/tenant/${prefix}/accounts/fee-summary?${dateParams.replace('&', '')}`; // remove leading & if any
                 const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
                 const data = await res.json();
@@ -121,7 +123,7 @@ export default function HistoryPage() {
                     setTotalItems(data.data.length);
                 }
             } else {
-                // Existing Logic for Deposit/Withdraw
+                // Existing Logic for Deposit/Withdraw OR Fee Detail
                 const filterParam = `&filter=${activeTab}`;
                 let url = "";
                 if (selectedAccount === "all") {
@@ -144,12 +146,23 @@ export default function HistoryPage() {
             console.error("Error fetching history", e);
         }
         setLoadingHistory(false);
-    }, [selectedAccount, prefix, limit, page, dateFilter, activeTab]);
+    }, [selectedAccount, prefix, limit, page, dateFilter, activeTab, viewMode]);
 
     // Reset page when filters change
     useEffect(() => {
         setPage(1);
-    }, [selectedAccount, limit, dateFilter, activeTab]);
+    }, [selectedAccount, limit, dateFilter, activeTab, viewMode]);
+
+    // Reset viewMode when tab changes
+    useEffect(() => {
+        if (activeTab !== 'fee') {
+            setViewMode('summary');
+        } else {
+            // If switching TO fee tab, reset to summary
+            setViewMode('summary');
+            setSelectedAccount('all'); // Reset account selection for summary view
+        }
+    }, [activeTab]);
 
     // Fetch accounts
     useEffect(() => {
@@ -226,7 +239,7 @@ export default function HistoryPage() {
     const filteredHistory = history;
 
     // Calculate total amount for display
-    const totalAmount = activeTab === 'fee'
+    const totalAmount = activeTab === 'fee' && viewMode === 'summary'
         ? feeSummary.reduce((sum, item) => sum + item.totalFee, 0)
         : filteredHistory.reduce((sum, entry) => {
             const val = entry.type === 'transaction' && entry.amount ? entry.amount : Math.abs(entry.change);
@@ -252,18 +265,38 @@ export default function HistoryPage() {
     return (
         <div>
             <div className="tenant-page-header">
-                <h1 className="tenant-page-title">ประวัติยอดเงิน</h1>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    {/* Back Button for Detail Mode */}
+                    {activeTab === 'fee' && viewMode === 'detail' && (
+                        <button
+                            onClick={() => {
+                                setViewMode('summary');
+                                setSelectedAccount('all');
+                            }}
+                            className="tenant-btn-secondary"
+                            style={{ padding: "4px 8px", fontSize: 18, border: "none", background: "transparent", color: "var(--text-primary)", cursor: "pointer" }}
+                        >
+                            ←
+                        </button>
+                    )}
+                    <h1 className="tenant-page-title">
+                        {activeTab === 'fee' && viewMode === 'detail'
+                            ? `ประวัติ: ${accounts.find(a => a.id === selectedAccount)?.name || 'รายบัญชี'}`
+                            : "ประวัติยอดเงิน"}
+                    </h1>
+                </div>
+
                 <div className="flex-center gap-16">
-                    {/* Live Status - Hide on Fee Tab */}
-                    {activeTab !== 'fee' && selectedAccount !== 'all' && (
+                    {/* Live Status - Hide on Fee Tab SUMMARY mode */}
+                    {(activeTab !== 'fee' || viewMode === 'detail') && selectedAccount !== 'all' && (
                         <div className="flex-center gap-6">
                             <div style={{ width: 8, height: 8, borderRadius: "50%", background: isConnected ? "#22c55e" : "#ef4444", animation: isConnected ? "pulse 2s infinite" : "none" }} />
                             <span style={{ fontSize: 12, color: isConnected ? "#22c55e" : "#ef4444" }}>{isConnected ? "LIVE" : "OFFLINE"}</span>
                         </div>
                     )}
 
-                    {/* Account Select - Hide on Fee Tab */}
-                    {activeTab !== 'fee' && accounts.length > 0 && (
+                    {/* Account Select - Hide on Fee Tab SUMMARY mode */}
+                    {(activeTab !== 'fee' || viewMode === 'detail') && accounts.length > 0 && (
                         <select className="tenant-form-input w-auto min-w-200" value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)}>
                             <option value="all">ทั้งหมด (รวมทุกวอลเล็ท)</option>
                             {accounts.map((acc) => (
@@ -272,8 +305,8 @@ export default function HistoryPage() {
                         </select>
                     )}
 
-                    {/* Limit Select (Only for non-fee tabs) */}
-                    {activeTab !== 'fee' && (
+                    {/* Limit Select (Only for non-fee tabs OR fee detail mode) */}
+                    {(activeTab !== 'fee' || viewMode === 'detail') && (
                         <select
                             className="tenant-form-input w-auto"
                             value={limit}
@@ -341,12 +374,12 @@ export default function HistoryPage() {
 
                 {loadingHistory ? (
                     <div className="flex-center p-40"><div className="spinner" /></div>
-                ) : (activeTab === 'fee' ? feeSummary.length === 0 : filteredHistory.length === 0) ? (
+                ) : (activeTab === 'fee' && viewMode === 'summary' ? feeSummary.length === 0 : filteredHistory.length === 0) ? (
                     <div className="tenant-empty">
                         <div className="tenant-empty-icon">📅</div>
                         <div className="tenant-empty-text">ไม่พบรายการในช่วงเวลานี้</div>
                     </div>
-                ) : activeTab === 'fee' ? (
+                ) : activeTab === 'fee' && viewMode === 'summary' ? (
                     <div style={{ overflowX: "auto" }}>
                         <table className="history-table">
                             <thead>
@@ -358,7 +391,16 @@ export default function HistoryPage() {
                             </thead>
                             <tbody>
                                 {feeSummary.map((acc) => (
-                                    <tr key={acc.accountId}>
+                                    <tr
+                                        key={acc.accountId}
+                                        onClick={() => {
+                                            setSelectedAccount(acc.accountId);
+                                            setViewMode('detail');
+                                        }}
+                                        style={{ cursor: "pointer", transition: "background 0.2s" }}
+                                        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-secondary)")}
+                                        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                                    >
                                         <td>
                                             <div style={{ fontWeight: 600 }}>{acc.accountName}</div>
                                             {acc.phoneNumber && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{acc.phoneNumber}</div>}
