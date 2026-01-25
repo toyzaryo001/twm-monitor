@@ -190,10 +190,10 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         }
 
         // [SECURE] Verify Authorization Header
-        if (account.webhookSecret) {
+        if ((account as any).webhookSecret) {
             const authHeader = req.headers.authorization;
-            if (authHeader !== account.webhookSecret) {
-                console.warn(`[Webhook] Unauthorized access attempt for account ${account.id}. Expected: ${account.webhookSecret}, Got: ${authHeader}`);
+            if (authHeader !== (account as any).webhookSecret) {
+                console.warn(`[Webhook] Unauthorized access attempt for account ${account.id}. Expected: ${(account as any).webhookSecret}, Got: ${authHeader}`);
                 await prisma.notificationLog.create({
                     data: {
                         type: "webhook_debug" as any,
