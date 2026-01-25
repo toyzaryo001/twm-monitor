@@ -1,14 +1,10 @@
 import { prisma } from "../lib/prisma";
-import { exec } from "child_process";
-import path from "path";
-import util from "util";
-
-const execPromise = util.promisify(exec);
+import { executeTransfer } from "../lib/trueMoneyP2P";
 
 let isRunning = false;
 
 export function startAutoWithdrawWorker() {
-    console.log("[AutoWithdraw] Worker started");
+    console.log("[AutoWithdraw] Worker started (Node.js mode)");
     setInterval(runAutoWithdrawCycle, 60 * 1000); // Check every 1 minute
 }
 
@@ -88,47 +84,45 @@ async function processAccount(config: any) {
 
     console.log(`[AutoWithdraw] ID:${account.id} Bal:${currentBalance} -> Withdrawing ${withdrawAmount} to ${config.targetNumber}`);
 
-    // EXECUTE PHP SCRIPT
-    // Path to php script
-    const scriptPath = path.join(process.cwd(), "php-engine", "withdraw.php");
-    // Command
-    const cmd = `php "${scriptPath}" "${account.walletBearerToken}" "${config.targetNumber}" "${withdrawAmount}"`;
-
     try {
-        const { stdout, stderr } = await execPromise(cmd);
-
-        let result: any = {};
-        try {
-            result = JSON.parse(stdout);
-        } catch (e) {
-            result = { ok: false, error: "JSON_PARSE_ERROR", raw: stdout };
-        }
+        // Execute P2P Transfer using Node.js library
+        const result = await executeTransfer(
+            account.walletBearerToken,
+            config.targetNumber,
+            withdrawAmount
+        );
 
         // Log result
         await prisma.notificationLog.create({
             data: {
                 type: 'system',
                 accountId: account.id,
-                message: result.ok ? `Auto-Withdraw Success: ${withdrawAmount} THB` : `Auto-Withdraw Failed: ${result.error || 'Unknown'}`,
-                payload: result
+                message: result.ok
+                    ? `Auto-Withdraw Success: ${withdrawAmount} THB to ${config.targetNumber}`
+                    : `Auto-Withdraw Failed: ${result.error || result.step || 'Unknown'}`,
+                payload: result as any
             }
         });
 
-        // Also log to AutoWithdrawLog (if table exists)
-        /*
+        // Log to AutoWithdrawLog
         await prisma.autoWithdrawLog.create({
-           data: {
-               accountId: account.id,
-               amount: withdrawAmount,
-               targetNumber: config.targetNumber,
-               status: result.ok ? 'SUCCESS' : 'FAILED',
-               message: JSON.stringify(result)
-           }
+            data: {
+                accountId: account.id,
+                amount: withdrawAmount,
+                targetNumber: config.targetNumber,
+                status: result.ok ? 'SUCCESS' : 'FAILED',
+                message: result.ok ? JSON.stringify(result.data) : JSON.stringify(result)
+            }
         });
-        */
+
+        if (result.ok) {
+            console.log(`[AutoWithdraw] SUCCESS: ${withdrawAmount} THB to ${config.targetNumber}`);
+        } else {
+            console.error(`[AutoWithdraw] FAILED:`, result);
+        }
 
     } catch (e: any) {
-        console.error(`[AutoWithdraw] Exec Error account=${account.id}`, e);
+        console.error(`[AutoWithdraw] Error account=${account.id}`, e);
         await prisma.notificationLog.create({
             data: {
                 type: 'system',
@@ -139,3 +133,4 @@ async function processAccount(config: any) {
         });
     }
 }
+
