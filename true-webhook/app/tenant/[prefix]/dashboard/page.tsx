@@ -213,9 +213,9 @@ export default function TenantDashboard() {
                         <div className="tenant-empty-text">ยังไม่มีวอลเล็ท คลิก "เพิ่มวอลเล็ท" เพื่อเริ่มต้น</div>
                     </div>
                 ) : (
-                    <div className="wallet-grid">
+                    <div className="dashboard-wallet-grid">
                         {top3Wallets.map((account, index) => (
-                            <div key={account.id} className="wallet-card" style={{
+                            <div key={account.id} className="dashboard-wallet-card" style={{
                                 border: index === 0 ? "2px solid var(--success)" : undefined,
                                 position: "relative"
                             }}>
