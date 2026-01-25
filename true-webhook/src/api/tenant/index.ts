@@ -201,4 +201,85 @@ router.post("/recover-transactions", async (req: Request<{ prefix: string }>, re
     }
 });
 
+// Debug: Check which transactions are missing
+router.get("/debug-missing", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
+    try {
+        const network = await prisma.network.findUnique({
+            where: { prefix: req.params.prefix },
+        });
+
+        if (!network) {
+            return res.status(404).json({ ok: false, error: "NETWORK_NOT_FOUND" });
+        }
+
+        const accounts = await prisma.account.findMany({
+            where: { networkId: network.id },
+            select: { id: true, phoneNumber: true }
+        });
+
+        // Get all decoded payload logs from today
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+
+        const logs = await prisma.notificationLog.findMany({
+            where: {
+                message: { contains: "Decoded Payload" },
+                createdAt: { gte: startOfDay },
+            },
+            orderBy: { createdAt: "desc" },
+            take: 50
+        });
+
+        // Get existing transactions
+        const existingTxs = await prisma.financialTransaction.findMany({
+            where: {
+                accountId: { in: accounts.map(a => a.id) },
+                timestamp: { gte: startOfDay }
+            },
+            select: { transactionId: true, amount: true, timestamp: true }
+        });
+
+        const existingIds = new Set(existingTxs.map(t => t.transactionId));
+
+        const analysis = logs.map(log => {
+            const payload = log.payload as any;
+            if (!payload) return { id: log.id, status: "NO_PAYLOAD" };
+
+            const txId = payload.transaction_id ||
+                (payload.event_type === 'FEE_PAYMENT' ? `fee-${payload.iat}-${payload.amount}` : null) ||
+                payload.ref_id ||
+                `recovered-${log.id}`;
+
+            const exists = existingIds.has(String(txId));
+            const amount = payload.amount ? payload.amount / 100 : 0;
+
+            return {
+                logId: log.id,
+                time: log.createdAt,
+                eventType: payload.event_type,
+                amount: amount,
+                txId: txId,
+                exists: exists,
+                status: exists ? "ALREADY_EXISTS" : "MISSING"
+            };
+        });
+
+        const missing = analysis.filter(a => a.status === "MISSING");
+        const existing = analysis.filter(a => a.status === "ALREADY_EXISTS");
+
+        return res.json({
+            ok: true,
+            data: {
+                totalLogs: logs.length,
+                missing: missing.length,
+                existing: existing.length,
+                missingDetails: missing.slice(0, 20),
+                existingDetails: existing.slice(0, 5)
+            }
+        });
+    } catch (err) {
+        next(err);
+    }
+});
+
 export default router;
