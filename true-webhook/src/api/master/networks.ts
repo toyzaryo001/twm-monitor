@@ -117,6 +117,7 @@ router.put("/:id", async (req, res, next) => {
             realtimeEnabled: z.boolean().optional(),
             checkIntervalMs: z.number().min(1000).max(300000).optional(),
             featureWebhookEnabled: z.boolean().optional(),
+            featureAutoWithdraw: z.boolean().optional(),
             // Telegram settings
             telegramBotToken: z.string().optional(),
             telegramChatId: z.string().optional(),
