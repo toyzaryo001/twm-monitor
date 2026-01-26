@@ -114,12 +114,16 @@ export default function WalletsPage() {
         setCheckingId(null);
     };
 
+    // Auto-Withdraw feature disabled - TrueMoney API not accessible
     const [featureAutoWithdrawEnabled, setFeatureAutoWithdrawEnabled] = useState(false);
 
     useEffect(() => {
         fetchAccounts();
 
-        // Fetch Network Config to check Feature Flag
+        // Feature Flag for Auto-Withdraw - DISABLED
+        // The TrueMoney P2P API is not publicly accessible, so this feature is disabled.
+        // Original code fetched network config to check featureAutoWithdraw flag
+        /*
         const fetchNetworkConfig = async () => {
             const token = getToken();
             if (!token) return;
@@ -132,6 +136,7 @@ export default function WalletsPage() {
             } catch (e) { console.error("Error fetching network config", e); }
         };
         fetchNetworkConfig();
+        */
     }, [prefix]);
 
     // Real-time balance updates via SSE

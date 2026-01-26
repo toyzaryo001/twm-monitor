@@ -283,18 +283,19 @@ export default function NetworkSettingsPage() {
                         </p>
                     </div>
 
+                    {/* Auto-Withdraw Feature - DISABLED */}
                     <div className="form-group" style={{ marginTop: 24 }}>
-                        <label style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: 12, cursor: "not-allowed", opacity: 0.5 }}>
                             <input
                                 type="checkbox"
-                                checked={form.featureAutoWithdraw}
-                                onChange={(e) => setForm({ ...form, featureAutoWithdraw: e.target.checked })}
+                                checked={false}
+                                disabled={true}
                                 style={{ width: 20, height: 20 }}
                             />
                             <span>เปิดใช้งานระบบ Auto-Withdraw (ถอนเงินอัตโนมัติ)</span>
                         </label>
-                        <p style={{ color: "#9ca3af", fontSize: 13, marginTop: 6 }}>
-                            อนุญาตให้เครือข่ายนี้ใช้งานระบบถอนเงินอัตโนมัติได้
+                        <p style={{ color: "#ef4444", fontSize: 13, marginTop: 6 }}>
+                            ⚠️ ฟีเจอร์นี้ถูกปิดใช้งาน - TrueMoney API ไม่สามารถเข้าถึงได้จากภายนอก
                         </p>
                     </div>
                 </div>

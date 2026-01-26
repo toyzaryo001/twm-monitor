@@ -5,7 +5,8 @@ import next from "next";
 import path from "path";
 import apiRouter from "./api/router";
 import { startBalanceWorker } from "./workers/balanceWorker";
-import { startAutoWithdrawWorker } from "./workers/autoWithdrawWorker";
+// Auto-Withdraw feature removed - TrueMoney API not accessible
+// import { startAutoWithdrawWorker } from "./workers/autoWithdrawWorker";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000", 10);
@@ -48,8 +49,8 @@ async function main() {
         // Start the balance worker (uses per-network settings from database)
         startBalanceWorker();
 
-        // Start Auto-Withdraw Worker
-        startAutoWithdrawWorker();
+        // Auto-Withdraw feature removed
+        // startAutoWithdrawWorker();
     });
 }
 
