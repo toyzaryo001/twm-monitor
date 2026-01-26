@@ -27,12 +27,17 @@ router.get("/", async (req: Request<{ prefix: string }>, res: Response, next: Ne
         // Calculate stats for each account
         const accountIds = accounts.map(a => a.id);
 
-        // 1. Total Fees (Outgoing transactions designated as fee)
+        // Calculate start of current month for fee reset
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+
+        // 1. Total Fees (Outgoing transactions designated as fee) - CURRENT MONTH ONLY
         // Note: We need to match the same logic as the History Page filter
         const feeStats = await (prisma as any).financialTransaction.findMany({
             where: {
                 accountId: { in: accountIds },
                 type: "outgoing",
+                timestamp: { gte: startOfMonth }, // Only count fees from current month
                 OR: [
                     { recipientName: { contains: "Fee" } },
                     { recipientMobile: { contains: "Fee" } },
