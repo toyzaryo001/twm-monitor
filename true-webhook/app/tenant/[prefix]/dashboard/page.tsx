@@ -89,6 +89,14 @@ export default function TenantDashboard() {
                 const statsRes = await fetch(`/api/tenant/${prefix}/stats`, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
+
+                // Check for 401 and redirect to login
+                if (statsRes.status === 401) {
+                    localStorage.removeItem("tenantToken");
+                    window.location.href = `/tenant/${prefix}/login`;
+                    return;
+                }
+
                 const statsData = await statsRes.json();
                 if (statsData.ok) {
                     setStats(statsData.data.stats);
@@ -98,6 +106,14 @@ export default function TenantDashboard() {
                 const accountsRes = await fetch(`/api/tenant/${prefix}/accounts`, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
+
+                // Check for 401 and redirect to login
+                if (accountsRes.status === 401) {
+                    localStorage.removeItem("tenantToken");
+                    window.location.href = `/tenant/${prefix}/login`;
+                    return;
+                }
+
                 const accountsData = await accountsRes.json();
                 if (accountsData.ok) {
                     setAccounts(accountsData.data);

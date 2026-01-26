@@ -126,6 +126,14 @@ export default function HistoryPage() {
             if (activeTab === "fee" && viewMode === "summary") {
                 const url = `/api/tenant/${prefix}/accounts/fee-summary?${dateParams.replace('&', '')}`; // remove leading & if any
                 const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+
+                // Check for 401 and redirect to login
+                if (res.status === 401) {
+                    localStorage.removeItem("tenantToken");
+                    window.location.href = `/tenant/${prefix}/login`;
+                    return;
+                }
+
                 const data = await res.json();
                 if (data.ok) {
                     setFeeSummary(data.data);
@@ -144,6 +152,14 @@ export default function HistoryPage() {
                 }
 
                 const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+
+                // Check for 401 and redirect to login
+                if (res.status === 401) {
+                    localStorage.removeItem("tenantToken");
+                    window.location.href = `/tenant/${prefix}/login`;
+                    return;
+                }
+
                 const data = await res.json();
                 if (data.ok) {
                     setHistory(data.data);
