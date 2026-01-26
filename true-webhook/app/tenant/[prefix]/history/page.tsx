@@ -28,7 +28,7 @@ interface HistoryEntry {
 
 type Tab = "all" | "deposit" | "withdraw" | "fee";
 
-type DateRange = "today" | "yesterday" | "3d" | "7d" | "15d" | "30d" | "all";
+type DateRange = "today" | "yesterday" | "3d" | "7d" | "15d" | "30d" | "all" | "custom";
 
 export default function HistoryPage() {
     const params = useParams();
@@ -47,6 +47,10 @@ export default function HistoryPage() {
     const [page, setPage] = useState<number>(1);
     const [totalPages, setTotalPages] = useState<number>(1);
     const [totalItems, setTotalItems] = useState<number>(0);
+
+    // Custom date range
+    const [customStartDate, setCustomStartDate] = useState<string>("");
+    const [customEndDate, setCustomEndDate] = useState<string>("");
 
     const eventSourceRef = useRef<EventSource | null>(null);
 
@@ -86,6 +90,13 @@ export default function HistoryPage() {
             const start = new Date(startOfDay);
             start.setDate(start.getDate() - 30);
             return `&from=${start.toISOString()}&to=${endOfDay.toISOString()}`;
+        }
+        if (filter === "custom" && customStartDate && customEndDate) {
+            const start = new Date(customStartDate);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(customEndDate);
+            end.setHours(23, 59, 59, 999);
+            return `&from=${start.toISOString()}&to=${end.toISOString()}`;
         }
         return ""; // All
     };
@@ -354,7 +365,38 @@ export default function HistoryPage() {
                     <button className={`date-btn ${dateFilter === "15d" ? "active" : ""}`} onClick={() => setDateFilter("15d")}>15 วัน</button>
                     <button className={`date-btn ${dateFilter === "30d" ? "active" : ""}`} onClick={() => setDateFilter("30d")}>1 เดือน</button>
                     <button className={`date-btn ${dateFilter === "all" ? "active" : ""}`} onClick={() => setDateFilter("all")}>ทั้งหมด</button>
+                    <button className={`date-btn ${dateFilter === "custom" ? "active" : ""}`} onClick={() => setDateFilter("custom")}>กำหนดเอง</button>
                 </div>
+
+                {/* Custom Date Range Picker */}
+                {dateFilter === "custom" && (
+                    <div style={{ display: "flex", gap: 12, marginBottom: 20, alignItems: "center", flexWrap: "wrap" }}>
+                        <label style={{ fontSize: 13, color: "var(--text-muted)" }}>จาก:</label>
+                        <input
+                            type="date"
+                            className="tenant-form-input"
+                            value={customStartDate}
+                            onChange={(e) => setCustomStartDate(e.target.value)}
+                            style={{ width: "auto", padding: "6px 12px" }}
+                        />
+                        <label style={{ fontSize: 13, color: "var(--text-muted)" }}>ถึง:</label>
+                        <input
+                            type="date"
+                            className="tenant-form-input"
+                            value={customEndDate}
+                            onChange={(e) => setCustomEndDate(e.target.value)}
+                            style={{ width: "auto", padding: "6px 12px" }}
+                        />
+                        <button
+                            className="tenant-btn tenant-btn-primary"
+                            style={{ padding: "6px 16px", fontSize: 13 }}
+                            onClick={() => fetchHistory(true)}
+                            disabled={!customStartDate || !customEndDate}
+                        >
+                            🔍 ค้นหา
+                        </button>
+                    </div>
+                )}
 
                 {/* Summary Box */}
                 <div className="summary-card">
