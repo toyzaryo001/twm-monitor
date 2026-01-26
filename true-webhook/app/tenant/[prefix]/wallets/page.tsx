@@ -552,20 +552,6 @@ export default function WalletsPage() {
                                 />
                             </div>
 
-                            <div className="tenant-form-group">
-                                <label className="tenant-form-label">Webhook Authorization Key (ถ้ามี)</label>
-                                <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>
-                                    รหัสยืนยันตัวตนจาก TrueMoney App เพื่อความปลอดภัย
-                                </div>
-                                <input
-                                    type="text"
-                                    className="tenant-form-input"
-                                    value={form.webhookSecret}
-                                    onChange={(e) => setForm({ ...form, webhookSecret: e.target.value })}
-                                    placeholder="วางรหัสที่ได้จากแอปที่นี่ (c255...)"
-                                />
-                            </div>
-
                             <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
                                 <button
                                     type="button"

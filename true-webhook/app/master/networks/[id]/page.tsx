@@ -282,22 +282,6 @@ export default function NetworkSettingsPage() {
                             เมื่อปิดใช้งาน เมนู "Webhook" ในหน้าตั้งค่าของ Tenant จะถูกซ่อน
                         </p>
                     </div>
-
-                    {/* Auto-Withdraw Feature - DISABLED */}
-                    <div className="form-group" style={{ marginTop: 24 }}>
-                        <label style={{ display: "flex", alignItems: "center", gap: 12, cursor: "not-allowed", opacity: 0.5 }}>
-                            <input
-                                type="checkbox"
-                                checked={false}
-                                disabled={true}
-                                style={{ width: 20, height: 20 }}
-                            />
-                            <span>เปิดใช้งานระบบ Auto-Withdraw (ถอนเงินอัตโนมัติ)</span>
-                        </label>
-                        <p style={{ color: "#ef4444", fontSize: 13, marginTop: 6 }}>
-                            ⚠️ ฟีเจอร์นี้ถูกปิดใช้งาน - TrueMoney API ไม่สามารถเข้าถึงได้จากภายนอก
-                        </p>
-                    </div>
                 </div>
 
                 {/* Telegram Settings */}
