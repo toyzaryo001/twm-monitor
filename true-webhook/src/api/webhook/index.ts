@@ -49,10 +49,10 @@ router.all("/:prefix", async (req: Request, res: Response) => {
             return res.status(403).json({ error: "Network is disabled", code: "NETWORK_DISABLED" });
         }
 
-        // Check if webhook feature is enabled by Master
-        if (!network.featureWebhookEnabled) {
-            console.log(`[Webhook] Feature disabled for network: ${prefix}`);
-            return res.status(403).json({ error: "Webhook feature is disabled for this network", code: "WEBHOOK_DISABLED" });
+        // Store feature flag to control History saving (webhook still receives data)
+        const shouldSaveToHistory = network.featureWebhookEnabled;
+        if (!shouldSaveToHistory) {
+            console.log(`[Webhook] Fee recording disabled for network: ${prefix} - will receive but not save`);
         }
 
         // 2. Parse Payload
@@ -231,9 +231,19 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         */
 
 
-        // 4. Save Transaction
+        // 4. Save Transaction (only if feature is enabled)
         const amount = typeof amountRaw === 'string' ? parseFloat(amountRaw) : amountRaw;
         const fee = typeof feeRaw === 'string' ? parseFloat(feeRaw) : feeRaw;
+
+        // Skip saving transaction if fee recording is disabled
+        if (!shouldSaveToHistory) {
+            console.log(`[Webhook] Fee recording disabled - skipping save. TX=${transactionId}, Acc=${account.id}`);
+            return res.status(200).json({
+                status: "ok",
+                message: "Data received but not saved (fee recording disabled)",
+                featureEnabled: false
+            });
+        }
 
         console.log(`[Webhook] Saving Transaction: ID=${transactionId}, Acc=${account.id}, Amt=${amount}, Fee=${fee}`);
 
