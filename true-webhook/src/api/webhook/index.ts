@@ -34,14 +34,25 @@ router.all("/:prefix", async (req: Request, res: Response) => {
     const { prefix } = req.params;
 
     try {
-        // 1. Find Network
+        // 1. Find Network and check if webhook feature is enabled
         const network = await prisma.network.findUnique({
             where: { prefix },
-            select: { id: true, name: true }
+            select: { id: true, name: true, isActive: true, featureWebhookEnabled: true }
         });
 
         if (!network) {
             return res.status(404).json({ error: "Network not found" });
+        }
+
+        // Check if network is active
+        if (!network.isActive) {
+            return res.status(403).json({ error: "Network is disabled", code: "NETWORK_DISABLED" });
+        }
+
+        // Check if webhook feature is enabled by Master
+        if (!network.featureWebhookEnabled) {
+            console.log(`[Webhook] Feature disabled for network: ${prefix}`);
+            return res.status(403).json({ error: "Webhook feature is disabled for this network", code: "WEBHOOK_DISABLED" });
         }
 
         // 2. Parse Payload
