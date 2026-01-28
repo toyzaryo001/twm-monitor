@@ -276,7 +276,7 @@ export default function NetworkSettingsPage() {
                                 onChange={(e) => setForm({ ...form, featureWebhookEnabled: e.target.checked })}
                                 style={{ width: 20, height: 20 }}
                             />
-                            <span>เปิดใช้งาน บันทึกค่าธรรมเนียม</span>
+                            <span>เปิดใช้งาน บันทึกค่าธรรมเนียม และยอดถอน</span>
                         </label>
                         <p style={{ color: "#9ca3af", fontSize: 13, marginTop: 6 }}>
                             เมื่อเปิด จะบันทึกข้อมูลธุรกรรมลง History | เมื่อปิด จะรับข้อมูลแต่ไม่บันทึก
