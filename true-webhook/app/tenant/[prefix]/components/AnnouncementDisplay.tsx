@@ -26,7 +26,7 @@ export default function AnnouncementDisplay({ prefix }: { prefix: string }) {
         }
 
         const fetchAnnouncements = async () => {
-            const token = localStorage.getItem("token");
+            const token = localStorage.getItem("tenantToken");
             if (!token) return;
 
             try {
