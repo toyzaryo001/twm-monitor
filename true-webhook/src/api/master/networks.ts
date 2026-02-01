@@ -125,6 +125,7 @@ router.put("/:id", async (req, res, next) => {
             notifyMoneyIn: z.boolean().optional(),
             notifyMoneyOut: z.boolean().optional(),
             notifyMinAmount: z.number().min(0).optional(),
+            expiredAt: z.union([z.string(), z.null()]).optional(),
         });
 
         const data = schema.parse(req.body);
@@ -135,6 +136,7 @@ router.put("/:id", async (req, res, next) => {
             logoUrl: data.logoUrl === "" ? null : data.logoUrl,
             telegramBotToken: data.telegramBotToken === "" ? null : data.telegramBotToken,
             telegramChatId: data.telegramChatId === "" ? null : data.telegramChatId,
+            expiredAt: data.expiredAt ? new Date(data.expiredAt) : (data.expiredAt === null ? null : undefined),
         };
 
         const network = await prisma.network.update({

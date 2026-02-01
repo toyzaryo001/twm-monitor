@@ -38,6 +38,9 @@ model Network {
   featureWebhookEnabled   Boolean   @default(true)
   featureAutoWithdraw     Boolean   @default(false)
   
+  // Expiration
+  expiredAt               DateTime?
+  
   // Telegram notification settings
   telegramBotToken        String?
   telegramChatId          String?

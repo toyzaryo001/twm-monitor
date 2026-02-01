@@ -20,9 +20,11 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
     const [loading, setLoading] = useState(true);
     const [network, setNetwork] = useState<any>(null);
 
+
+
     useEffect(() => {
-        // Allow public pages (Login)
-        if (pathname?.includes("/login")) {
+        // Allow public pages (Login, Expired)
+        if (pathname?.includes("/login") || pathname?.includes("/expired")) {
             setLoading(false);
             return;
         }
@@ -35,15 +37,29 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
             return;
         }
 
-        // Simple auth check or network info fetch could go here
-        // For now, we assume middleware handles protection
-        setLoading(false);
+        // Fetch network status to check expiration
+        fetch(`/api/tenant/${prefix}/stats`, {
+            headers: { Authorization: `Bearer ${token}` }
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.ok && data.data.network.expiredAt) {
+                    const expiredAt = new Date(data.data.network.expiredAt);
+                    if (new Date() > expiredAt) {
+                        router.push(`/tenant/${prefix}/expired`);
+                        return;
+                    }
+                }
+                setLoading(false);
+            })
+            .catch(() => setLoading(false));
+
     }, [prefix, router, pathname]);
 
     if (loading) return null;
 
-    // Special layout for Login page (Full screen, no sidebar)
-    if (pathname?.includes("/login")) {
+    // Special layout for Login/Expired page (Full screen, no sidebar)
+    if (pathname?.includes("/login") || pathname?.includes("/expired")) {
         return (
             <ToastProvider>
                 <div className="tenant-theme">

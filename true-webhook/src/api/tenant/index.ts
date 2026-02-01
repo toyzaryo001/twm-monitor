@@ -55,7 +55,8 @@ router.get("/stats", async (req: Request<{ prefix: string }>, res: Response, nex
                     // @ts-ignore
                     isAutoReceiveEnabled: network.featureWebhookEnabled ?? true,
                     // @ts-ignore
-                    featureAutoWithdraw: network.featureAutoWithdraw ?? false
+                    featureAutoWithdraw: network.featureAutoWithdraw ?? false,
+                    expiredAt: (network as any).expiredAt,
                 },
                 stats: { total: accountCount, active: activeAccounts },
             },
