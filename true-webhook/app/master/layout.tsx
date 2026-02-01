@@ -15,6 +15,7 @@ interface User {
 const navItems = [
     { href: "/master/dashboard", label: "แดชบอร์ด", icon: "📊" },
     { href: "/master/networks", label: "จัดการเครือข่าย", icon: "🌐" },
+    { href: "/master/announcements", label: "จัดการประกาศ", icon: "📢" },
     { href: "/master/users", label: "จัดการผู้ใช้", icon: "👥" },
     { href: "/master/settings", label: "ตั้งค่า", icon: "⚙️" },
 ];

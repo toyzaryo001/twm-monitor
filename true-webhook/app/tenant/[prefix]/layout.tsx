@@ -8,8 +8,12 @@ import "../tenant-theme.css";
 
 import { isTokenExpired } from "../../lib/clientAuth";
 
+import AnnouncementDisplay from "./components/AnnouncementDisplay";
+
 export default function TenantLayout({ children }: { children: React.ReactNode }) {
     const params = useParams();
+    // ... (existing code)
+
     const router = useRouter();
     const pathname = usePathname();
     const prefix = params.prefix as string;
@@ -80,6 +84,7 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
                         </div>
                     </header>
                     <main className="tenant-content">
+                        <AnnouncementDisplay prefix={prefix} />
                         {children}
                     </main>
                 </div>

@@ -15,6 +15,9 @@ router.use(requireAuth, requireNetworkAccess);
 // Accounts management
 router.use("/accounts", accountsRouter);
 
+import announcementsRouter from "./announcements";
+router.use("/announcements", announcementsRouter);
+
 // Dashboard stats
 router.get("/stats", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     try {

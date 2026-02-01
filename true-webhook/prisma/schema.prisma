@@ -48,6 +48,7 @@ model Network {
   
   users       User[]
   accounts    Account[]
+  announcementNetworks AnnouncementNetwork[]
   
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -215,5 +216,39 @@ model AutoWithdrawLog {
   
   createdAt      DateTime @default(now())
   
+
   @@index([accountId, createdAt])
+}
+
+// ========== ANNOUNCEMENTS ==========
+
+enum AnnouncementType {
+  POPUP
+  MARQUEE
+}
+
+model Announcement {
+  id          String           @id @default(cuid())
+  title       String
+  content     String           @db.Text
+  type        AnnouncementType @default(POPUP)
+  isActive    Boolean          @default(true)
+  
+  // Scoping: If empty, applies to ALL networks (Global)
+  networks    AnnouncementNetwork[]
+  
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model AnnouncementNetwork {
+  id             String       @id @default(cuid())
+  announcementId String
+  networkId      String
+  
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  network        Network      @relation(fields: [networkId], references: [id], onDelete: Cascade)
+  
+  @@unique([announcementId, networkId])
+  @@index([networkId])
 }
