@@ -11,6 +11,7 @@ interface Network {
     name: string;
     logoUrl: string | null;
     isActive: boolean;
+    expiredAt: string | null;
     realtimeEnabled: boolean;
     checkIntervalMs: number;
     featureWebhookEnabled: boolean;
@@ -37,6 +38,7 @@ export default function NetworkSettingsPage() {
         name: "",
         logoUrl: "",
         isActive: true,
+        expiredAt: "",
 
         realtimeEnabled: true,
         checkIntervalMs: 2000,
@@ -67,6 +69,7 @@ export default function NetworkSettingsPage() {
                     name: data.data.name,
                     logoUrl: data.data.logoUrl || "",
                     isActive: data.data.isActive,
+                    expiredAt: data.data.expiredAt ? new Date(data.data.expiredAt).toISOString().slice(0, 10) : "",
                     realtimeEnabled: data.data.realtimeEnabled ?? true,
                     checkIntervalMs: data.data.checkIntervalMs ?? 2000,
                     featureWebhookEnabled: data.data.featureWebhookEnabled ?? true,
@@ -221,6 +224,83 @@ export default function NetworkSettingsPage() {
                             />
                             <span>เปิดใช้งานเครือข่าย</span>
                         </label>
+                    </div>
+                </div>
+
+                {/* Expiration Date Settings */}
+                <div className="card" style={{ marginBottom: 24 }}>
+                    <h2 style={{ fontSize: 18, marginBottom: 20, color: "#f59e0b" }}>📅 วันหมดอายุบริการ</h2>
+
+                    <div className="form-group">
+                        <label className="form-label">วันหมดอายุ</label>
+                        <input
+                            type="date"
+                            className="form-input"
+                            value={form.expiredAt}
+                            onChange={(e) => setForm({ ...form, expiredAt: e.target.value })}
+                            style={{ maxWidth: 250 }}
+                        />
+                        <p style={{ color: "#9ca3af", fontSize: 13, marginTop: 6 }}>
+                            เมื่อถึงวันที่กำหนด เครือข่ายจะไม่สามารถใช้งานได้อัตโนมัติ
+                        </p>
+                    </div>
+
+                    {form.expiredAt && (
+                        <div style={{
+                            marginTop: 16,
+                            padding: 16,
+                            background: new Date(form.expiredAt) > new Date()
+                                ? "rgba(34, 197, 94, 0.1)"
+                                : "rgba(239, 68, 68, 0.1)",
+                            borderRadius: 12,
+                            border: `1px solid ${new Date(form.expiredAt) > new Date() ? "rgba(34, 197, 94, 0.3)" : "rgba(239, 68, 68, 0.3)"}`
+                        }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                <span style={{ fontSize: 28 }}>
+                                    {new Date(form.expiredAt) > new Date() ? "✅" : "⚠️"}
+                                </span>
+                                <div>
+                                    <div style={{ fontWeight: 600, color: new Date(form.expiredAt) > new Date() ? "#22c55e" : "#ef4444" }}>
+                                        {new Date(form.expiredAt) > new Date()
+                                            ? `เหลือเวลาอีก ${Math.ceil((new Date(form.expiredAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} วัน`
+                                            : "หมดอายุแล้ว!"
+                                        }
+                                    </div>
+                                    <div style={{ fontSize: 13, color: "#9ca3af" }}>
+                                        หมดอายุวันที่: {new Date(form.expiredAt).toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 13, color: "#9ca3af", marginRight: 8, alignSelf: "center" }}>ต่ออายุเร็ว:</span>
+                        {[7, 30, 90, 365].map(days => (
+                            <button
+                                key={days}
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ padding: "6px 12px", fontSize: 13 }}
+                                onClick={() => {
+                                    const base = form.expiredAt && new Date(form.expiredAt) > new Date()
+                                        ? new Date(form.expiredAt)
+                                        : new Date();
+                                    base.setDate(base.getDate() + days);
+                                    setForm({ ...form, expiredAt: base.toISOString().slice(0, 10) });
+                                }}
+                            >
+                                +{days} วัน
+                            </button>
+                        ))}
+                        <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ padding: "6px 12px", fontSize: 13, color: "#f59e0b" }}
+                            onClick={() => setForm({ ...form, expiredAt: "" })}
+                        >
+                            ♾️ ไม่มีวันหมด
+                        </button>
                     </div>
                 </div>
 
