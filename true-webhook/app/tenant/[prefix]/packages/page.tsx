@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
-import { ToastProvider, useToast } from "../../../components/Toast";
+import { useToast } from "../../../components/Toast";
 
 interface Package {
     id: string;
@@ -16,15 +16,13 @@ interface PaymentRequest {
     id: string;
     status: "PENDING" | "APPROVED" | "REJECTED";
     createdAt: string;
-    package: {
-        name: string;
-        durationDays: number;
-    };
+    package: { name: string; durationDays: number; };
 }
 
-function PackagesContent() {
+export default function TenantPackagesPage() {
     const params = useParams();
     const prefix = params.prefix as string;
+    const { showToast } = useToast();
 
     const [packages, setPackages] = useState<Package[]>([]);
     const [pendingRequest, setPendingRequest] = useState<PaymentRequest | null>(null);
@@ -33,11 +31,8 @@ function PackagesContent() {
     const [uploading, setUploading] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const { showToast } = useToast();
 
-    useEffect(() => {
-        fetchData();
-    }, [prefix]);
+    useEffect(() => { fetchData(); }, [prefix]);
 
     const fetchData = async () => {
         try {
@@ -55,11 +50,8 @@ function PackagesContent() {
             if (pkgData.ok) setPackages(pkgData.data);
 
             if (histData.ok && histData.data.length > 0) {
-                // Check if the latest one is pending
                 const latest = histData.data[0];
-                if (latest.status === "PENDING") {
-                    setPendingRequest(latest);
-                }
+                if (latest.status === "PENDING") setPendingRequest(latest);
             }
         } catch (err) {
             console.error(err);
@@ -89,7 +81,7 @@ function PackagesContent() {
             if (result.ok) {
                 showToast({ title: "ส่งหลักฐานเรียบร้อย รอตรวจสอบครับ", type: "success" });
                 setSelectedPkg(null);
-                fetchData(); // Refresh to show pending state
+                fetchData();
             } else {
                 showToast({ title: result.error || "อัปโหลดล้มเหลว", type: "error" });
             }
@@ -100,19 +92,20 @@ function PackagesContent() {
         }
     };
 
-    if (loading) return <div className="text-center py-20 text-gray-400">Loading...</div>;
+    if (loading) return <div className="loading"><div className="spinner" /></div>;
 
+    // Pending State
     if (pendingRequest) {
         return (
-            <div className="p-4 md:p-8 flex items-center justify-center min-h-[60vh]">
-                <div className="bg-[#1e1e1e] border border-yellow-500/30 rounded-2xl p-8 max-w-md w-full text-center">
-                    <div className="text-5xl mb-4">⏳</div>
-                    <h2 className="text-2xl font-bold text-white mb-2">รอตรวจสอบยอดเงิน</h2>
-                    <p className="text-gray-400 mb-6">
-                        คุณได้ส่งหลักฐานการโอนเงินสำหรับแพ็คเกจ <br />
-                        <span className="text-indigo-400 font-bold">{pendingRequest.package.name}</span> เรียบร้อยแล้ว
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh", padding: 24 }}>
+                <div className="card" style={{ maxWidth: 450, textAlign: "center", padding: 40 }}>
+                    <div style={{ fontSize: 64, marginBottom: 16 }}>⏳</div>
+                    <h2 style={{ fontSize: 24, fontWeight: 700, color: "white", marginBottom: 8 }}>รอตรวจสอบยอดเงิน</h2>
+                    <p style={{ color: "var(--text-muted)", marginBottom: 24 }}>
+                        คุณได้ส่งหลักฐานการโอนเงินสำหรับแพ็คเกจ<br />
+                        <span style={{ color: "var(--primary)", fontWeight: 700 }}>{pendingRequest.package.name}</span> เรียบร้อยแล้ว
                     </p>
-                    <div className="bg-[#111] rounded-lg p-4 text-sm text-gray-500">
+                    <div style={{ background: "var(--bg-secondary)", padding: 16, borderRadius: 12, fontSize: 13, color: "var(--text-muted)" }}>
                         แจ้งเมื่อ: {new Date(pendingRequest.createdAt).toLocaleString("th-TH")}
                     </div>
                 </div>
@@ -120,114 +113,187 @@ function PackagesContent() {
         );
     }
 
-    return (
-        <div className="p-4 md:p-8">
-            <h1 className="text-2xl font-bold text-white mb-2">เลือกแพ็คเกจต่ออายุ</h1>
-            <p className="text-gray-400 mb-8">เลือกแผนที่เหมาะสมกับการใช้งานของคุณ</p>
-
-            {selectedPkg ? (
-                // Upload Step
-                <div className="max-w-2xl mx-auto bg-[#1e1e1e] border border-[#333] rounded-2xl p-6 md:p-8">
-                    <button
-                        onClick={() => setSelectedPkg(null)}
-                        className="mb-6 text-gray-400 hover:text-white flex items-center gap-2"
-                    >
+    // Upload Step
+    if (selectedPkg) {
+        return (
+            <div style={{ padding: 24 }}>
+                <div className="page-header" style={{ marginBottom: 24 }}>
+                    <button className="btn btn-secondary" onClick={() => setSelectedPkg(null)}>
                         ← ย้อนกลับ
                     </button>
+                </div>
 
-                    <div className="flex flex-col md:flex-row gap-8">
-                        <div className="flex-1">
-                            <h2 className="text-xl font-bold text-white mb-4">โอนเงินชำระค่าบริการ</h2>
+                <div className="card" style={{ maxWidth: 800, margin: "0 auto", padding: 32 }}>
+                    <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>💳 ชำระเงินแพ็คเกจ {selectedPkg.name}</h2>
+                    <p style={{ color: "var(--text-muted)", marginBottom: 32 }}>
+                        โอนเงิน <strong style={{ color: "var(--success)", fontSize: 20 }}>฿{selectedPkg.price.toLocaleString()}</strong> แล้วแนบสลิปโอนเงิน
+                    </p>
 
-                            <div className="bg-[#252525] p-4 rounded-xl mb-6">
-                                <div className="text-gray-400 text-sm mb-1">ธนาคาร</div>
-                                <div className="text-white font-medium flex items-center gap-2">
-                                    <span className="w-6 h-6 bg-green-500 rounded-full inline-block"></span>
-                                    กสิกรไทย (K-Bank)
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32 }}>
+                        {/* Bank Info */}
+                        <div>
+                            <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: "var(--text-muted)" }}>ข้อมูลบัญชีธนาคาร</h3>
+                            <div style={{ background: "var(--bg-secondary)", padding: 20, borderRadius: 12 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+                                    <div style={{ width: 40, height: 40, background: "linear-gradient(135deg, #22c55e, #16a34a)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
+                                        🏦
+                                    </div>
+                                    <div>
+                                        <div style={{ fontWeight: 600, color: "white" }}>กสิกรไทย (K-Bank)</div>
+                                        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>กรุณาโอนตามยอดที่ระบุ</div>
+                                    </div>
                                 </div>
-                                <div className="my-3 border-t border-[#333]"></div>
-                                <div className="text-gray-400 text-sm mb-1">เลขบัญชี</div>
-                                <div className="text-2xl font-mono text-indigo-400 font-bold">xxx-x-xxxxx-x</div>
-                                <div className="text-gray-400 text-sm mt-1">ชื่อบัญชี: บจก. ทรู เว็บฮุก</div>
-                            </div>
-
-                            <div className="text-gray-400 text-sm">
-                                * กรุณาโอนเงินยอด <strong className="text-white">฿{selectedPkg.price.toLocaleString()}</strong> <br />
-                                แล้วแนบสลิปหลักฐานด้านขวา
+                                <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+                                    <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>เลขบัญชี</div>
+                                    <div style={{ fontSize: 22, fontFamily: "monospace", fontWeight: 700, color: "var(--primary)", marginBottom: 8 }}>
+                                        xxx-x-xxxxx-x
+                                    </div>
+                                    <div style={{ fontSize: 13, color: "var(--text-muted)" }}>ชื่อบัญชี: บจก. ทรู เว็บฮุก</div>
+                                </div>
                             </div>
                         </div>
 
-                        <div className="flex-1 border-l border-[#333] pl-0 md:pl-8 pt-8 md:pt-0 border-t md:border-t-0">
-                            <h3 className="text-lg font-bold text-white mb-4">แนบสลิปโอนเงิน</h3>
-
+                        {/* Upload Area */}
+                        <div>
+                            <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: "var(--text-muted)" }}>แนบสลิปโอนเงิน</h3>
                             <div
-                                onClick={() => fileInputRef.current?.click()}
-                                className={`
-                                    border-2 border-dashed border-[#444] hover:border-indigo-500 rounded-xl 
-                                    aspect-[3/4] flex flex-col items-center justify-center cursor-pointer
-                                    bg-[#111] transition-colors
-                                    ${uploading ? "opacity-50 pointer-events-none" : ""}
-                                `}
+                                onClick={() => !uploading && fileInputRef.current?.click()}
+                                style={{
+                                    border: "2px dashed var(--border)",
+                                    borderRadius: 16,
+                                    padding: 40,
+                                    textAlign: "center",
+                                    cursor: uploading ? "default" : "pointer",
+                                    background: "var(--bg-secondary)",
+                                    transition: "all 0.2s",
+                                    opacity: uploading ? 0.6 : 1
+                                }}
                             >
-                                <div className="text-4xl mb-2">📤</div>
-                                <span className="text-gray-400 text-sm">คลิกเพื่อเลือกไฟล์</span>
-                                <span className="text-gray-600 text-xs mt-1">Support: JPG, PNG</span>
+                                <div style={{ fontSize: 48, marginBottom: 12 }}>{uploading ? "⏳" : "📤"}</div>
+                                <div style={{ color: "white", fontWeight: 500, marginBottom: 4 }}>
+                                    {uploading ? "กำลังอัปโหลด..." : "คลิกเพื่อเลือกไฟล์"}
+                                </div>
+                                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>รองรับ: JPG, PNG</div>
                             </div>
                             <input
                                 type="file"
                                 ref={fileInputRef}
-                                className="hidden"
+                                style={{ display: "none" }}
                                 accept="image/*"
                                 onChange={handleUpload}
                             />
-
-                            {uploading && <div className="text-center text-indigo-400 mt-4 text-sm">กำลังอัปโหลด...</div>}
                         </div>
                     </div>
                 </div>
+            </div>
+        );
+    }
+
+    // Package Selection
+    return (
+        <div style={{ padding: 24 }}>
+            <div className="page-header">
+                <div>
+                    <h1 className="page-title">เลือกแพ็คเกจต่ออายุ</h1>
+                    <p style={{ color: "var(--text-muted)", marginTop: 4 }}>เลือกแผนที่เหมาะสมกับการใช้งานของคุณ</p>
+                </div>
+            </div>
+
+            {packages.length === 0 ? (
+                <div className="card empty-state">ยังไม่มีแพ็คเกจที่เปิดขาย</div>
             ) : (
-                // Package Selection Step
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {packages.map(pkg => (
-                        <div key={pkg.id} className="bg-[#1e1e1e] border border-[#333] rounded-2xl p-6 hover:border-indigo-500 transition-all hover:shadow-[0_0_30px_rgba(99,102,241,0.1)] flex flex-col">
-                            <h3 className="text-xl font-bold text-white mb-2">{pkg.name}</h3>
-                            <div className="flex items-baseline gap-1 mb-6">
-                                <span className="text-4xl font-bold text-indigo-400">฿{pkg.price.toLocaleString()}</span>
-                                <span className="text-gray-500">/ {pkg.durationDays} วัน</span>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 24, marginTop: 24 }}>
+                    {packages.map((pkg, index) => (
+                        <div
+                            key={pkg.id}
+                            className="card"
+                            style={{
+                                padding: 0,
+                                overflow: "hidden",
+                                border: index === 0 ? "2px solid var(--primary)" : undefined,
+                                position: "relative"
+                            }}
+                        >
+                            {/* Popular Badge */}
+                            {index === 0 && packages.length > 1 && (
+                                <div style={{
+                                    position: "absolute",
+                                    top: 16,
+                                    right: 16,
+                                    background: "linear-gradient(135deg, #f59e0b, #d97706)",
+                                    color: "white",
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    padding: "4px 10px",
+                                    borderRadius: 20
+                                }}>
+                                    ⭐ แนะนำ
+                                </div>
+                            )}
+
+                            {/* Header */}
+                            <div style={{ padding: "24px 24px 0" }}>
+                                <h3 style={{ fontSize: 20, fontWeight: 700, color: "white", marginBottom: 12 }}>{pkg.name}</h3>
+                                <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
+                                    <span style={{ fontSize: 36, fontWeight: 800, color: "var(--primary)" }}>
+                                        ฿{pkg.price.toLocaleString()}
+                                    </span>
+                                </div>
+                                <div style={{
+                                    display: "inline-block",
+                                    background: "rgba(99, 102, 241, 0.15)",
+                                    color: "var(--primary)",
+                                    padding: "4px 12px",
+                                    borderRadius: 20,
+                                    fontSize: 13,
+                                    fontWeight: 500
+                                }}>
+                                    {pkg.durationDays} วัน
+                                </div>
                             </div>
 
-                            <div className="flex-1 mb-8">
-                                <ul className="space-y-3">
-                                    {pkg.description?.split("\n").map((line, i) => (
-                                        <li key={i} className="flex items-start gap-3 text-gray-300 text-sm">
-                                            <span className="text-green-500 mt-0.5">✓</span>
-                                            {line}
-                                        </li>
-                                    ))}
-                                    {!pkg.description && (
-                                        <li className="text-gray-500 text-sm italic">ไม่มีรายละเอียด</li>
-                                    )}
-                                </ul>
+                            {/* Features */}
+                            <div style={{ padding: 24, minHeight: 120 }}>
+                                {pkg.description ? (
+                                    <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                                        {pkg.description.split("\n").map((line, i) => (
+                                            <li key={i} style={{
+                                                display: "flex",
+                                                alignItems: "flex-start",
+                                                gap: 10,
+                                                marginBottom: 10,
+                                                color: "var(--text-muted)",
+                                                fontSize: 14
+                                            }}>
+                                                <span style={{ color: "#22c55e", fontWeight: 700 }}>✓</span>
+                                                {line}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p style={{ color: "var(--text-muted)", fontStyle: "italic", fontSize: 14 }}>ไม่มีรายละเอียดเพิ่มเติม</p>
+                                )}
                             </div>
 
-                            <button
-                                onClick={() => setSelectedPkg(pkg)}
-                                className="w-full py-3 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors"
-                            >
-                                เลือกแพ็คเกจนี้
-                            </button>
+                            {/* CTA Button */}
+                            <div style={{ padding: "0 24px 24px" }}>
+                                <button
+                                    onClick={() => setSelectedPkg(pkg)}
+                                    className="btn btn-primary"
+                                    style={{
+                                        width: "100%",
+                                        padding: "14px 24px",
+                                        fontSize: 15,
+                                        fontWeight: 600
+                                    }}
+                                >
+                                    เลือกแพ็คเกจนี้
+                                </button>
+                            </div>
                         </div>
                     ))}
                 </div>
             )}
         </div>
-    );
-}
-
-export default function TenantPackagesPage() {
-    return (
-        <ToastProvider>
-            <PackagesContent />
-        </ToastProvider>
     );
 }
