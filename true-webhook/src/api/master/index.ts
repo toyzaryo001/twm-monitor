@@ -20,6 +20,7 @@ import settingsRouter from "./settings";
 import announcementsRouter from "./announcements";
 import packagesRouter from "./packages";
 import paymentsRouter from "./payments";
+import bankSettingsRouter from "./bankSettings";
 
 // Users management
 router.use("/users", usersRouter);
@@ -33,6 +34,9 @@ router.use("/announcements", announcementsRouter);
 // Pricing & Payments
 router.use("/packages", packagesRouter);
 router.use("/payments", paymentsRouter);
+
+// Bank settings
+router.use("/bank-settings", bankSettingsRouter);
 
 // Dashboard overview
 router.get("/overview", requireAuth, requireMaster, async (req, res, next) => {

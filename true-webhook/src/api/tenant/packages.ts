@@ -16,24 +16,19 @@ router.get("/", async (req, res, next) => {
     }
 });
 
-// Get bank info for the network
+// Get bank info (from global settings)
 router.get("/bank-info", async (req: any, res, next) => {
     try {
-        const prefix = req.params.prefix;
-        const network = await (prisma.network as any).findUnique({
-            where: { prefix },
-            select: {
-                bankName: true,
-                bankAccountNumber: true,
-                bankAccountName: true,
+        const settings = await prisma.systemSetting.findMany({
+            where: {
+                key: { in: ["bankName", "bankAccountNumber", "bankAccountName"] }
             }
         });
 
-        if (!network) {
-            return res.status(404).json({ ok: false, error: "Network not found" });
-        }
+        const data: Record<string, string> = {};
+        settings.forEach(s => { data[s.key] = s.value; });
 
-        return res.json({ ok: true, data: network });
+        return res.json({ ok: true, data });
     } catch (err) {
         next(err);
     }
