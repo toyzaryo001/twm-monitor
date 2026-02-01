@@ -43,6 +43,11 @@ export default function AnnouncementDisplay({ prefix }: { prefix: string }) {
         };
 
         fetchAnnouncements();
+
+        // Poll every 60 seconds
+        const interval = setInterval(fetchAnnouncements, 60000);
+
+        return () => clearInterval(interval);
     }, [prefix, pathname]);
 
     const markAsViewed = (id: string) => {
@@ -59,19 +64,28 @@ export default function AnnouncementDisplay({ prefix }: { prefix: string }) {
             {/* MARQUEE */}
             {marquees.length > 0 && (
                 <div style={{
-                    background: "var(--primary-color)",
-                    color: "#fff",
+                    background: "rgba(0, 0, 0, 0.85)",
+                    backdropFilter: "blur(5px)",
+                    borderBottom: "1px solid rgba(255, 215, 0, 0.3)",
+                    borderTop: "1px solid rgba(255, 215, 0, 0.3)",
+                    color: "#FFD700",
                     padding: "8px 0",
-                    position: "relative",
+                    position: "fixed",
+                    top: 80, // Below header
+                    left: 0,
+                    width: "100%",
+                    zIndex: 1000,
                     overflow: "hidden",
                     whiteSpace: "nowrap",
-                    fontSize: 14,
-                    fontWeight: 500
+                    fontSize: 16,
+                    fontWeight: 600,
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                    textShadow: "0 0 10px rgba(255, 215, 0, 0.5)"
                 }}>
                     <div className="marquee-content" style={{ display: "inline-block", paddingLeft: "100%" }}>
                         {marquees.map((m, i) => (
-                            <span key={m.id} style={{ marginRight: 50 }}>
-                                📢 {m.title}: {m.content}
+                            <span key={m.id} style={{ marginRight: 100, display: "inline-flex", alignItems: "center", gap: 8 }}>
+                                🏆 <span style={{ color: "#fff" }}>{m.title}:</span> {m.content}
                             </span>
                         ))}
                     </div>
@@ -81,7 +95,10 @@ export default function AnnouncementDisplay({ prefix }: { prefix: string }) {
                             100% { transform: translate(-100%, 0); }
                         }
                         .marquee-content {
-                            animation: marquee 20s linear infinite;
+                            animation: marquee 30s linear infinite;
+                        }
+                        .marquee-content:hover {
+                            animation-play-state: paused;
                         }
                     `}</style>
                 </div>
