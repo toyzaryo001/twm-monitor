@@ -9,6 +9,7 @@ interface Network {
     name: string;
     isActive: boolean;
     createdAt: string;
+    expiredAt: string | null;
     totalBalance: number;
     _count: { users: number; accounts: number };
 }
@@ -164,6 +165,7 @@ export default function NetworksPage() {
                                 <th>Prefix</th>
                                 <th>ยอดรวม</th>
                                 <th>บัญชี</th>
+                                <th>หมดอายุ</th>
                                 <th>สถานะ</th>
                                 <th>จัดการ</th>
                             </tr>
@@ -177,6 +179,21 @@ export default function NetworksPage() {
                                         ฿ {n.totalBalance?.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "0.00"}
                                     </td>
                                     <td>{n._count.accounts}</td>
+                                    <td>
+                                        {n.expiredAt ? (
+                                            <span style={{
+                                                color: new Date(n.expiredAt) > new Date() ? "#22c55e" : "#ef4444",
+                                                fontWeight: 500
+                                            }}>
+                                                {new Date(n.expiredAt) > new Date()
+                                                    ? `${Math.ceil((new Date(n.expiredAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} วัน`
+                                                    : "หมดอายุ!"
+                                                }
+                                            </span>
+                                        ) : (
+                                            <span style={{ color: "#9ca3af" }}>ไม่มีกำหนด</span>
+                                        )}
+                                    </td>
                                     <td>
                                         <span className={`badge ${n.isActive ? "badge-success" : "badge-error"}`}>
                                             {n.isActive ? "ใช้งาน" : "ปิด"}
