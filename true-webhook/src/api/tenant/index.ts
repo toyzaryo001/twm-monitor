@@ -18,6 +18,12 @@ router.use("/accounts", accountsRouter);
 import announcementsRouter from "./announcements";
 router.use("/announcements", announcementsRouter);
 
+import packagesRouter from "./packages";
+router.use("/packages", packagesRouter);
+
+import paymentsRouter from "./payments";
+router.use("/payments", paymentsRouter);
+
 // Dashboard stats
 router.get("/stats", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     try {

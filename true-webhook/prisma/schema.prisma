@@ -52,6 +52,7 @@ model Network {
   users       User[]
   accounts    Account[]
   announcementNetworks AnnouncementNetwork[]
+  paymentRequests      PaymentRequest[]
   
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -255,3 +256,42 @@ model AnnouncementNetwork {
   @@unique([announcementId, networkId])
   @@index([networkId])
 }
+
+// ========== PRICING & SLIPS ==========
+
+model Package {
+  id            String    @id @default(cuid())
+  name          String
+  price         Float
+  durationDays  Int
+  description   String?
+  isActive      Boolean   @default(true)
+  
+  paymentRequests PaymentRequest[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model PaymentRequest {
+  id          String    @id @default(cuid())
+  
+  networkId   String
+  network     Network   @relation(fields: [networkId], references: [id], onDelete: Cascade)
+  
+  packageId   String
+  package     Package   @relation(fields: [packageId], references: [id])
+  
+  amount      Float
+  slipUrl     String    // Path or URL to slip image
+  status      String    // PENDING, APPROVED, REJECTED
+  
+  reviewedBy  String?   // Admin ID who reviewed
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([networkId])
+  @@index([status])
+}
+

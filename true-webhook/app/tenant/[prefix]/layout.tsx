@@ -91,6 +91,9 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
                             <Link href={`/tenant/${prefix}/settings`} className={`tenant-menu-item ${pathname?.includes("/settings") ? "active" : ""}`}>
                                 ⚙️ ตั้งค่า
                             </Link>
+                            <Link href={`/tenant/${prefix}/packages`} className={`tenant-menu-item ${pathname?.includes("/packages") ? "active" : ""}`}>
+                                📦 แพ็คเกจ
+                            </Link>
                         </div>
                         <div className="tenant-user">
                             <button className="tenant-btn-logout" onClick={() => {
