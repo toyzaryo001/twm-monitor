@@ -24,7 +24,7 @@ router.get("/", async (req: Request, res: Response, next: NextFunction) => {
         });
 
         // Format response to be cleaner for UI
-        const formatted = announcements.map(a => ({
+        const formatted = announcements.map((a: any) => ({
             id: a.id,
             title: a.title,
             content: a.content,
@@ -32,7 +32,7 @@ router.get("/", async (req: Request, res: Response, next: NextFunction) => {
             isActive: a.isActive,
             createdAt: a.createdAt,
             scope: a.networks.length > 0 ? "SPECIFIC" : "GLOBAL",
-            targetNetworks: a.networks.map(an => an.network)
+            targetNetworks: a.networks.map((an: any) => an.network)
         }));
 
         res.json({ ok: true, data: formatted });

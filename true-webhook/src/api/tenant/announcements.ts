@@ -30,7 +30,7 @@ router.get("/", async (req: Request<{ prefix: string }>, res: Response, next: Ne
             orderBy: { createdAt: "desc" }
         });
 
-        const formatted = announcements.map(a => ({
+        const formatted = announcements.map((a: any) => ({
             id: a.id,
             title: a.title,
             content: a.content,
