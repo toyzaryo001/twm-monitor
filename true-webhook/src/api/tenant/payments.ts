@@ -93,7 +93,7 @@ router.post("/upload", upload.single("slip"), async (req: any, res: any, next: a
 });
 
 // Get Payment History
-router.get("/history", async (req, res, next) => {
+router.get("/history", async (req: any, res, next) => {
     try {
         const prefix = req.params.prefix;
 
