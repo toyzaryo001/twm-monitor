@@ -29,6 +29,9 @@ async function main() {
     server.use(cors());
     server.use(express.json());
 
+    // Serve uploaded files (slips)
+    server.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+
     // Health check
     server.get("/api/health", (req, res) => {
         res.json({ ok: true, timestamp: new Date().toISOString() });

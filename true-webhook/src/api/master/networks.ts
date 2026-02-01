@@ -126,6 +126,10 @@ router.put("/:id", async (req, res, next) => {
             notifyMoneyOut: z.boolean().optional(),
             notifyMinAmount: z.number().min(0).optional(),
             expiredAt: z.union([z.string(), z.null()]).optional(),
+            // Bank account settings
+            bankName: z.string().optional(),
+            bankAccountNumber: z.string().optional(),
+            bankAccountName: z.string().optional(),
         });
 
         const data = schema.parse(req.body);

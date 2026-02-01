@@ -49,6 +49,11 @@ model Network {
   notifyMoneyOut          Boolean   @default(true)
   notifyMinAmount         Int       @default(0)     // Minimum amount (satang) to trigger notification
   
+  // Bank account for payments
+  bankName                String?   // e.g. "กสิกรไทย"
+  bankAccountNumber       String?   // e.g. "xxx-x-xxxxx-x"
+  bankAccountName         String?   // e.g. "บจก. ทรู เว็บฮุก"
+  
   users       User[]
   accounts    Account[]
   announcementNetworks AnnouncementNetwork[]

@@ -29,6 +29,7 @@ export default function TenantPackagesPage() {
     const [loading, setLoading] = useState(true);
     const [selectedPkg, setSelectedPkg] = useState<Package | null>(null);
     const [uploading, setUploading] = useState(false);
+    const [bankInfo, setBankInfo] = useState<{ bankName: string; bankAccountNumber: string; bankAccountName: string } | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -39,15 +40,18 @@ export default function TenantPackagesPage() {
             const token = localStorage.getItem("tenantToken");
             const headers = { Authorization: `Bearer ${token}` };
 
-            const [pkgRes, histRes] = await Promise.all([
+            const [pkgRes, histRes, bankRes] = await Promise.all([
                 fetch(`/api/tenant/${prefix}/packages`, { headers }),
-                fetch(`/api/tenant/${prefix}/payments/history`, { headers })
+                fetch(`/api/tenant/${prefix}/payments/history`, { headers }),
+                fetch(`/api/tenant/${prefix}/packages/bank-info`, { headers })
             ]);
 
             const pkgData = await pkgRes.json();
             const histData = await histRes.json();
+            const bankData = await bankRes.json();
 
             if (pkgData.ok) setPackages(pkgData.data);
+            if (bankData.ok) setBankInfo(bankData.data);
 
             if (histData.ok && histData.data.length > 0) {
                 const latest = histData.data[0];
@@ -133,24 +137,34 @@ export default function TenantPackagesPage() {
                         {/* Bank Info */}
                         <div>
                             <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: "var(--text-muted)" }}>ข้อมูลบัญชีธนาคาร</h3>
-                            <div style={{ background: "var(--bg-secondary)", padding: 20, borderRadius: 12 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-                                    <div style={{ width: 40, height: 40, background: "linear-gradient(135deg, #22c55e, #16a34a)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
-                                        🏦
+                            {bankInfo && bankInfo.bankAccountNumber ? (
+                                <div style={{ background: "var(--bg-secondary)", padding: 20, borderRadius: 12 }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+                                        <div style={{ width: 40, height: 40, background: "linear-gradient(135deg, #22c55e, #16a34a)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
+                                            🏦
+                                        </div>
+                                        <div>
+                                            <div style={{ fontWeight: 600, color: "white" }}>{bankInfo.bankName || "ธนาคาร"}</div>
+                                            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>กรุณาโอนตามยอดที่ระบุ</div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <div style={{ fontWeight: 600, color: "white" }}>กสิกรไทย (K-Bank)</div>
-                                        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>กรุณาโอนตามยอดที่ระบุ</div>
+                                    <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+                                        <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>เลขบัญชี</div>
+                                        <div style={{ fontSize: 22, fontFamily: "monospace", fontWeight: 700, color: "var(--primary)", marginBottom: 8 }}>
+                                            {bankInfo.bankAccountNumber}
+                                        </div>
+                                        {bankInfo.bankAccountName && (
+                                            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>ชื่อบัญชี: {bankInfo.bankAccountName}</div>
+                                        )}
                                     </div>
                                 </div>
-                                <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>
-                                    <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>เลขบัญชี</div>
-                                    <div style={{ fontSize: 22, fontFamily: "monospace", fontWeight: 700, color: "var(--primary)", marginBottom: 8 }}>
-                                        xxx-x-xxxxx-x
-                                    </div>
-                                    <div style={{ fontSize: 13, color: "var(--text-muted)" }}>ชื่อบัญชี: บจก. ทรู เว็บฮุก</div>
+                            ) : (
+                                <div style={{ background: "var(--bg-secondary)", padding: 20, borderRadius: 12, textAlign: "center", color: "var(--text-muted)" }}>
+                                    <div style={{ fontSize: 32, marginBottom: 8 }}>⚠️</div>
+                                    <div>ยังไม่ได้ตั้งค่าบัญชีรับเงิน</div>
+                                    <div style={{ fontSize: 13 }}>กรุณาติดต่อผู้ดูแลระบบ</div>
                                 </div>
-                            </div>
+                            )}
                         </div>
 
                         {/* Upload Area */}
