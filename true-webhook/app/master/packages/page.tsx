@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { ToastProvider, useToast } from "../../components/Toast";
-import Link from "next/link";
 
 interface Package {
     id: string;
@@ -19,7 +18,6 @@ function PackagesContent() {
     const [showModal, setShowModal] = useState(false);
     const { showToast } = useToast();
 
-    // Form State
     const [formData, setFormData] = useState({
         name: "",
         price: "",
@@ -35,9 +33,7 @@ function PackagesContent() {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const data = await res.json();
-            if (data.ok) {
-                setPackages(data.data);
-            }
+            if (data.ok) setPackages(data.data);
         } catch (err) {
             console.error(err);
         } finally {
@@ -45,14 +41,11 @@ function PackagesContent() {
         }
     };
 
-    useEffect(() => {
-        fetchPackages();
-    }, []);
+    useEffect(() => { fetchPackages(); }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const token = localStorage.getItem("token");
-
         const payload = {
             name: formData.name,
             price: Number(formData.price),
@@ -62,17 +55,11 @@ function PackagesContent() {
 
         try {
             const url = editId ? `/api/master/packages/${editId}` : "/api/master/packages";
-            const method = editId ? "PUT" : "POST";
-
             const res = await fetch(url, {
-                method,
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`
-                },
+                method: editId ? "PUT" : "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify(payload)
             });
-
             const result = await res.json();
             if (result.ok) {
                 showToast({ title: editId ? "แก้ไขแพ็คเกจสำเร็จ" : "สร้างแพ็คเกจสำเร็จ", type: "success" });
@@ -105,12 +92,27 @@ function PackagesContent() {
         }
     };
 
+    const openEdit = (pkg: Package) => {
+        setEditId(pkg.id);
+        setFormData({
+            name: pkg.name,
+            price: String(pkg.price),
+            durationDays: String(pkg.durationDays),
+            description: pkg.description || ""
+        });
+        setShowModal(true);
+    };
+
     return (
-        <div className="p-8">
-            <div className="flex justify-between items-center mb-8">
+        <div className="p-6 md:p-8 min-h-screen">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                 <div>
-                    <h1 className="text-2xl font-bold text-white mb-2">จัดการแพ็คเกจ</h1>
-                    <p className="text-gray-400">กำหนดราคาและระยะเวลาสำหรับบริการ</p>
+                    <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+                        <span className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center text-lg">📦</span>
+                        จัดการแพ็คเกจ
+                    </h1>
+                    <p className="text-gray-400 mt-2 ml-13">กำหนดราคาและระยะเวลาสำหรับบริการ</p>
                 </div>
                 <button
                     onClick={() => {
@@ -118,100 +120,137 @@ function PackagesContent() {
                         setFormData({ name: "", price: "", durationDays: "30", description: "" });
                         setShowModal(true);
                     }}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+                    className="px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 font-medium"
                 >
-                    <span>+ เพิ่มแพ็คเกจ</span>
+                    <span className="text-lg">+</span> เพิ่มแพ็คเกจ
                 </button>
             </div>
 
+            {/* Content */}
             {loading ? (
-                <div className="text-center py-20 text-gray-400">กำลังโหลด...</div>
+                <div className="flex items-center justify-center py-32">
+                    <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+            ) : packages.length === 0 ? (
+                <div className="text-center py-24 bg-gradient-to-b from-[#1a1a2e] to-[#16162a] rounded-2xl border border-[#2a2a4a]">
+                    <div className="w-20 h-20 bg-[#252545] rounded-full flex items-center justify-center mx-auto mb-6 text-4xl">📦</div>
+                    <h3 className="text-xl font-semibold text-white mb-2">ยังไม่มีแพ็คเกจ</h3>
+                    <p className="text-gray-400 mb-6">เริ่มต้นสร้างแพ็คเกจแรกของคุณ</p>
+                    <button
+                        onClick={() => setShowModal(true)}
+                        className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors"
+                    >
+                        + สร้างแพ็คเกจ
+                    </button>
+                </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {packages.map(pkg => (
-                        <div key={pkg.id} className="bg-[#1e1e1e] border border-[#333] rounded-xl p-6 relative group hover:border-indigo-500 transition-colors">
-                            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-                                <button
-                                    onClick={() => {
-                                        setEditId(pkg.id);
-                                        setFormData({
-                                            name: pkg.name,
-                                            price: String(pkg.price),
-                                            durationDays: String(pkg.durationDays),
-                                            description: pkg.description || ""
-                                        });
-                                        setShowModal(true);
-                                    }}
-                                    className="p-1 hover:bg-[#333] rounded text-gray-400 hover:text-white"
-                                >
+                    {packages.map((pkg, i) => (
+                        <div
+                            key={pkg.id}
+                            className="relative bg-gradient-to-b from-[#1e1e2e] to-[#1a1a28] border border-[#2a2a4a] rounded-2xl p-6 group hover:border-indigo-500/50 transition-all hover:shadow-xl hover:shadow-indigo-500/10"
+                        >
+                            {/* Popular Badge (for first item) */}
+                            {i === 0 && packages.length > 1 && (
+                                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full text-xs font-bold text-white shadow-lg">
+                                    ⭐ ยอดนิยม
+                                </div>
+                            )}
+
+                            {/* Actions */}
+                            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                <button onClick={() => openEdit(pkg)} className="w-8 h-8 flex items-center justify-center bg-[#333355] hover:bg-[#444466] rounded-lg text-gray-300 hover:text-white transition-colors">
                                     ✏️
                                 </button>
-                                <button
-                                    onClick={() => handleDelete(pkg.id)}
-                                    className="p-1 hover:bg-[#333] rounded text-red-400 hover:text-red-300"
-                                >
+                                <button onClick={() => handleDelete(pkg.id)} className="w-8 h-8 flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 rounded-lg text-red-400 hover:text-red-300 transition-colors">
                                     🗑️
                                 </button>
                             </div>
 
-                            <h3 className="text-xl font-bold text-white mb-2">{pkg.name}</h3>
-                            <div className="flex items-baseline gap-1 mb-4">
-                                <span className="text-3xl font-bold text-indigo-400">฿{pkg.price.toLocaleString()}</span>
-                                <span className="text-gray-500">/ {pkg.durationDays} วัน</span>
-                            </div>
-                            <p className="text-gray-400 text-sm h-12 overflow-hidden">{pkg.description || "-"}</p>
-
-                            <div className="mt-4 pt-4 border-t border-[#333] flex justify-between items-center">
-                                <span className={`text-xs px-2 py-1 rounded-full ${pkg.isActive ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500"}`}>
-                                    {pkg.isActive ? "ใช้งานอยู่" : "ปิดใช้งาน"}
+                            {/* Content */}
+                            <div className="mb-6">
+                                <h3 className="text-xl font-bold text-white mb-1">{pkg.name}</h3>
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${pkg.isActive ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}`}>
+                                    {pkg.isActive ? "● เปิดใช้งาน" : "○ ปิดใช้งาน"}
                                 </span>
+                            </div>
+
+                            {/* Price */}
+                            <div className="mb-6">
+                                <div className="flex items-baseline gap-1">
+                                    <span className="text-4xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+                                        ฿{pkg.price.toLocaleString()}
+                                    </span>
+                                </div>
+                                <span className="text-gray-500 text-sm">/ {pkg.durationDays} วัน</span>
+                            </div>
+
+                            {/* Description */}
+                            <div className="min-h-[60px] text-gray-400 text-sm border-t border-[#2a2a4a] pt-4">
+                                {pkg.description || <span className="text-gray-600 italic">ไม่มีรายละเอียด</span>}
                             </div>
                         </div>
                     ))}
                 </div>
             )}
 
-            {/* Create/Edit Modal */}
+            {/* Modal */}
             {showModal && (
-                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-                    <div className="bg-[#1e1e1e] rounded-xl border border-[#333] w-full max-w-md p-6">
-                        <h2 className="text-xl font-bold text-white mb-6">
-                            {editId ? "แก้ไขแพ็คเกจ" : "เพิ่มแพ็คเกจใหม่"}
-                        </h2>
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowModal(false)}>
+                    <div
+                        className="bg-gradient-to-b from-[#1e1e2e] to-[#16162a] rounded-2xl border border-[#2a2a4a] w-full max-w-md shadow-2xl"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        {/* Modal Header */}
+                        <div className="p-6 border-b border-[#2a2a4a] flex items-center justify-between">
+                            <h2 className="text-xl font-bold text-white flex items-center gap-3">
+                                <span className="w-8 h-8 bg-indigo-500/20 rounded-lg flex items-center justify-center text-indigo-400">
+                                    {editId ? "✏️" : "📦"}
+                                </span>
+                                {editId ? "แก้ไขแพ็คเกจ" : "เพิ่มแพ็คเกจใหม่"}
+                            </h2>
+                            <button onClick={() => setShowModal(false)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-[#333355] rounded-lg transition-colors">
+                                ✕
+                            </button>
+                        </div>
 
-                        <form onSubmit={handleSubmit} className="space-y-4">
+                        {/* Modal Body */}
+                        <form onSubmit={handleSubmit} className="p-6 space-y-5">
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1">ชื่อแพ็คเกจ</label>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">ชื่อแพ็คเกจ</label>
                                 <input
                                     type="text"
                                     value={formData.name}
                                     onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                    className="w-full bg-[#111] border border-[#333] rounded-lg px-4 py-2 text-white outline-none focus:border-indigo-500"
-                                    placeholder="เช่น Silver Plan, 30 Days"
+                                    className="w-full bg-[#12121e] border border-[#2a2a4a] rounded-xl px-4 py-3 text-white placeholder-gray-600 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                                    placeholder="เช่น Silver, Gold, Premium"
                                     required
                                 />
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-400 mb-1">ราคา (บาท)</label>
-                                    <input
-                                        type="number"
-                                        value={formData.price}
-                                        onChange={e => setFormData({ ...formData, price: e.target.value })}
-                                        className="w-full bg-[#111] border border-[#333] rounded-lg px-4 py-2 text-white outline-none focus:border-indigo-500"
-                                        placeholder="1500"
-                                        required
-                                        min="0"
-                                    />
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">ราคา (บาท)</label>
+                                    <div className="relative">
+                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">฿</span>
+                                        <input
+                                            type="number"
+                                            value={formData.price}
+                                            onChange={e => setFormData({ ...formData, price: e.target.value })}
+                                            className="w-full bg-[#12121e] border border-[#2a2a4a] rounded-xl pl-8 pr-4 py-3 text-white placeholder-gray-600 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                                            placeholder="1500"
+                                            required
+                                            min="0"
+                                        />
+                                    </div>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-400 mb-1">จำนวนวัน</label>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">จำนวนวัน</label>
                                     <input
                                         type="number"
                                         value={formData.durationDays}
                                         onChange={e => setFormData({ ...formData, durationDays: e.target.value })}
-                                        className="w-full bg-[#111] border border-[#333] rounded-lg px-4 py-2 text-white outline-none focus:border-indigo-500"
+                                        className="w-full bg-[#12121e] border border-[#2a2a4a] rounded-xl px-4 py-3 text-white placeholder-gray-600 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                                         placeholder="30"
                                         required
                                         min="1"
@@ -220,28 +259,29 @@ function PackagesContent() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1">รายละเอียด (Optional)</label>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">รายละเอียด <span className="text-gray-600">(ไม่บังคับ)</span></label>
                                 <textarea
                                     value={formData.description}
                                     onChange={e => setFormData({ ...formData, description: e.target.value })}
-                                    className="w-full bg-[#111] border border-[#333] rounded-lg px-4 py-2 text-white outline-none focus:border-indigo-500 h-24 resize-none"
-                                    placeholder="รายละเอียด เช่น เช็คยอดเงินได้, แจ้งเตือน Telegram"
+                                    className="w-full bg-[#12121e] border border-[#2a2a4a] rounded-xl px-4 py-3 text-white placeholder-gray-600 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all h-24 resize-none"
+                                    placeholder="ฟีเจอร์ที่รวมในแพ็คเกจ..."
                                 />
                             </div>
 
-                            <div className="flex justify-end gap-3 mt-8">
+                            {/* Modal Footer */}
+                            <div className="flex gap-3 pt-4">
                                 <button
                                     type="button"
                                     onClick={() => setShowModal(false)}
-                                    className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+                                    className="flex-1 px-4 py-3 bg-[#252545] hover:bg-[#303060] text-gray-300 rounded-xl transition-colors font-medium"
                                 >
                                     ยกเลิก
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
+                                    className="flex-1 px-4 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl transition-all shadow-lg shadow-indigo-500/25 font-medium"
                                 >
-                                    บันทึก
+                                    {editId ? "บันทึกการแก้ไข" : "สร้างแพ็คเกจ"}
                                 </button>
                             </div>
                         </form>
