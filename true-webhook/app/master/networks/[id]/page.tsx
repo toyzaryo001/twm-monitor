@@ -267,7 +267,7 @@ export default function NetworkSettingsPage() {
                                         }
                                     </div>
                                     <div style={{ fontSize: 13, color: "#9ca3af" }}>
-                                        หมดอายุวันที่: {new Date(form.expiredAt).toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })}
+                                        หมดอายุวันที่: {new Date(form.expiredAt).toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric", calendar: "gregory" })}
                                     </div>
                                 </div>
                             </div>
