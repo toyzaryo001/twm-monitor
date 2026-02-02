@@ -1,47 +1,26 @@
 import { Router } from "express";
 import { prisma } from "../../lib/prisma";
+import { uploadToCloudinary } from "../../lib/cloudinary";
 import multer from "multer";
-import path from "path";
-import fs from "fs";
 
 const router = Router({ mergeParams: true });
 
-// Configure Multer for disk storage
-const uploadDir = path.join(process.cwd(), "public/uploads/slips");
-
-// Ensure directory exists
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-        const ext = path.extname(file.originalname);
-        cb(null, `slip-${uniqueSuffix}${ext}`);
-    }
-});
-
+// Configure Multer for memory storage (for Cloudinary upload)
 const upload = multer({
-    storage,
+    storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
     fileFilter: (req, file, cb) => {
         const allowedTypes = /jpeg|jpg|png|webp/;
-        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
         const mimetype = allowedTypes.test(file.mimetype);
 
-        if (extname && mimetype) {
+        if (mimetype) {
             return cb(null, true);
         }
         cb(new Error("Only images are allowed!"));
     }
 });
 
-// Upload Slip & Create Request
-// Expected body: packageId, amount (will be verified against package price ideally, but user input for now)
+// Upload Slip & Create Request (uses Cloudinary)
 router.post("/upload", upload.single("slip"), async (req: any, res: any, next: any) => {
     try {
         if (!req.file) {
@@ -74,7 +53,9 @@ router.post("/upload", upload.single("slip"), async (req: any, res: any, next: a
             return res.status(404).json({ ok: false, error: "PACKAGE_NOT_FOUND" });
         }
 
-        const slipUrl = `/uploads/slips/${req.file.filename}`;
+        // Upload to Cloudinary
+        const uploadResult = await uploadToCloudinary(req.file.buffer, `slips/${prefix}`);
+        const slipUrl = uploadResult.url;
 
         const request = await (prisma as any).paymentRequest.create({
             data: {
@@ -88,6 +69,7 @@ router.post("/upload", upload.single("slip"), async (req: any, res: any, next: a
 
         return res.status(201).json({ ok: true, data: request });
     } catch (err) {
+        console.error("Upload error:", err);
         next(err);
     }
 });
