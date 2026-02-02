@@ -102,31 +102,32 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
                                     position: "relative",
                                     display: "inline-flex",
                                     alignItems: "center",
-                                    gap: 4,
-                                    fontSize: 10,
-                                    fontWeight: 700,
+                                    fontSize: 11,
+                                    fontWeight: 800,
                                     letterSpacing: 0.5,
                                     background: network.currentPackage.toUpperCase().includes("PRO")
-                                        ? "linear-gradient(180deg, #a855f7 0%, #7c3aed 100%)"
-                                        : "linear-gradient(180deg, #60a5fa 0%, #2563eb 100%)",
-                                    color: "#fff",
-                                    padding: "3px 10px",
+                                        ? "linear-gradient(135deg, #e9d5ff 0%, #c4b5fd 50%, #a78bfa 100%)"
+                                        : "linear-gradient(135deg, #bfdbfe 0%, #93c5fd 50%, #60a5fa 100%)",
+                                    color: "#1e1b4b",
+                                    padding: "4px 12px",
                                     borderRadius: 6,
                                     textTransform: "uppercase",
-                                    boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
-                                    border: "1px solid rgba(255,255,255,0.3)",
-                                    overflow: "hidden"
+                                    boxShadow: "0 6px 20px rgba(0,0,0,0.35), 0 2px 4px rgba(0,0,0,0.2)",
+                                    border: "1px solid rgba(255,255,255,0.6)",
+                                    overflow: "hidden",
+                                    transform: "translateY(-1px)"
                                 }}>
+                                    {/* Glass shine overlay */}
                                     <span style={{
                                         position: "absolute",
                                         top: 0,
                                         left: 0,
                                         right: 0,
                                         height: "50%",
-                                        background: "linear-gradient(180deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.05) 100%)",
+                                        background: "linear-gradient(180deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0.2) 100%)",
                                         borderRadius: "6px 6px 0 0"
                                     }} />
-                                    <span style={{ position: "relative", zIndex: 1 }}>
+                                    <span style={{ position: "relative", zIndex: 1, textShadow: "0 1px 0 rgba(255,255,255,0.5)" }}>
                                         {network.currentPackage.toUpperCase()}
                                     </span>
                                 </span>
