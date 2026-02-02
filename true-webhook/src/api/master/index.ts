@@ -21,6 +21,7 @@ import announcementsRouter from "./announcements";
 import packagesRouter from "./packages";
 import paymentsRouter from "./payments";
 import bankSettingsRouter from "./bankSettings";
+import contactSettingsRouter from "./contactSettings";
 
 // Users management
 router.use("/users", usersRouter);
@@ -37,6 +38,9 @@ router.use("/payments", paymentsRouter);
 
 // Bank settings
 router.use("/bank-settings", bankSettingsRouter);
+
+// Contact settings
+router.use("/contact-settings", contactSettingsRouter);
 
 // Dashboard overview
 router.get("/overview", requireAuth, requireMaster, async (req, res, next) => {

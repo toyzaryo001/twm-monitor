@@ -20,6 +20,7 @@ const navItems = [
     { href: "/master/announcements", label: "จัดการประกาศ", icon: "📢" },
     { href: "/master/users", label: "จัดการผู้ใช้", icon: "👥" },
     { href: "/master/bank-settings", label: "บัญชีรับเงิน", icon: "🏦" },
+    { href: "/master/contact-settings", label: "ช่องทางติดต่อ", icon: "📞" },
     { href: "/master/settings", label: "ตั้งค่า", icon: "⚙️" },
 ];
 
