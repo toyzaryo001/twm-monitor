@@ -49,10 +49,31 @@ export default function ExpiredPage() {
                 padding: "16px 32px",
                 background: "#1e1e1e",
                 borderRadius: 8,
-                border: "1px solid #333"
+                border: "1px solid #333",
+                marginBottom: 24
             }}>
                 ID: {prefix}
             </div>
+
+            <a
+                href={`/tenant/${prefix}/packages`}
+                style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "16px 32px",
+                    background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                    color: "white",
+                    borderRadius: 12,
+                    fontSize: 18,
+                    fontWeight: 600,
+                    textDecoration: "none",
+                    transition: "all 0.2s",
+                    boxShadow: "0 4px 20px rgba(99, 102, 241, 0.3)"
+                }}
+            >
+                🔄 ต่ออายุบริการ
+            </a>
         </div>
     );
 }
