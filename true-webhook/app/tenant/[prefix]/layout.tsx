@@ -99,26 +99,37 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
                             <span className="tenant-brand-text">{prefix.toUpperCase()} Panel</span>
                             {network?.currentPackage && (
                                 <span style={{
+                                    position: "relative",
                                     display: "inline-flex",
                                     alignItems: "center",
-                                    gap: 4,
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    letterSpacing: 0.5,
+                                    gap: 6,
+                                    fontSize: 13,
+                                    fontWeight: 900,
+                                    letterSpacing: 1,
                                     background: network.currentPackage.toUpperCase().includes("PRO")
-                                        ? "linear-gradient(135deg, #8b5cf6 0%, #a855f7 50%, #c084fc 100%)"
-                                        : "linear-gradient(135deg, #3b82f6 0%, #60a5fa 50%, #93c5fd 100%)",
-                                    color: "#ffffff",
-                                    padding: "5px 14px",
-                                    borderRadius: 6,
+                                        ? "linear-gradient(180deg, #a855f7 0%, #7c3aed 100%)"
+                                        : "linear-gradient(180deg, #60a5fa 0%, #2563eb 100%)",
+                                    color: "#fff",
+                                    padding: "6px 16px",
+                                    borderRadius: 8,
                                     textTransform: "uppercase",
-                                    boxShadow: network.currentPackage.toUpperCase().includes("PRO")
-                                        ? "0 4px 15px rgba(139, 92, 246, 0.5), inset 0 1px 0 rgba(255,255,255,0.3)"
-                                        : "0 4px 15px rgba(59, 130, 246, 0.5), inset 0 1px 0 rgba(255,255,255,0.3)",
-                                    border: "1px solid rgba(255,255,255,0.2)",
-                                    textShadow: "0 1px 2px rgba(0,0,0,0.3)"
+                                    boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                                    border: "1px solid rgba(255,255,255,0.3)",
+                                    overflow: "hidden"
                                 }}>
-                                    {network.currentPackage.toUpperCase().includes("PRO") ? "👑" : "💎"} {network.currentPackage}
+                                    {/* Glass shine effect */}
+                                    <span style={{
+                                        position: "absolute",
+                                        top: 0,
+                                        left: 0,
+                                        right: 0,
+                                        height: "50%",
+                                        background: "linear-gradient(180deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.1) 100%)",
+                                        borderRadius: "8px 8px 0 0"
+                                    }} />
+                                    <span style={{ position: "relative", zIndex: 1 }}>
+                                        {network.currentPackage.toUpperCase().includes("PRO") ? "👑" : "💎"} {network.currentPackage.toUpperCase()}
+                                    </span>
                                 </span>
                             )}
                         </div>
