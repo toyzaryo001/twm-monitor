@@ -94,20 +94,23 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
             <div className="tenant-theme">
                 <div className="tenant-layout">
                     <header className="tenant-navbar">
-                        <div className="tenant-brand" style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <span className="tenant-brand-icon">🔶</span>
-                                <span className="tenant-brand-text">{prefix.toUpperCase()} Panel</span>
-                            </div>
+                        <div className="tenant-brand" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <span className="tenant-brand-icon">🔶</span>
+                            <span className="tenant-brand-text">{prefix.toUpperCase()} Panel</span>
                             {network?.currentPackage && (
                                 <span style={{
-                                    fontSize: 11,
-                                    color: "#f59e0b",
-                                    fontWeight: 600,
-                                    marginLeft: 28,
-                                    marginTop: -2
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    letterSpacing: 1,
+                                    background: "linear-gradient(135deg, #fbbf24, #f59e0b, #d97706)",
+                                    color: "#1a1a2e",
+                                    padding: "3px 10px",
+                                    borderRadius: 4,
+                                    textTransform: "uppercase",
+                                    boxShadow: "0 2px 8px rgba(251, 191, 36, 0.4)",
+                                    border: "1px solid rgba(251, 191, 36, 0.5)"
                                 }}>
-                                    📦 {network.currentPackage}
+                                    ⭐ {network.currentPackage}
                                 </span>
                             )}
                         </div>
