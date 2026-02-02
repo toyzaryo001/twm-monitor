@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { useToast } from "../../../components/Toast";
+import { BankLogoByName } from "../../../components/BankLogo";
 
 interface Package {
     id: string;
@@ -141,9 +142,7 @@ export default function TenantPackagesPage() {
                             {bankInfo && bankInfo.bankAccountNumber ? (
                                 <div style={{ background: "var(--bg-secondary)", padding: 20, borderRadius: 12 }}>
                                     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-                                        <div style={{ width: 40, height: 40, background: "linear-gradient(135deg, #22c55e, #16a34a)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
-                                            🏦
-                                        </div>
+                                        <BankLogoByName bankName={bankInfo.bankName || ""} size={48} />
                                         <div>
                                             <div style={{ fontWeight: 600, color: "white" }}>{bankInfo.bankName || "ธนาคาร"}</div>
                                             <div style={{ fontSize: 12, color: "var(--text-muted)" }}>กรุณาโอนตามยอดที่ระบุ</div>

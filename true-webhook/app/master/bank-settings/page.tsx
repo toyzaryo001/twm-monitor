@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useToast } from "../../components/Toast";
+import { getAllBanks, BankLogo, getBankCode } from "../../components/BankLogo";
 
 interface BankSettings {
     bankName: string;
@@ -19,6 +20,7 @@ export default function BankSettingsPage() {
         bankAccountName: "",
     });
 
+    const banks = getAllBanks();
     const getToken = () => localStorage.getItem("token") || "";
 
     useEffect(() => {
@@ -70,6 +72,8 @@ export default function BankSettingsPage() {
         setSaving(false);
     };
 
+    const selectedBankCode = getBankCode(form.bankName);
+
     if (loading) return <div className="loading"><div className="spinner" /></div>;
 
     return (
@@ -89,15 +93,37 @@ export default function BankSettingsPage() {
                     </p>
 
                     <div className="form-group">
-                        <label className="form-label">ชื่อธนาคาร</label>
-                        <input
-                            type="text"
+                        <label className="form-label">เลือกธนาคาร</label>
+                        <select
                             className="form-input"
                             value={form.bankName}
                             onChange={(e) => setForm({ ...form, bankName: e.target.value })}
-                            placeholder="เช่น กสิกรไทย, กรุงเทพ, ไทยพาณิชย์"
-                        />
+                            style={{ cursor: "pointer" }}
+                        >
+                            <option value="">-- เลือกธนาคาร --</option>
+                            {banks.map(bank => (
+                                <option key={bank.code} value={bank.name}>
+                                    {bank.name} ({bank.symbol})
+                                </option>
+                            ))}
+                        </select>
                     </div>
+
+                    {/* Bank Logo Preview */}
+                    {selectedBankCode && (
+                        <div style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 12,
+                            padding: 16,
+                            background: "rgba(34, 197, 94, 0.1)",
+                            borderRadius: 8,
+                            marginBottom: 16
+                        }}>
+                            <BankLogo bankCode={selectedBankCode} size={48} />
+                            <span style={{ fontWeight: 600, color: "#22c55e" }}>{form.bankName}</span>
+                        </div>
+                    )}
 
                     <div className="form-group">
                         <label className="form-label">เลขบัญชี</label>
@@ -132,16 +158,20 @@ export default function BankSettingsPage() {
                         }}>
                             <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 12 }}>ตัวอย่างที่ลูกค้าจะเห็น:</div>
                             <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                                <div style={{
-                                    width: 48,
-                                    height: 48,
-                                    background: "linear-gradient(135deg, #22c55e, #16a34a)",
-                                    borderRadius: 12,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    fontSize: 22
-                                }}>🏦</div>
+                                {selectedBankCode ? (
+                                    <BankLogo bankCode={selectedBankCode} size={56} />
+                                ) : (
+                                    <div style={{
+                                        width: 56,
+                                        height: 56,
+                                        background: "linear-gradient(135deg, #22c55e, #16a34a)",
+                                        borderRadius: 12,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        fontSize: 24
+                                    }}>🏦</div>
+                                )}
                                 <div>
                                     <div style={{ fontWeight: 600, color: "white", fontSize: 16 }}>{form.bankName}</div>
                                     <div style={{ fontSize: 22, fontFamily: "monospace", color: "#22c55e", fontWeight: 700 }}>{form.bankAccountNumber}</div>
