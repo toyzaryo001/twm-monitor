@@ -35,9 +35,14 @@ router.get("/stats", async (req: Request<{ prefix: string }>, res: Response, nex
             return res.status(404).json({ ok: false, error: "NETWORK_NOT_FOUND" });
         }
 
-        const [accountCount, activeAccounts] = await Promise.all([
+        const [accountCount, activeAccounts, latestPayment] = await Promise.all([
             prisma.account.count({ where: { networkId: network.id } }),
             prisma.account.count({ where: { networkId: network.id, isActive: true } }),
+            (prisma as any).paymentRequest.findFirst({
+                where: { networkId: network.id, status: "APPROVED" },
+                orderBy: { updatedAt: "desc" },
+                include: { package: { select: { name: true } } }
+            })
         ]);
 
         return res.json({
@@ -63,6 +68,7 @@ router.get("/stats", async (req: Request<{ prefix: string }>, res: Response, nex
                     // @ts-ignore
                     featureAutoWithdraw: network.featureAutoWithdraw ?? false,
                     expiredAt: (network as any).expiredAt,
+                    currentPackage: latestPayment?.package?.name || null,
                 },
                 stats: { total: accountCount, active: activeAccounts },
             },

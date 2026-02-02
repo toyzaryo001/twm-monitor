@@ -43,11 +43,14 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
         })
             .then(res => res.json())
             .then(data => {
-                if (data.ok && data.data.network.expiredAt) {
-                    const expiredAt = new Date(data.data.network.expiredAt);
-                    if (new Date() > expiredAt) {
-                        router.push(`/tenant/${prefix}/expired`);
-                        return;
+                if (data.ok) {
+                    setNetwork(data.data.network);
+                    if (data.data.network.expiredAt) {
+                        const expiredAt = new Date(data.data.network.expiredAt);
+                        if (new Date() > expiredAt) {
+                            router.push(`/tenant/${prefix}/expired`);
+                            return;
+                        }
                     }
                 }
                 setLoading(false);
@@ -94,6 +97,19 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
                         <div className="tenant-brand">
                             <span className="tenant-brand-icon">🔶</span>
                             <span className="tenant-brand-text">{prefix.toUpperCase()} Panel</span>
+                            {network?.currentPackage && (
+                                <span style={{
+                                    fontSize: 10,
+                                    background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                                    color: "white",
+                                    padding: "2px 8px",
+                                    borderRadius: 6,
+                                    fontWeight: 600,
+                                    marginLeft: 8
+                                }}>
+                                    {network.currentPackage}
+                                </span>
+                            )}
                         </div>
                         <div className="tenant-menu">
                             <Link href={`/tenant/${prefix}/dashboard`} className={`tenant-menu-item ${pathname?.includes("/dashboard") ? "active" : ""}`}>
