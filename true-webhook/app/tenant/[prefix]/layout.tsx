@@ -80,7 +80,7 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
                     <div style={{ padding: "20px", maxWidth: 1200, margin: "0 auto" }}>
                         <div style={{ marginBottom: 20, display: "flex", alignItems: "center", gap: 16 }}>
                             <span style={{ fontSize: 24 }}>🔶</span>
-                            <span style={{ fontSize: 20, fontWeight: 700 }}>{prefix.toUpperCase()} - ต่ออายุบริการ</span>
+                            <span style={{ fontSize: 20, fontWeight: 700 }}>{prefix.toUpperCase()} - แพ็คเกจ</span>
                         </div>
                         {children}
                     </div>

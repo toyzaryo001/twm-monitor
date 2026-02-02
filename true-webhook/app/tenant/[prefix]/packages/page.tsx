@@ -209,7 +209,7 @@ export default function TenantPackagesPage() {
         <div style={{ padding: 24 }}>
             <div className="page-header">
                 <div>
-                    <h1 className="page-title">เลือกแพ็คเกจต่ออายุ</h1>
+                    <h1 className="page-title">เลือกแพ็คเกจ</h1>
                     <p style={{ color: "var(--text-muted)", marginTop: 4 }}>เลือกแผนที่เหมาะสมกับการใช้งานของคุณ</p>
                 </div>
             </div>
