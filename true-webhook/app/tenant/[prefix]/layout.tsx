@@ -94,20 +94,20 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
             <div className="tenant-theme">
                 <div className="tenant-layout">
                     <header className="tenant-navbar">
-                        <div className="tenant-brand">
-                            <span className="tenant-brand-icon">🔶</span>
-                            <span className="tenant-brand-text">{prefix.toUpperCase()} Panel</span>
+                        <div className="tenant-brand" style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <span className="tenant-brand-icon">🔶</span>
+                                <span className="tenant-brand-text">{prefix.toUpperCase()} Panel</span>
+                            </div>
                             {network?.currentPackage && (
                                 <span style={{
-                                    fontSize: 10,
-                                    background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-                                    color: "white",
-                                    padding: "2px 8px",
-                                    borderRadius: 6,
+                                    fontSize: 11,
+                                    color: "#f59e0b",
                                     fontWeight: 600,
-                                    marginLeft: 8
+                                    marginLeft: 28,
+                                    marginTop: -2
                                 }}>
-                                    {network.currentPackage}
+                                    📦 {network.currentPackage}
                                 </span>
                             )}
                         </div>
