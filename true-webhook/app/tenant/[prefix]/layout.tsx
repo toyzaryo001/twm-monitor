@@ -102,33 +102,32 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
                                     position: "relative",
                                     display: "inline-flex",
                                     alignItems: "center",
-                                    gap: 6,
-                                    fontSize: 13,
-                                    fontWeight: 900,
-                                    letterSpacing: 1,
+                                    gap: 4,
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    letterSpacing: 0.5,
                                     background: network.currentPackage.toUpperCase().includes("PRO")
                                         ? "linear-gradient(180deg, #a855f7 0%, #7c3aed 100%)"
                                         : "linear-gradient(180deg, #60a5fa 0%, #2563eb 100%)",
                                     color: "#fff",
-                                    padding: "6px 16px",
-                                    borderRadius: 8,
+                                    padding: "3px 10px",
+                                    borderRadius: 6,
                                     textTransform: "uppercase",
-                                    boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                                    boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
                                     border: "1px solid rgba(255,255,255,0.3)",
                                     overflow: "hidden"
                                 }}>
-                                    {/* Glass shine effect */}
                                     <span style={{
                                         position: "absolute",
                                         top: 0,
                                         left: 0,
                                         right: 0,
                                         height: "50%",
-                                        background: "linear-gradient(180deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.1) 100%)",
-                                        borderRadius: "8px 8px 0 0"
+                                        background: "linear-gradient(180deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.05) 100%)",
+                                        borderRadius: "6px 6px 0 0"
                                     }} />
                                     <span style={{ position: "relative", zIndex: 1 }}>
-                                        {network.currentPackage.toUpperCase().includes("PRO") ? "👑" : "💎"} {network.currentPackage.toUpperCase()}
+                                        {network.currentPackage.toUpperCase()}
                                     </span>
                                 </span>
                             )}
