@@ -1,12 +1,11 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { PrismaClient } from "@prisma/client";
-import { requireMaster } from "../../middleware/auth";
+import { prisma } from "../../lib/prisma";
+import { requireAuth, requireMaster } from "../../middleware/auth";
 
 const router = Router();
-const prisma = new PrismaClient();
 
 // Get contact settings
-router.get("/", requireMaster, async (req: Request, res: Response, next: NextFunction) => {
+router.get("/", requireAuth, requireMaster, async (req: Request, res: Response, next: NextFunction) => {
     try {
         const keys = ["contactLineId", "contactLineUrl", "contactFacebookUrl", "contactTelegramUrl", "contactPhone", "contactEmail"];
 
@@ -36,7 +35,7 @@ router.get("/", requireMaster, async (req: Request, res: Response, next: NextFun
 });
 
 // Update contact settings
-router.put("/", requireMaster, async (req: Request, res: Response, next: NextFunction) => {
+router.put("/", requireAuth, requireMaster, async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { lineId, lineUrl, facebookUrl, telegramUrl, phone, email } = req.body;
 
