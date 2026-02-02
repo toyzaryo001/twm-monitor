@@ -50,11 +50,6 @@ export default function NetworkSettingsPage() {
         notifyMoneyIn: true,
         notifyMoneyOut: true,
         notifyMinAmount: 0,
-
-        // Bank settings
-        bankName: "",
-        bankAccountNumber: "",
-        bankAccountName: "",
     });
 
     const getToken = () => localStorage.getItem("token") || "";
@@ -85,9 +80,6 @@ export default function NetworkSettingsPage() {
                     notifyMoneyIn: data.data.notifyMoneyIn ?? true,
                     notifyMoneyOut: data.data.notifyMoneyOut ?? true,
                     notifyMinAmount: data.data.notifyMinAmount ?? 0,
-                    bankName: data.data.bankName || "",
-                    bankAccountNumber: data.data.bankAccountNumber || "",
-                    bankAccountName: data.data.bankAccountName || "",
                 });
             }
         } catch (e) {
@@ -349,77 +341,6 @@ export default function NetworkSettingsPage() {
                             <p style={{ color: "#9ca3af", fontSize: 13, marginTop: 6 }}>
                                 ⚠️ ยิ่งเร็วยิ่งใช้ทรัพยากรมาก และอาจถูก rate limit จาก API
                             </p>
-                        </div>
-                    )}
-                </div>
-
-                {/* Bank Account Settings */}
-                <div className="card" style={{ marginBottom: 24 }}>
-                    <h2 style={{ fontSize: 18, marginBottom: 20, color: "#22c55e" }}>🏦 บัญชีรับเงิน (สำหรับต่ออายุ)</h2>
-                    <p style={{ color: "#9ca3af", fontSize: 13, marginBottom: 20 }}>
-                        ตั้งค่าบัญชีธนาคารที่จะแสดงให้ลูกค้าโอนเงินเมื่อต้องการต่ออายุบริการ
-                    </p>
-
-                    <div className="form-group">
-                        <label className="form-label">ชื่อธนาคาร</label>
-                        <input
-                            type="text"
-                            className="form-input"
-                            value={form.bankName}
-                            onChange={(e) => setForm({ ...form, bankName: e.target.value })}
-                            placeholder="เช่น กสิกรไทย, กรุงเทพ, ไทยพาณิชย์"
-                        />
-                    </div>
-
-                    <div className="form-group">
-                        <label className="form-label">เลขบัญชี</label>
-                        <input
-                            type="text"
-                            className="form-input"
-                            value={form.bankAccountNumber}
-                            onChange={(e) => setForm({ ...form, bankAccountNumber: e.target.value })}
-                            placeholder="เช่น 123-4-56789-0"
-                        />
-                    </div>
-
-                    <div className="form-group">
-                        <label className="form-label">ชื่อบัญชี</label>
-                        <input
-                            type="text"
-                            className="form-input"
-                            value={form.bankAccountName}
-                            onChange={(e) => setForm({ ...form, bankAccountName: e.target.value })}
-                            placeholder="เช่น บจก. ทรูเว็บฮุก หรือ ชื่อ-นามสกุล"
-                        />
-                    </div>
-
-                    {/* Preview */}
-                    {form.bankName && form.bankAccountNumber && (
-                        <div style={{
-                            marginTop: 16,
-                            padding: 16,
-                            background: "rgba(34, 197, 94, 0.1)",
-                            borderRadius: 12,
-                            border: "1px solid rgba(34, 197, 94, 0.3)"
-                        }}>
-                            <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 8 }}>ตัวอย่างที่ลูกค้าจะเห็น:</div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                                <div style={{
-                                    width: 40,
-                                    height: 40,
-                                    background: "linear-gradient(135deg, #22c55e, #16a34a)",
-                                    borderRadius: 10,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    fontSize: 18
-                                }}>🏦</div>
-                                <div>
-                                    <div style={{ fontWeight: 600, color: "white" }}>{form.bankName}</div>
-                                    <div style={{ fontSize: 18, fontFamily: "monospace", color: "#22c55e", fontWeight: 700 }}>{form.bankAccountNumber}</div>
-                                    {form.bankAccountName && <div style={{ fontSize: 13, color: "#9ca3af" }}>{form.bankAccountName}</div>}
-                                </div>
-                            </div>
                         </div>
                     )}
                 </div>
