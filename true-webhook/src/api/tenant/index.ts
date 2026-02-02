@@ -9,6 +9,36 @@ const router = Router({ mergeParams: true });
 // Auth routes (no auth required - public endpoints)
 router.use("/auth", authRouter);
 
+// Public: Get contact info (no auth required)
+router.get("/contact-info", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const keys = ["contactLineId", "contactLineUrl", "contactFacebookUrl", "contactTelegramUrl", "contactPhone", "contactEmail"];
+
+        const settings = await prisma.systemSetting.findMany({
+            where: { key: { in: keys } }
+        });
+
+        const settingsMap: Record<string, string> = {};
+        settings.forEach(s => {
+            settingsMap[s.key] = s.value;
+        });
+
+        return res.json({
+            ok: true,
+            data: {
+                lineId: settingsMap.contactLineId || "",
+                lineUrl: settingsMap.contactLineUrl || "",
+                facebookUrl: settingsMap.contactFacebookUrl || "",
+                telegramUrl: settingsMap.contactTelegramUrl || "",
+                phone: settingsMap.contactPhone || "",
+                email: settingsMap.contactEmail || ""
+            }
+        });
+    } catch (err) {
+        next(err);
+    }
+});
+
 // Protected routes below
 router.use(requireAuth, requireNetworkAccess);
 
