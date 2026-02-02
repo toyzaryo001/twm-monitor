@@ -271,6 +271,7 @@ model Package {
   durationDays  Int
   description   String?
   isActive      Boolean   @default(true)
+  isRecommended Boolean   @default(false)
   
   paymentRequests PaymentRequest[]
   

@@ -10,6 +10,7 @@ interface Package {
     durationDays: number;
     description?: string;
     isActive: boolean;
+    isRecommended: boolean;
 }
 
 export default function PackagesPage() {
@@ -24,7 +25,8 @@ export default function PackagesPage() {
         price: "",
         durationDays: "30",
         description: "",
-        isActive: true
+        isActive: true,
+        isRecommended: false
     });
 
     const getToken = () => localStorage.getItem("token") || "";
@@ -48,7 +50,7 @@ export default function PackagesPage() {
     useEffect(() => { fetchPackages(); }, []);
 
     const resetForm = () => {
-        setForm({ name: "", price: "", durationDays: "30", description: "", isActive: true });
+        setForm({ name: "", price: "", durationDays: "30", description: "", isActive: true, isRecommended: false });
         setEditingId(null);
     };
 
@@ -58,7 +60,8 @@ export default function PackagesPage() {
             price: String(pkg.price),
             durationDays: String(pkg.durationDays),
             description: pkg.description || "",
-            isActive: pkg.isActive
+            isActive: pkg.isActive,
+            isRecommended: pkg.isRecommended || false
         });
         setEditingId(pkg.id);
         setShowModal(true);
@@ -90,7 +93,8 @@ export default function PackagesPage() {
             price: Number(form.price),
             durationDays: Number(form.durationDays),
             description: form.description,
-            isActive: form.isActive
+            isActive: form.isActive,
+            isRecommended: form.isRecommended
         };
 
         try {
@@ -143,7 +147,12 @@ export default function PackagesPage() {
                             {packages.map(pkg => (
                                 <tr key={pkg.id}>
                                     <td>
-                                        <div style={{ fontWeight: 600 }}>{pkg.name}</div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                            <div style={{ fontWeight: 600 }}>{pkg.name}</div>
+                                            {pkg.isRecommended && (
+                                                <span style={{ background: "linear-gradient(135deg, #f59e0b, #d97706)", color: "white", fontSize: 10, padding: "2px 8px", borderRadius: 10, fontWeight: 600 }}>แนะนำ</span>
+                                            )}
+                                        </div>
                                         <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
                                             {pkg.description ? (pkg.description.length > 40 ? pkg.description.substring(0, 40) + "..." : pkg.description) : "-"}
                                         </div>
@@ -241,6 +250,20 @@ export default function PackagesPage() {
                                     />
                                     <span>เปิดใช้งาน</span>
                                 </label>
+                            </div>
+
+                            <div className="form-group">
+                                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={form.isRecommended}
+                                        onChange={e => setForm({ ...form, isRecommended: e.target.checked })}
+                                    />
+                                    <span>⭐ แสดงป้าย "แนะนำ"</span>
+                                </label>
+                                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                                    แพ็คเกจที่เลือกจะแสดงป้ายสีส้ม "แนะนำ" ให้ลูกค้าเห็น
+                                </p>
                             </div>
 
                             <div className="modal-actions">

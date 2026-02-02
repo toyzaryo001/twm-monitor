@@ -28,6 +28,7 @@ router.post("/", async (req, res, next) => {
             price: z.number().min(0),
             durationDays: z.number().min(1),
             description: z.string().optional(),
+            isRecommended: z.boolean().optional(),
         });
 
         const data = schema.parse(req.body);
@@ -54,6 +55,7 @@ router.put("/:id", async (req, res, next) => {
             durationDays: z.number().min(1).optional(),
             description: z.string().optional(),
             isActive: z.boolean().optional(),
+            isRecommended: z.boolean().optional(),
         });
 
         const data = schema.parse(req.body);

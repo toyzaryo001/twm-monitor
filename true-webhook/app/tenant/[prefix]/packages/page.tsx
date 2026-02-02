@@ -10,6 +10,7 @@ interface Package {
     price: number;
     durationDays: number;
     description: string;
+    isRecommended: boolean;
 }
 
 interface PaymentRequest {
@@ -224,12 +225,12 @@ export default function TenantPackagesPage() {
                             style={{
                                 padding: 0,
                                 overflow: "hidden",
-                                border: index === 0 ? "2px solid var(--primary)" : undefined,
+                                border: pkg.isRecommended ? "2px solid var(--primary)" : undefined,
                                 position: "relative"
                             }}
                         >
                             {/* Popular Badge */}
-                            {index === 0 && packages.length > 1 && (
+                            {pkg.isRecommended && (
                                 <div style={{
                                     position: "absolute",
                                     top: 16,
