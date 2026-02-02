@@ -99,16 +99,26 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
                             <span className="tenant-brand-text">{prefix.toUpperCase()} Panel</span>
                             {network?.currentPackage && (
                                 <span style={{
-                                    display: "inline-block",
-                                    fontSize: 12,
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 4,
+                                    fontSize: 11,
                                     fontWeight: 700,
-                                    background: "#f59e0b",
-                                    color: "#000",
-                                    padding: "4px 12px",
-                                    borderRadius: 4,
-                                    marginLeft: 8
+                                    letterSpacing: 0.5,
+                                    background: network.currentPackage.toUpperCase().includes("PRO")
+                                        ? "linear-gradient(135deg, #8b5cf6 0%, #a855f7 50%, #c084fc 100%)"
+                                        : "linear-gradient(135deg, #3b82f6 0%, #60a5fa 50%, #93c5fd 100%)",
+                                    color: "#ffffff",
+                                    padding: "5px 14px",
+                                    borderRadius: 6,
+                                    textTransform: "uppercase",
+                                    boxShadow: network.currentPackage.toUpperCase().includes("PRO")
+                                        ? "0 4px 15px rgba(139, 92, 246, 0.5), inset 0 1px 0 rgba(255,255,255,0.3)"
+                                        : "0 4px 15px rgba(59, 130, 246, 0.5), inset 0 1px 0 rgba(255,255,255,0.3)",
+                                    border: "1px solid rgba(255,255,255,0.2)",
+                                    textShadow: "0 1px 2px rgba(0,0,0,0.3)"
                                 }}>
-                                    {network.currentPackage}
+                                    {network.currentPackage.toUpperCase().includes("PRO") ? "👑" : "💎"} {network.currentPackage}
                                 </span>
                             )}
                         </div>
