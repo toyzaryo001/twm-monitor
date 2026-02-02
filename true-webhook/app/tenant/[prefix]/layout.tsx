@@ -99,16 +99,15 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
                             <span className="tenant-brand-text">{prefix.toUpperCase()} Panel</span>
                             {network?.currentPackage && (
                                 <span style={{
-                                    fontSize: 10,
-                                    fontWeight: 700,
-                                    letterSpacing: 1,
-                                    background: "linear-gradient(135deg, #fbbf24, #f59e0b, #d97706)",
-                                    color: "#1a1a2e",
-                                    padding: "3px 10px",
+                                    fontSize: 11,
+                                    fontWeight: 800,
+                                    letterSpacing: 0.5,
+                                    background: "linear-gradient(135deg, #fbbf24, #f59e0b)",
+                                    color: "#000000",
+                                    padding: "4px 10px",
                                     borderRadius: 4,
                                     textTransform: "uppercase",
-                                    boxShadow: "0 2px 8px rgba(251, 191, 36, 0.4)",
-                                    border: "1px solid rgba(251, 191, 36, 0.5)"
+                                    boxShadow: "0 2px 8px rgba(251, 191, 36, 0.4)"
                                 }}>
                                     ⭐ {network.currentPackage}
                                 </span>
