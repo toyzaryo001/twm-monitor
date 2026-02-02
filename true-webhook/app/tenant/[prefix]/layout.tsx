@@ -23,8 +23,8 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
 
 
     useEffect(() => {
-        // Allow public pages (Login, Expired)
-        if (pathname?.includes("/login") || pathname?.includes("/expired")) {
+        // Allow public pages (Login, Expired, Packages for renewal)
+        if (pathname?.includes("/login") || pathname?.includes("/expired") || pathname?.includes("/packages")) {
             setLoading(false);
             return;
         }
@@ -64,6 +64,23 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
             <ToastProvider>
                 <div className="tenant-theme">
                     {children}
+                </div>
+            </ToastProvider>
+        );
+    }
+
+    // Minimal layout for Packages page (when renewing after expiry)
+    if (pathname?.includes("/packages")) {
+        return (
+            <ToastProvider>
+                <div className="tenant-theme">
+                    <div style={{ padding: "20px", maxWidth: 1200, margin: "0 auto" }}>
+                        <div style={{ marginBottom: 20, display: "flex", alignItems: "center", gap: 16 }}>
+                            <span style={{ fontSize: 24 }}>🔶</span>
+                            <span style={{ fontSize: 20, fontWeight: 700 }}>{prefix.toUpperCase()} - ต่ออายุบริการ</span>
+                        </div>
+                        {children}
+                    </div>
                 </div>
             </ToastProvider>
         );
