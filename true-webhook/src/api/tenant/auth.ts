@@ -5,6 +5,10 @@ import { verifyPassword, signToken } from "../../lib/auth";
 
 const router = Router({ mergeParams: true });
 
+function isLocalJga88(prefix: string) {
+    return process.env.LOCAL_JGA88_MODE === "true" && prefix === "jga88";
+}
+
 // Tenant Login (for network users)
 router.post("/login", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     try {
@@ -15,6 +19,33 @@ router.post("/login", async (req: Request<{ prefix: string }>, res: Response, ne
 
         const { username, password } = schema.parse(req.body);
         const prefix = req.params.prefix;
+
+        if (isLocalJga88(prefix)) {
+            if (username !== "jga88" || password !== "Jga112233") {
+                return res.status(401).json({ ok: false, error: "INVALID_CREDENTIALS" });
+            }
+
+            const token = signToken({
+                userId: "local-jga88-user",
+                email: "jga88",
+                role: "NETWORK_ADMIN",
+                networkId: "local-jga88-network",
+            }, 6 * 60 * 60 * 1000);
+
+            return res.json({
+                ok: true,
+                data: {
+                    token,
+                    user: {
+                        id: "local-jga88-user",
+                        email: "jga88",
+                        displayName: "JGA88 Admin",
+                        role: "NETWORK_ADMIN",
+                        network: { id: "local-jga88-network", name: "JGA88", prefix: "jga88" },
+                    },
+                },
+            });
+        }
 
         // Find the network first
         const network = await prisma.network.findUnique({
@@ -86,6 +117,13 @@ router.post("/login", async (req: Request<{ prefix: string }>, res: Response, ne
 // Check network status (public endpoint)
 router.get("/status", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     try {
+        if (isLocalJga88(req.params.prefix)) {
+            return res.json({
+                ok: true,
+                data: { name: "JGA88", isActive: true, logoUrl: null },
+            });
+        }
+
         const network = await prisma.network.findUnique({
             where: { prefix: req.params.prefix },
             select: { name: true, isActive: true, logoUrl: true },

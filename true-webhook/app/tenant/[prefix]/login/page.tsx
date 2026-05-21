@@ -13,7 +13,7 @@ export default function TenantLoginPage() {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
     const [form, setForm] = useState({
-        prefix: "",  // Always start empty, user must fill in
+        prefix: prefixFromUrl || "",
         username: "",
         password: ""
     });
@@ -49,11 +49,10 @@ export default function TenantLoginPage() {
         const token = localStorage.getItem("tenantToken");
         const savedPrefix = localStorage.getItem("tenantPrefix");
         if (token && savedPrefix) {
-            router.push("/dashboard");
+            router.push(`/tenant/${savedPrefix}/dashboard`);
             return;
         }
 
-        // Don't auto-check from URL, user must fill in prefix manually
         setLoading(false);
     }, [router]);
 
@@ -112,8 +111,7 @@ export default function TenantLoginPage() {
             localStorage.setItem("tenantUser", JSON.stringify(data.data.user));
             localStorage.setItem("tenantPrefix", form.prefix);
 
-            // Redirect to dashboard using short URL
-            router.push("/dashboard");
+            router.push(`/tenant/${form.prefix}/dashboard`);
         } catch (e) {
             setError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
             setSubmitting(false);

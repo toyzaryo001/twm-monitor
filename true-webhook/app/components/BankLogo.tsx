@@ -1,8 +1,6 @@
 "use client";
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-// @ts-expect-error - thai-banks-logo has no type definitions
-import thaiBanks from "thai-banks-logo";
+import { bankLists } from "thai-banks-logo";
 
 interface BankLogoProps {
     bankCode: string;
@@ -78,7 +76,7 @@ export function getBankCode(bankName: string): string | null {
 }
 
 export function getBankInfo(bankCode: string) {
-    const banks = thaiBanks as Record<string, { name: string; symbol: string; color: string; logo: string }>;
+    const banks = bankLists as Record<string, { name: string; symbol: string; color: string; icon?: string; logo?: string }>;
     return banks[bankCode] || null;
 }
 
@@ -106,7 +104,7 @@ export function BankLogo({ bankCode, size = 40 }: BankLogoProps) {
 
     return (
         <img
-            src={bank.logo}
+            src={bank.logo || bank.icon}
             alt={bank.name}
             style={{
                 width: size,
@@ -143,10 +141,10 @@ export function BankLogoByName({ bankName, size = 40 }: { bankName: string; size
 }
 
 // Export all bank codes for dropdown
-export const allBankCodes = Object.keys(thaiBanks as Record<string, unknown>);
+export const allBankCodes = Object.keys(bankLists as Record<string, unknown>);
 
 export function getAllBanks() {
-    const banks = thaiBanks as Record<string, { name: string; symbol: string; color: string; logo: string }>;
+    const banks = bankLists as Record<string, { name: string; symbol: string; color: string; icon?: string; logo?: string }>;
     return Object.entries(banks).map(([code, info]) => ({
         code,
         ...info

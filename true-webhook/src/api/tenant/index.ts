@@ -6,6 +6,10 @@ import { prisma } from "../../lib/prisma";
 
 const router = Router({ mergeParams: true });
 
+function isLocalJga88(prefix: string) {
+    return process.env.LOCAL_JGA88_MODE === "true" && prefix === "jga88";
+}
+
 // Auth routes (no auth required - public endpoints)
 router.use("/auth", authRouter);
 
@@ -57,6 +61,34 @@ router.use("/payments", paymentsRouter);
 // Dashboard stats
 router.get("/stats", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     try {
+        if (isLocalJga88(req.params.prefix)) {
+            return res.json({
+                ok: true,
+                data: {
+                    network: {
+                        id: "local-jga88-network",
+                        name: "JGA88",
+                        prefix: "jga88",
+                        logoUrl: null,
+                        isActive: true,
+                        realtimeEnabled: false,
+                        checkIntervalMs: 2000,
+                        telegramEnabled: false,
+                        telegramBotToken: null,
+                        telegramChatId: null,
+                        notifyMoneyIn: true,
+                        notifyMoneyOut: true,
+                        notifyMinAmount: 0,
+                        isAutoReceiveEnabled: true,
+                        featureAutoWithdraw: false,
+                        expiredAt: null,
+                        currentPackage: "LOCAL",
+                    },
+                    stats: { total: 0, active: 0 },
+                },
+            });
+        }
+
         const network = await prisma.network.findUnique({
             where: { prefix: req.params.prefix },
         });

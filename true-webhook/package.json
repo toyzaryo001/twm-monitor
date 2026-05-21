@@ -6,7 +6,12 @@
         "node": "20.x"
     },
     "scripts": {
-        "dev": "cross-env NODE_ENV=development ts-node-dev --respawn --transpile-only src/server.ts",
+        "dev": "cross-env NODE_ENV=development TS_NODE_PROJECT=tsconfig.server.json ts-node-dev --respawn --transpile-only --ignore-watch .next src/server.ts",
+        "dev:local": "cross-env NODE_ENV=development TS_NODE_PROJECT=tsconfig.server.json DATABASE_URL=postgresql://postgres:postgres@localhost:5432/true_webhook JWT_SECRET=local-dev-secret-change-me PORT=3000 BASE_DOMAIN=localhost DISABLE_BALANCE_WORKER=true LOCAL_JGA88_MODE=true ts-node-dev --respawn --transpile-only --ignore-watch .next src/server.ts",
+        "start:local": "cross-env NODE_ENV=production DATABASE_URL=postgresql://postgres:postgres@localhost:5432/true_webhook JWT_SECRET=local-dev-secret-change-me PORT=3000 BASE_DOMAIN=localhost DISABLE_BALANCE_WORKER=true LOCAL_JGA88_MODE=true node dist/server.js",
+        "local:db:push": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/true_webhook prisma db push",
+        "local:seed": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/true_webhook node scripts/seed.js",
+        "local:seed:jga88": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/true_webhook node scripts/seed-local-jga88.js",
         "build": "npm run prisma:generate && next build && tsc -p tsconfig.server.json",
         "start": "node scripts/railway-start.mjs",
         "start:railway": "node scripts/railway-start.mjs",

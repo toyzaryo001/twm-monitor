@@ -22,6 +22,20 @@ interface Stats {
     active: number;
 }
 
+function getWalletErrorMessage(data: any) {
+    if (data.error === "WALLET_API_UNREACHABLE") {
+        return "ไม่สามารถเชื่อมต่อ Wallet API ได้";
+    }
+
+    if (data.error === "WALLET_API_ERROR") {
+        const status = data.status ? ` (HTTP ${data.status})` : "";
+        const detail = data.detail ? `: ${String(data.detail).slice(0, 120)}` : "";
+        return `Wallet API ตอบกลับผิดพลาด${status}${detail}`;
+    }
+
+    return "เกิดข้อผิดพลาด: " + data.error;
+}
+
 export default function TenantDashboard() {
     const params = useParams();
     const prefix = params.prefix as string;
@@ -66,11 +80,7 @@ export default function TenantDashboard() {
                 showToast({
                     type: "error",
                     title: "เกิดข้อผิดพลาด",
-                    message: data.error === "WALLET_API_UNREACHABLE"
-                        ? "ไม่สามารถเชื่อมต่อ Wallet API ได้"
-                        : data.error === "WALLET_API_ERROR"
-                            ? "Wallet API ตอบกลับผิดพลาด"
-                            : "เกิดข้อผิดพลาด: " + data.error
+                    message: getWalletErrorMessage(data)
                 });
             }
         } catch (e) {

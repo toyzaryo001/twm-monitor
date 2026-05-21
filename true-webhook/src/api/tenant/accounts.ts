@@ -2,8 +2,109 @@ import { Router, Request, Response, NextFunction } from "express";
 import { prisma } from "../../lib/prisma";
 import { z } from "zod";
 import { broadcastBalanceUpdate } from "../sse";
+import fs from "fs";
+import path from "path";
 
 const router = Router({ mergeParams: true });
+
+const localJga88Accounts = new Map<string, any>();
+const localJga88AutoWithdraw = new Map<string, any>();
+const localJga88Balances = new Map<string, any>();
+const localJga88StatePath = path.join(process.cwd(), ".local-jga88-state.json");
+let localJga88StateLoaded = false;
+
+function isLocalJga88(prefix: string) {
+    const enabled = process.env.LOCAL_JGA88_MODE === "true" && prefix === "jga88";
+    if (enabled) loadLocalJga88State();
+    return enabled;
+}
+
+function loadLocalJga88State() {
+    if (localJga88StateLoaded) return;
+    localJga88StateLoaded = true;
+
+    try {
+        if (!fs.existsSync(localJga88StatePath)) return;
+        const state = JSON.parse(fs.readFileSync(localJga88StatePath, "utf8"));
+
+        for (const account of state.accounts || []) {
+            localJga88Accounts.set(account.id, account);
+        }
+        for (const [accountId, config] of Object.entries(state.autoWithdraw || {})) {
+            localJga88AutoWithdraw.set(accountId, config);
+        }
+        for (const [accountId, balance] of Object.entries(state.balances || {})) {
+            localJga88Balances.set(accountId, balance);
+        }
+    } catch (err) {
+        console.error("[local-jga88] Failed to load local state:", err);
+    }
+}
+
+function saveLocalJga88State() {
+    try {
+        const state = {
+            accounts: Array.from(localJga88Accounts.values()),
+            autoWithdraw: Object.fromEntries(localJga88AutoWithdraw),
+            balances: Object.fromEntries(localJga88Balances),
+        };
+
+        fs.writeFileSync(localJga88StatePath, JSON.stringify(state, null, 2));
+    } catch (err) {
+        console.error("[local-jga88] Failed to save local state:", err);
+    }
+}
+
+function withLocalStats(account: any) {
+    return {
+        ...account,
+        stats: account.stats || {
+            totalFee: 0,
+            firstActiveAt: null,
+        },
+    };
+}
+
+async function fetchLocalWalletBalance(account: any) {
+    const walletRes = await fetch(account.walletEndpointUrl, {
+        method: "GET",
+        headers: {
+            "Authorization": `Bearer ${account.walletBearerToken}`,
+            "Content-Type": "application/json",
+        },
+    });
+
+    if (!walletRes.ok) {
+        const error: any = new Error("WALLET_API_ERROR");
+        error.status = walletRes.status;
+        error.responseText = (await walletRes.text()).slice(0, 300);
+        throw error;
+    }
+
+    const walletData = await walletRes.json();
+    let balanceSatang = 0;
+    let mobileNo = account.phoneNumber || "";
+
+    if (walletData.data) {
+        balanceSatang = parseInt(walletData.data.balance, 10) || 0;
+        mobileNo = walletData.data.mobile_no || account.phoneNumber || "";
+    } else if (walletData.balance) {
+        balanceSatang = parseInt(walletData.balance, 10) || 0;
+        mobileNo = walletData.mobile_no || walletData.mobileNo || account.phoneNumber || "";
+    }
+
+    const data = {
+        balance: balanceSatang / 100,
+        balanceSatang,
+        mobileNo,
+        checkedAt: new Date(),
+        changed: true,
+    };
+
+    localJga88Balances.set(account.id, data);
+    saveLocalJga88State();
+    return data;
+}
 
 // Helper to check network exists
 const getNetwork = async (prefix: string) => {
@@ -13,6 +114,13 @@ const getNetwork = async (prefix: string) => {
 // List accounts
 router.get("/", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     try {
+        if (isLocalJga88(req.params.prefix)) {
+            return res.json({
+                ok: true,
+                data: Array.from(localJga88Accounts.values()).map(withLocalStats),
+            });
+        }
+
         const network = await getNetwork(req.params.prefix);
         if (!network) {
             return res.status(404).json({ ok: false, error: "NETWORK_NOT_FOUND" });
@@ -366,11 +474,6 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
 router.post("/", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     // ... (unchanged)
     try {
-        const network = await getNetwork(req.params.prefix);
-        if (!network) {
-            return res.status(404).json({ ok: false, error: "NETWORK_NOT_FOUND" });
-        }
-
         const schema = z.object({
             name: z.string().min(1),
             phoneNumber: z.string().optional(),
@@ -379,6 +482,28 @@ router.post("/", async (req: Request<{ prefix: string }>, res: Response, next: N
         });
 
         const data = schema.parse(req.body);
+
+        if (isLocalJga88(req.params.prefix)) {
+            const now = new Date();
+            const account = {
+                id: `local-wallet-${Date.now()}`,
+                ...data,
+                webhookSecret: null,
+                isActive: true,
+                networkId: "local-jga88-network",
+                telegramConfig: null,
+                createdAt: now,
+                updatedAt: now,
+            };
+            localJga88Accounts.set(account.id, account);
+            saveLocalJga88State();
+            return res.status(201).json({ ok: true, data: withLocalStats(account) });
+        }
+
+        const network = await getNetwork(req.params.prefix);
+        if (!network) {
+            return res.status(404).json({ ok: false, error: "NETWORK_NOT_FOUND" });
+        }
 
         const account = await prisma.account.create({
             data: { ...data, networkId: network.id } as any,
@@ -405,6 +530,17 @@ router.put("/:id", async (req: Request<{ prefix: string; id: string }>, res: Res
 
         const data = schema.parse(req.body);
 
+        if (isLocalJga88(req.params.prefix)) {
+            const current = localJga88Accounts.get(req.params.id);
+            if (!current) {
+                return res.status(404).json({ ok: false, error: "NOT_FOUND" });
+            }
+            const account = { ...current, ...data, updatedAt: new Date() };
+            localJga88Accounts.set(req.params.id, account);
+            saveLocalJga88State();
+            return res.json({ ok: true, data: withLocalStats(account) });
+        }
+
         const account = await prisma.account.update({
             where: { id: req.params.id },
             data,
@@ -423,6 +559,14 @@ router.put("/:id", async (req: Request<{ prefix: string; id: string }>, res: Res
 // Delete account
 router.delete("/:id", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
     try {
+        if (isLocalJga88(req.params.prefix)) {
+            localJga88Accounts.delete(req.params.id);
+            localJga88AutoWithdraw.delete(req.params.id);
+            localJga88Balances.delete(req.params.id);
+            saveLocalJga88State();
+            return res.status(204).send();
+        }
+
         await prisma.account.delete({ where: { id: req.params.id } });
         return res.status(204).send();
     } catch (err) {
@@ -433,6 +577,10 @@ router.delete("/:id", async (req: Request<{ prefix: string; id: string }>, res: 
 // Get Auto-Withdraw Config
 router.get("/:id/auto-withdraw", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
     try {
+        if (isLocalJga88(req.params.prefix)) {
+            return res.json({ ok: true, data: localJga88AutoWithdraw.get(req.params.id) || null });
+        }
+
         const config = await prisma.autoWithdrawConfig.findUnique({
             where: { accountId: req.params.id }
         });
@@ -454,6 +602,18 @@ router.put("/:id/auto-withdraw", async (req: Request<{ prefix: string; id: strin
         });
 
         const data = schema.parse(req.body);
+
+        if (isLocalJga88(req.params.prefix)) {
+            const config = {
+                id: `local-auto-withdraw-${req.params.id}`,
+                accountId: req.params.id,
+                ...data,
+                updatedAt: new Date(),
+            };
+            localJga88AutoWithdraw.set(req.params.id, config);
+            saveLocalJga88State();
+            return res.json({ ok: true, data: config });
+        }
 
         const config = await prisma.autoWithdrawConfig.upsert({
             where: { accountId: req.params.id },
@@ -477,6 +637,26 @@ router.put("/:id/auto-withdraw", async (req: Request<{ prefix: string; id: strin
 router.post("/:id/balance", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
     // ... (unchanged)
     try {
+        if (isLocalJga88(req.params.prefix)) {
+            const account = localJga88Accounts.get(req.params.id);
+            if (!account) {
+                return res.status(404).json({ ok: false, error: "ACCOUNT_NOT_FOUND" });
+            }
+
+            try {
+                const data = await fetchLocalWalletBalance(account);
+                return res.json({ ok: true, data });
+            } catch (fetchErr: any) {
+                console.error("Local wallet API fetch error:", fetchErr);
+                return res.status(502).json({
+                    ok: false,
+                    error: fetchErr.message === "WALLET_API_ERROR" ? "WALLET_API_ERROR" : "WALLET_API_UNREACHABLE",
+                    status: fetchErr.status,
+                    detail: fetchErr.responseText,
+                });
+            }
+        }
+
         const account = await prisma.account.findUnique({
             where: { id: req.params.id },
         });
@@ -496,7 +676,8 @@ router.post("/:id/balance", async (req: Request<{ prefix: string; id: string }>,
             });
 
             if (!walletRes.ok) {
-                return res.status(502).json({ ok: false, error: "WALLET_API_ERROR", status: walletRes.status });
+                const detail = (await walletRes.text()).slice(0, 300);
+                return res.status(502).json({ ok: false, error: "WALLET_API_ERROR", status: walletRes.status, detail });
             }
 
             const walletData = await walletRes.json();
@@ -565,6 +746,25 @@ router.post("/:id/balance", async (req: Request<{ prefix: string; id: string }>,
 // Get latest balance
 router.get("/:id/balance", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
     try {
+        if (isLocalJga88(req.params.prefix)) {
+            const account = localJga88Accounts.get(req.params.id);
+            if (!account) {
+                return res.status(404).json({ ok: false, error: "ACCOUNT_NOT_FOUND" });
+            }
+
+            const cached = localJga88Balances.get(req.params.id);
+            if (cached) {
+                return res.json({ ok: true, data: cached });
+            }
+
+            try {
+                const data = await fetchLocalWalletBalance(account);
+                return res.json({ ok: true, data });
+            } catch (fetchErr) {
+                return res.json({ ok: true, data: null });
+            }
+        }
+
         const snapshot = await prisma.balanceSnapshot.findFirst({
             where: { accountId: req.params.id },
             orderBy: { checkedAt: "desc" },

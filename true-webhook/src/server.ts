@@ -49,6 +49,11 @@ async function main() {
     server.listen(port, () => {
         console.log(`[server] listening on http://localhost:${port} (dev=${dev})`);
 
+        if (process.env.DISABLE_BALANCE_WORKER === "true") {
+            console.log("[server] Balance worker disabled by DISABLE_BALANCE_WORKER=true");
+            return;
+        }
+
         // Start the balance worker (uses per-network settings from database)
         startBalanceWorker();
 

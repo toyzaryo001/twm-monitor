@@ -11,6 +11,7 @@ out/
 .env
 .env.local
 .env.*.local
+.local-jga88-state.json
 
 # IDE
 .idea/
