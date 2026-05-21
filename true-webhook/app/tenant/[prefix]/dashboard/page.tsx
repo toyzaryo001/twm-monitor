@@ -29,7 +29,12 @@ function getWalletErrorMessage(data: any) {
 
     if (data.error === "WALLET_API_ERROR") {
         const status = data.status ? ` (HTTP ${data.status})` : "";
-        const detail = data.detail ? `: ${String(data.detail).slice(0, 120)}` : "";
+        const rawDetail = data.detail ? String(data.detail) : "";
+        if (rawDetail.includes("No user profile")) {
+            return `Wallet API ไม่พบโปรไฟล์ผู้ใช้${status} กรุณาตรวจ Bearer Token หรือผูกวอลเล็ทใหม่`;
+        }
+
+        const detail = rawDetail ? `: ${rawDetail.slice(0, 120)}` : "";
         return `Wallet API ตอบกลับผิดพลาด${status}${detail}`;
     }
 
