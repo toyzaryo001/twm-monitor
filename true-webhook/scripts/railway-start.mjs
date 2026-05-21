@@ -14,13 +14,19 @@ function run(cmd) {
     }
 }
 
-// Run db push
-console.log("[railway-start] Syncing database schema...");
-run("npx prisma db push --accept-data-loss");
+if (process.env.SKIP_DB_SYNC === "true") {
+    console.log("[railway-start] Skipping database schema sync (SKIP_DB_SYNC=true)");
+} else {
+    console.log("[railway-start] Syncing database schema...");
+    run("npx prisma db push --accept-data-loss");
+}
 
-// Run seed script
-console.log("[railway-start] Seeding admin user...");
-run("node scripts/seed.js");
+if (process.env.SKIP_SEED === "true") {
+    console.log("[railway-start] Skipping seed (SKIP_SEED=true)");
+} else {
+    console.log("[railway-start] Seeding admin user...");
+    run("node scripts/seed.js");
+}
 
 // Start the application
 console.log("[railway-start] Starting application...");

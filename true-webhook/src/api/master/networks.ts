@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { requireAuth, requireMaster } from "../../middleware/auth";
+import { hashPassword } from "../../lib/auth";
 
 const router = Router();
 
@@ -87,20 +88,59 @@ router.post("/", async (req, res, next) => {
         const schema = z.object({
             prefix: z.string().min(2).max(30).regex(/^[a-z0-9_-]+$/),
             name: z.string().min(1),
+            adminUsername: z.string().min(3).optional().or(z.literal("")),
+            adminPassword: z.string().min(6).optional().or(z.literal("")),
+        }).refine((data) => {
+            return (!data.adminUsername && !data.adminPassword) || (!!data.adminUsername && !!data.adminPassword);
+        }, {
+            message: "ADMIN_USERNAME_AND_PASSWORD_REQUIRED_TOGETHER",
+            path: ["adminUsername"],
         });
 
-        const { prefix, name } = schema.parse(req.body);
+        const { prefix, name, adminUsername, adminPassword } = schema.parse(req.body);
 
         const existing = await prisma.network.findUnique({ where: { prefix } });
         if (existing) {
             return res.status(400).json({ ok: false, error: "PREFIX_EXISTS" });
         }
 
-        const network = await prisma.network.create({
-            data: { prefix, name },
+        if (adminUsername) {
+            const existingUser = await prisma.user.findUnique({ where: { email: adminUsername } });
+            if (existingUser) {
+                return res.status(400).json({ ok: false, error: "ADMIN_USERNAME_EXISTS" });
+            }
+        }
+
+        const result = await prisma.$transaction(async (tx) => {
+            const network = await tx.network.create({
+                data: { prefix, name },
+            });
+
+            let adminUser = null;
+            if (adminUsername && adminPassword) {
+                adminUser = await tx.user.create({
+                    data: {
+                        email: adminUsername,
+                        passwordHash: await hashPassword(adminPassword),
+                        displayName: `${name} Admin`,
+                        role: "NETWORK_ADMIN",
+                        networkId: network.id,
+                    },
+                    select: { id: true, email: true, displayName: true, role: true },
+                });
+            }
+
+            return { network, adminUser };
         });
 
-        return res.status(201).json({ ok: true, data: network });
+        return res.status(201).json({
+            ok: true,
+            data: {
+                ...result.network,
+                adminUser: result.adminUser,
+                tenantUrl: `https://${prefix}.${process.env.BASE_DOMAIN || "tmw-monitors.com"}`,
+            },
+        });
     } catch (err) {
         next(err);
     }

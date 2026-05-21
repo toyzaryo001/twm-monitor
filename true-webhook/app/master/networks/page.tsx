@@ -14,13 +14,15 @@ interface Network {
     _count: { users: number; accounts: number };
 }
 
+const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || "tmw-monitors.com";
+
 export default function NetworksPage() {
     const { showToast } = useToast();
     const [networks, setNetworks] = useState<Network[]>([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
-    const [form, setForm] = useState({ prefix: "", name: "" });
+    const [form, setForm] = useState({ prefix: "", name: "", adminUsername: "", adminPassword: "" });
 
     const getToken = () => {
         if (typeof window !== "undefined") {
@@ -99,12 +101,12 @@ export default function NetworksPage() {
 
         setShowModal(false);
         setEditingId(null);
-        setForm({ prefix: "", name: "" });
+        setForm({ prefix: "", name: "", adminUsername: "", adminPassword: "" });
         fetchNetworks();
     };
 
     const handleEdit = (network: Network) => {
-        setForm({ prefix: network.prefix, name: network.name });
+        setForm({ prefix: network.prefix, name: network.name, adminUsername: "", adminPassword: "" });
         setEditingId(network.id);
         setShowModal(true);
     };
@@ -149,7 +151,7 @@ export default function NetworksPage() {
         <div>
             <div className="page-header">
                 <h1 className="page-title">จัดการเครือข่าย</h1>
-                <button className="btn btn-primary" onClick={() => { setForm({ prefix: "", name: "" }); setEditingId(null); setShowModal(true); }}>
+                <button className="btn btn-primary" onClick={() => { setForm({ prefix: "", name: "", adminUsername: "", adminPassword: "" }); setEditingId(null); setShowModal(true); }}>
                     + เพิ่มเครือข่าย
                 </button>
             </div>
@@ -174,7 +176,12 @@ export default function NetworksPage() {
                             {networks.map((n) => (
                                 <tr key={n.id}>
                                     <td>{n.name}</td>
-                                    <td><code>{n.prefix}</code></td>
+                                    <td>
+                                        <code>{n.prefix}</code>
+                                        <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                                            {n.prefix}.{baseDomain}
+                                        </div>
+                                    </td>
                                     <td style={{ color: "var(--success)", fontWeight: 600 }}>
                                         ฿ {n.totalBalance?.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "0.00"}
                                     </td>
@@ -240,6 +247,11 @@ export default function NetworksPage() {
                                     required
                                     disabled={!!editingId}
                                 />
+                                {!editingId && form.prefix && (
+                                    <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
+                                        Tenant URL: https://{form.prefix}.{baseDomain}
+                                    </div>
+                                )}
                             </div>
                             <div className="form-group">
                                 <label className="form-label">ชื่อเครือข่าย</label>
@@ -252,6 +264,32 @@ export default function NetworksPage() {
                                     required
                                 />
                             </div>
+                            {!editingId && (
+                                <>
+                                    <div className="form-group">
+                                        <label className="form-label">Tenant Admin Username</label>
+                                        <input
+                                            type="text"
+                                            className="form-input"
+                                            value={form.adminUsername}
+                                            onChange={(e) => setForm({ ...form, adminUsername: e.target.value })}
+                                            placeholder={`${form.prefix || "tenant"}admin`}
+                                            autoComplete="off"
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Tenant Admin Password</label>
+                                        <input
+                                            type="password"
+                                            className="form-input"
+                                            value={form.adminPassword}
+                                            onChange={(e) => setForm({ ...form, adminPassword: e.target.value })}
+                                            placeholder="อย่างน้อย 6 ตัวอักษร"
+                                            autoComplete="new-password"
+                                        />
+                                    </div>
+                                </>
+                            )}
                             <div className="modal-actions">
                                 <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
                                     ยกเลิก
