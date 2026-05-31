@@ -143,13 +143,14 @@ export default function WalletsPage() {
         }
 
         const roundedBalance = Math.round(balance);
+        const formattedRoundedBalance = roundedBalance.toLocaleString("en-US");
 
         try {
-            await navigator.clipboard.writeText(String(roundedBalance));
+            await navigator.clipboard.writeText(formattedRoundedBalance);
             showToast({
                 type: "success",
                 title: "คัดลอกยอดแล้ว",
-                message: `ยอดปัดเศษ: ฿ ${roundedBalance.toLocaleString("th-TH")}`,
+                message: `ยอดปัดเศษ: ฿ ${formattedRoundedBalance}`,
             });
         } catch {
             showToast({
@@ -449,7 +450,7 @@ export default function WalletsPage() {
                                         disabled={!balances[account.id]}
                                         title={
                                             balances[account.id]
-                                                ? `คัดลอก ${Math.round(balances[account.id]!.balance).toLocaleString("th-TH")}`
+                                                ? `คัดลอก ${Math.round(balances[account.id]!.balance).toLocaleString("en-US")}`
                                                 : "รอโหลดข้อมูลยอดเงิน"
                                         }
                                     >
