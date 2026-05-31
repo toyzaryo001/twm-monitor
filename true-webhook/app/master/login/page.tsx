@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
@@ -8,42 +8,44 @@ export default function LoginPage() {
     const [isSetup, setIsSetup] = useState(false);
     const [needsSetup, setNeedsSetup] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
-
+    const [showPassword, setShowPassword] = useState(false);
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
 
     useEffect(() => {
         fetch("/api/master/auth/setup-status")
-            .then((r) => r.json())
+            .then((response) => response.json())
             .then((data) => {
                 setNeedsSetup(data.needsSetup);
                 setIsSetup(data.needsSetup);
                 setLoading(false);
             })
-            .catch(() => setLoading(false));
+            .catch(() => {
+                setError("เชื่อมต่อระบบไม่ได้ กรุณาลองใหม่อีกครั้ง");
+                setLoading(false);
+            });
     }, []);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
         setError("");
-        setLoading(true);
+        setSubmitting(true);
 
         try {
             const endpoint = isSetup ? "/api/master/auth/setup" : "/api/master/auth/login";
-            const body = { username, password };
-
-            const res = await fetch(endpoint, {
+            const response = await fetch(endpoint, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(body),
+                body: JSON.stringify({ username: username.trim(), password }),
             });
 
-            const data = await res.json();
+            const data = await response.json();
 
             if (!data.ok) {
-                setError(data.error === "INVALID_CREDENTIALS" ? "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" : data.error);
-                setLoading(false);
+                setError(data.error === "INVALID_CREDENTIALS" ? "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง ตรวจตัวพิมพ์และลองอีกครั้ง" : data.error);
+                setSubmitting(false);
                 return;
             }
 
@@ -51,8 +53,8 @@ export default function LoginPage() {
             localStorage.setItem("user", JSON.stringify(data.user));
             router.push("/master/dashboard");
         } catch {
-            setError("เกิดข้อผิดพลาด กรุณาลองใหม่");
-            setLoading(false);
+            setError("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาลองใหม่");
+            setSubmitting(false);
         }
     };
 
@@ -66,48 +68,79 @@ export default function LoginPage() {
 
     return (
         <div className="login-container">
-            <div className="card login-card">
-                <h1 className="login-title">🔐 Master Panel</h1>
-                <p className="login-subtitle">
-                    {isSetup ? "สร้างบัญชีผู้ดูแลระบบ" : "เข้าสู่ระบบ"}
-                </p>
-
-                <form onSubmit={handleSubmit}>
-                    <div className="form-group">
-                        <label className="form-label">ชื่อผู้ใช้</label>
-                        <input
-                            type="text"
-                            className="form-input"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            required
-                            placeholder="username"
-                        />
+            <div className="login-shell">
+                <section className="login-hero">
+                    <div>
+                        <div className="master-brand-mark" style={{ marginBottom: 22 }}>TM</div>
+                        <div className="master-eyebrow">Private Operations Console</div>
+                        <h1 className="login-title">ควบคุมระบบแบบมั่นใจ</h1>
+                        <p className="login-subtitle">
+                            Master Panel สำหรับดูแลเครือข่าย แพ็คเกจ การชำระเงิน และการตั้งค่าหลังบ้านทั้งหมด
+                        </p>
                     </div>
-
-                    <div className="form-group">
-                        <label className="form-label">รหัสผ่าน</label>
-                        <input
-                            type="password"
-                            className="form-input"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            required
-                            placeholder="••••••••"
-                            minLength={6}
-                        />
-                    </div>
-
-                    {error && (
-                        <div style={{ color: "var(--error)", marginBottom: 16, fontSize: 14 }}>
-                            {error}
+                    <div className="login-proof-grid">
+                        <div className="login-proof">
+                            <div className="stat-label">Access</div>
+                            <div style={{ fontSize: 22, fontWeight: 900, color: "var(--accent-gold)" }}>MASTER</div>
                         </div>
-                    )}
+                        <div className="login-proof">
+                            <div className="stat-label">Session</div>
+                            <div style={{ fontSize: 22, fontWeight: 900, color: "var(--accent)" }}>12H</div>
+                        </div>
+                        <div className="login-proof">
+                            <div className="stat-label">Scope</div>
+                            <div style={{ fontSize: 22, fontWeight: 900, color: "var(--success)" }}>ALL</div>
+                        </div>
+                    </div>
+                </section>
 
-                    <button type="submit" className="btn btn-primary" style={{ width: "100%" }} disabled={loading}>
-                        {loading ? "กำลังดำเนินการ..." : isSetup ? "สร้างบัญชี" : "เข้าสู่ระบบ"}
-                    </button>
-                </form>
+                <section className="login-card">
+                    <div className="master-eyebrow">{isSetup ? "Initial Setup" : "Secure Login"}</div>
+                    <h2 className="login-title">{isSetup ? "สร้างบัญชี Master" : "เข้าสู่ระบบ"}</h2>
+                    <p className="login-subtitle">
+                        {isSetup ? "ตั้งค่าผู้ดูแลระบบคนแรกเพื่อเริ่มใช้งาน" : "ใช้บัญชี Master เพื่อจัดการทุกเครือข่าย"}
+                    </p>
+
+                    <form onSubmit={handleSubmit}>
+                        <div className="form-group">
+                            <label className="form-label">ชื่อผู้ใช้</label>
+                            <input
+                                type="text"
+                                className="form-input"
+                                value={username}
+                                onChange={(event) => setUsername(event.target.value)}
+                                required
+                                placeholder="เช่น superTT"
+                                autoComplete="username"
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label className="form-label">รหัสผ่าน</label>
+                            <div className="password-field">
+                                <input
+                                    type={showPassword ? "text" : "password"}
+                                    className="form-input"
+                                    value={password}
+                                    onChange={(event) => setPassword(event.target.value)}
+                                    required
+                                    minLength={6}
+                                    placeholder="กรอกรหัสผ่าน"
+                                    autoComplete={isSetup ? "new-password" : "current-password"}
+                                />
+                                <button type="button" className="btn btn-secondary" onClick={() => setShowPassword((value) => !value)}>
+                                    {showPassword ? "ซ่อน" : "แสดง"}
+                                </button>
+                            </div>
+                        </div>
+
+                        {error && <div className="login-error">{error}</div>}
+
+                        <button type="submit" className="btn btn-primary" style={{ width: "100%" }} disabled={submitting}>
+                            {submitting ? "กำลังตรวจสอบ..." : isSetup ? "สร้างบัญชี Master" : "เข้าสู่ระบบ"}
+                        </button>
+                    </form>
+                </section>
             </div>
         </div>
     );

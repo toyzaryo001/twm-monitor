@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useToast } from "../../components/Toast";
+import { masterFetch } from "../../lib/masterFetch";
+import { ConfirmModal, EmptyState, PageHeader, StatCard, StatusBadge, TableShell } from "../components/MasterUI";
 
 interface Package {
     id: string;
@@ -13,44 +15,41 @@ interface Package {
     isRecommended: boolean;
 }
 
+const defaultForm = {
+    name: "",
+    price: "",
+    durationDays: "30",
+    description: "",
+    isActive: true,
+    isRecommended: false,
+};
+
 export default function PackagesPage() {
     const { showToast } = useToast();
     const [packages, setPackages] = useState<Package[]>([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
-
-    const [form, setForm] = useState({
-        name: "",
-        price: "",
-        durationDays: "30",
-        description: "",
-        isActive: true,
-        isRecommended: false
-    });
-
-    const getToken = () => localStorage.getItem("token") || "";
+    const [confirmDelete, setConfirmDelete] = useState<Package | null>(null);
+    const [form, setForm] = useState(defaultForm);
 
     const fetchPackages = async () => {
-        const token = getToken();
-        if (!token) return;
-        setLoading(true);
         try {
-            const res = await fetch("/api/master/packages", {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            const data = await res.json();
-            if (data.ok) setPackages(data.data);
-        } catch (e) {
-            console.error("Error fetching packages", e);
+            const data = await masterFetch<{ ok: true; data: Package[] }>("/api/master/packages");
+            setPackages(data.data);
+        } catch (error) {
+            showToast({ type: "error", title: "โหลดแพ็คเกจไม่สำเร็จ", message: error instanceof Error ? error.message : "PACKAGES_LOAD_FAILED" });
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
-    useEffect(() => { fetchPackages(); }, []);
+    useEffect(() => {
+        fetchPackages();
+    }, []);
 
     const resetForm = () => {
-        setForm({ name: "", price: "", durationDays: "30", description: "", isActive: true, isRecommended: false });
+        setForm(defaultForm);
         setEditingId(null);
     };
 
@@ -61,60 +60,47 @@ export default function PackagesPage() {
             durationDays: String(pkg.durationDays),
             description: pkg.description || "",
             isActive: pkg.isActive,
-            isRecommended: pkg.isRecommended || false
+            isRecommended: pkg.isRecommended || false,
         });
         setEditingId(pkg.id);
         setShowModal(true);
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm("ยืนยันการลบแพ็คเกจนี้?")) return;
-        const token = getToken();
-        try {
-            await fetch(`/api/master/packages/${id}`, {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            showToast({ type: "success", title: "สำเร็จ", message: "ลบแพ็คเกจเรียบร้อยแล้ว" });
-            fetchPackages();
-        } catch (e) {
-            showToast({ type: "error", title: "ล้มเหลว", message: "ลบแพ็คเกจไม่สำเร็จ" });
-        }
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const token = getToken();
+    const handleSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
         const url = editingId ? `/api/master/packages/${editingId}` : "/api/master/packages";
         const method = editingId ? "PUT" : "POST";
 
-        const payload = {
-            name: form.name,
-            price: Number(form.price),
-            durationDays: Number(form.durationDays),
-            description: form.description,
-            isActive: form.isActive,
-            isRecommended: form.isRecommended
-        };
-
         try {
-            const res = await fetch(url, {
+            await masterFetch(url, {
                 method,
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({
+                    name: form.name.trim(),
+                    price: Number(form.price),
+                    durationDays: Number(form.durationDays),
+                    description: form.description.trim(),
+                    isActive: form.isActive,
+                    isRecommended: form.isRecommended,
+                }),
             });
-            const data = await res.json();
+            showToast({ type: "success", title: "บันทึกสำเร็จ", message: "อัปเดตแพ็คเกจเรียบร้อยแล้ว" });
+            setShowModal(false);
+            resetForm();
+            await fetchPackages();
+        } catch (error) {
+            showToast({ type: "error", title: "บันทึกไม่สำเร็จ", message: error instanceof Error ? error.message : "PACKAGE_SAVE_FAILED" });
+        }
+    };
 
-            if (data.ok) {
-                showToast({ type: "success", title: "สำเร็จ", message: "บันทึกข้อมูลเรียบร้อยแล้ว" });
-                setShowModal(false);
-                resetForm();
-                fetchPackages();
-            } else {
-                showToast({ type: "error", title: "ล้มเหลว", message: data.error || "เกิดข้อผิดพลาด" });
-            }
-        } catch (e) {
-            showToast({ type: "error", title: "ล้มเหลว", message: "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้" });
+    const deletePackage = async () => {
+        if (!confirmDelete) return;
+        try {
+            await masterFetch(`/api/master/packages/${confirmDelete.id}`, { method: "DELETE" });
+            showToast({ type: "success", title: "ลบสำเร็จ", message: `ลบแพ็คเกจ ${confirmDelete.name} แล้ว` });
+            setConfirmDelete(null);
+            await fetchPackages();
+        } catch (error) {
+            showToast({ type: "error", title: "ลบไม่สำเร็จ", message: error instanceof Error ? error.message : "PACKAGE_DELETE_FAILED" });
         }
     };
 
@@ -122,157 +108,111 @@ export default function PackagesPage() {
 
     return (
         <div>
-            <div className="page-header">
-                <h1 className="page-title">จัดการแพ็คเกจ</h1>
-                <button className="btn btn-primary" onClick={() => { resetForm(); setShowModal(true); }}>
-                    + เพิ่มแพ็คเกจ
-                </button>
+            <PageHeader
+                eyebrow="Pricing"
+                title="จัดการแพ็คเกจ"
+                description="กำหนดราคา ระยะเวลา และแพ็คเกจแนะนำที่ tenant ใช้ต่ออายุบริการ"
+                actions={<button className="btn btn-primary" onClick={() => { resetForm(); setShowModal(true); }}>เพิ่มแพ็คเกจ</button>}
+            />
+
+            <div className="stats-grid">
+                <StatCard label="แพ็คเกจทั้งหมด" value={packages.length} tone="gold" />
+                <StatCard label="เปิดขาย" value={packages.filter((item) => item.isActive).length} tone="green" />
+                <StatCard label="แพ็คเกจแนะนำ" value={packages.filter((item) => item.isRecommended).length} tone="cyan" />
             </div>
 
-            <div className="card">
+            <TableShell>
                 {packages.length === 0 ? (
-                    <div className="empty-state">ยังไม่มีแพ็คเกจ</div>
+                    <EmptyState title="ยังไม่มีแพ็คเกจ" description="สร้างแพ็คเกจแรกเพื่อให้ tenant ต่ออายุบริการได้" />
                 ) : (
-                    <table className="table">
-                        <thead>
-                            <tr>
-                                <th>ชื่อแพ็คเกจ</th>
-                                <th>ราคา</th>
-                                <th>ระยะเวลา</th>
-                                <th>สถานะ</th>
-                                <th>จัดการ</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {packages.map(pkg => (
-                                <tr key={pkg.id}>
-                                    <td>
-                                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                            <div style={{ fontWeight: 600 }}>{pkg.name}</div>
-                                            {pkg.isRecommended && (
-                                                <span style={{ background: "linear-gradient(135deg, #f59e0b, #d97706)", color: "white", fontSize: 10, padding: "2px 8px", borderRadius: 10, fontWeight: 600 }}>แนะนำ</span>
-                                            )}
-                                        </div>
-                                        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                                            {pkg.description ? (pkg.description.length > 40 ? pkg.description.substring(0, 40) + "..." : pkg.description) : "-"}
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span style={{ color: "var(--primary)", fontWeight: 700, fontSize: 16 }}>
-                                            ฿{pkg.price.toLocaleString()}
-                                        </span>
-                                    </td>
-                                    <td>{pkg.durationDays} วัน</td>
-                                    <td>
-                                        <span className={`badge ${pkg.isActive ? "badge-success" : "badge-error"}`}>
-                                            {pkg.isActive ? "เปิดใช้" : "ปิดใช้"}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div style={{ display: "flex", gap: 8 }}>
-                                            <button className="btn btn-secondary" style={{ padding: "4px 8px" }} onClick={() => handleEdit(pkg)}>
-                                                แก้ไข
-                                            </button>
-                                            <button className="btn btn-danger" style={{ padding: "4px 8px" }} onClick={() => handleDelete(pkg.id)}>
-                                                ลบ
-                                            </button>
-                                        </div>
-                                    </td>
+                    <div className="table-wrap">
+                        <table className="table">
+                            <thead>
+                                <tr>
+                                    <th>แพ็คเกจ</th>
+                                    <th>ราคา</th>
+                                    <th>ระยะเวลา</th>
+                                    <th>สถานะ</th>
+                                    <th>จัดการ</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {packages.map((pkg) => (
+                                    <tr key={pkg.id}>
+                                        <td>
+                                            <div className="table-title" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                                {pkg.name}
+                                                {pkg.isRecommended && <span className="badge badge-warning">แนะนำ</span>}
+                                            </div>
+                                            <div className="table-subtitle">{pkg.description || "ไม่มีรายละเอียด"}</div>
+                                        </td>
+                                        <td style={{ color: "var(--accent-gold)", fontWeight: 900 }}>฿{pkg.price.toLocaleString("th-TH")}</td>
+                                        <td>{pkg.durationDays} วัน</td>
+                                        <td><StatusBadge active={pkg.isActive} /></td>
+                                        <td>
+                                            <div className="table-actions">
+                                                <button className="btn btn-secondary btn-compact" onClick={() => handleEdit(pkg)}>แก้ไข</button>
+                                                <button className="btn btn-danger btn-compact" onClick={() => setConfirmDelete(pkg)}>ลบ</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 )}
-            </div>
+            </TableShell>
 
             {showModal && (
                 <div className="modal-overlay" onClick={() => setShowModal(false)}>
-                    <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 500 }}>
+                    <div className="modal" onClick={(event) => event.stopPropagation()}>
                         <h2 className="modal-title">{editingId ? "แก้ไขแพ็คเกจ" : "เพิ่มแพ็คเกจใหม่"}</h2>
                         <form onSubmit={handleSubmit}>
                             <div className="form-group">
                                 <label className="form-label">ชื่อแพ็คเกจ</label>
-                                <input
-                                    type="text"
-                                    className="form-input"
-                                    value={form.name}
-                                    onChange={e => setForm({ ...form, name: e.target.value })}
-                                    required
-                                    placeholder="เช่น Silver, Gold, Premium"
-                                />
+                                <input className="form-input" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required placeholder="เช่น PRO" />
                             </div>
-
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                            <div className="form-row">
                                 <div className="form-group">
                                     <label className="form-label">ราคา (บาท)</label>
-                                    <input
-                                        type="number"
-                                        className="form-input"
-                                        value={form.price}
-                                        onChange={e => setForm({ ...form, price: e.target.value })}
-                                        required
-                                        min="0"
-                                        placeholder="1500"
-                                    />
+                                    <input className="form-input" type="number" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} required min="0" />
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label">จำนวนวัน</label>
-                                    <input
-                                        type="number"
-                                        className="form-input"
-                                        value={form.durationDays}
-                                        onChange={e => setForm({ ...form, durationDays: e.target.value })}
-                                        required
-                                        min="1"
-                                        placeholder="30"
-                                    />
+                                    <input className="form-input" type="number" value={form.durationDays} onChange={(event) => setForm({ ...form, durationDays: event.target.value })} required min="1" />
                                 </div>
                             </div>
-
                             <div className="form-group">
                                 <label className="form-label">รายละเอียด</label>
-                                <textarea
-                                    className="form-input"
-                                    rows={3}
-                                    value={form.description}
-                                    onChange={e => setForm({ ...form, description: e.target.value })}
-                                    placeholder="รายละเอียดฟีเจอร์..."
-                                    style={{ resize: "vertical" }}
-                                />
+                                <textarea className="form-input" value={form.description} rows={3} onChange={(event) => setForm({ ...form, description: event.target.value })} />
                             </div>
-
-                            <div className="form-group">
-                                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                                    <input
-                                        type="checkbox"
-                                        checked={form.isActive}
-                                        onChange={e => setForm({ ...form, isActive: e.target.checked })}
-                                    />
-                                    <span>เปิดใช้งาน</span>
+                            <div style={{ display: "grid", gap: 10 }}>
+                                <label className="master-toggle-row">
+                                    <span>เปิดใช้งานแพ็คเกจนี้</span>
+                                    <input type="checkbox" checked={form.isActive} onChange={(event) => setForm({ ...form, isActive: event.target.checked })} />
+                                </label>
+                                <label className="master-toggle-row">
+                                    <span>แสดงเป็นแพ็คเกจแนะนำ</span>
+                                    <input type="checkbox" checked={form.isRecommended} onChange={(event) => setForm({ ...form, isRecommended: event.target.checked })} />
                                 </label>
                             </div>
-
-                            <div className="form-group">
-                                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                                    <input
-                                        type="checkbox"
-                                        checked={form.isRecommended}
-                                        onChange={e => setForm({ ...form, isRecommended: e.target.checked })}
-                                    />
-                                    <span>⭐ แสดงป้าย "แนะนำ"</span>
-                                </label>
-                                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
-                                    แพ็คเกจที่เลือกจะแสดงป้ายสีส้ม "แนะนำ" ให้ลูกค้าเห็น
-                                </p>
-                            </div>
-
                             <div className="modal-actions">
                                 <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>ยกเลิก</button>
-                                <button type="submit" className="btn btn-primary">{editingId ? "บันทึกการแก้ไข" : "สร้างแพ็คเกจ"}</button>
+                                <button type="submit" className="btn btn-primary">{editingId ? "บันทึก" : "สร้างแพ็คเกจ"}</button>
                             </div>
                         </form>
                     </div>
                 </div>
+            )}
+
+            {confirmDelete && (
+                <ConfirmModal
+                    title="ลบแพ็คเกจนี้?"
+                    message={`ยืนยันการลบ ${confirmDelete.name}`}
+                    confirmText="ลบแพ็คเกจ"
+                    onCancel={() => setConfirmDelete(null)}
+                    onConfirm={deletePackage}
+                />
             )}
         </div>
     );

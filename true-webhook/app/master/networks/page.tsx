@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useToast } from "../../components/Toast";
+import { masterFetch } from "../../lib/masterFetch";
+import { ConfirmModal, EmptyState, PageHeader, StatCard, StatusBadge, TableShell } from "../components/MasterUI";
 
 interface Network {
     id: string;
@@ -22,87 +25,65 @@ export default function NetworksPage() {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [confirmDelete, setConfirmDelete] = useState<Network | null>(null);
+    const [query, setQuery] = useState("");
+    const [statusFilter, setStatusFilter] = useState("all");
     const [form, setForm] = useState({ prefix: "", name: "", adminUsername: "", adminPassword: "" });
 
-    const getToken = () => {
-        if (typeof window !== "undefined") {
-            return localStorage.getItem("token") || "";
-        }
-        return "";
-    };
-
-    const handleUnauthorized = () => {
-        if (typeof window !== "undefined") {
-            localStorage.removeItem("token");
-            localStorage.removeItem("user");
-            window.location.href = "/master/login";
-        }
-    };
-
     const fetchNetworks = async () => {
-        const token = getToken();
-        if (!token) {
-            handleUnauthorized();
-            return;
-        }
-
         try {
-            const res = await fetch("/api/master/networks", {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-
-            if (res.status === 401) {
-                handleUnauthorized();
-                return;
-            }
-
-            const data = await res.json();
-            if (data.ok) setNetworks(data.data);
-        } catch (e) {
-            console.error("Error fetching networks:", e);
+            const data = await masterFetch<{ ok: true; data: Network[] }>("/api/master/networks");
+            setNetworks(data.data);
+        } catch (error) {
+            showToast({ type: "error", title: "โหลดข้อมูลไม่สำเร็จ", message: error instanceof Error ? error.message : "NETWORKS_LOAD_FAILED" });
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     useEffect(() => {
         fetchNetworks();
     }, []);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const token = getToken();
-        if (!token) return;
+    const filteredNetworks = useMemo(() => {
+        return networks.filter((network) => {
+            const matchesText = `${network.name} ${network.prefix}`.toLowerCase().includes(query.trim().toLowerCase());
+            const matchesStatus = statusFilter === "all" || (statusFilter === "active" ? network.isActive : !network.isActive);
+            return matchesText && matchesStatus;
+        });
+    }, [networks, query, statusFilter]);
 
+    const totalBalance = networks.reduce((sum, network) => sum + (network.totalBalance || 0), 0);
+    const expiredCount = networks.filter((network) => network.expiredAt && new Date(network.expiredAt) <= new Date()).length;
+
+    const openCreate = () => {
+        setForm({ prefix: "", name: "", adminUsername: "", adminPassword: "" });
+        setEditingId(null);
+        setShowModal(true);
+    };
+
+    const handleSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
         const url = editingId ? `/api/master/networks/${editingId}` : "/api/master/networks";
         const method = editingId ? "PUT" : "POST";
 
         try {
-            const res = await fetch(url, {
+            await masterFetch(url, {
                 method,
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                body: JSON.stringify(form),
+                body: JSON.stringify({
+                    ...form,
+                    prefix: form.prefix.trim().toLowerCase(),
+                    name: form.name.trim(),
+                    adminUsername: form.adminUsername.trim(),
+                }),
             });
-
-            if (res.status === 401) {
-                handleUnauthorized();
-                return;
-            }
-
-            const data = await res.json();
-
-            if (!data.ok) {
-                showToast({ type: "error", title: "เกิดข้อผิดพลาด", message: data.error || "ไม่สามารถบันทึกข้อมูลได้" });
-                return;
-            }
-        } catch (e) {
-            showToast({ type: "error", title: "เกิดข้อผิดพลาด", message: "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้" });
-            return;
+            showToast({ type: "success", title: "บันทึกสำเร็จ", message: editingId ? "อัปเดตเครือข่ายแล้ว" : "สร้างเครือข่ายใหม่แล้ว" });
+            setShowModal(false);
+            setEditingId(null);
+            await fetchNetworks();
+        } catch (error) {
+            showToast({ type: "error", title: "บันทึกไม่สำเร็จ", message: error instanceof Error ? error.message : "NETWORK_SAVE_FAILED" });
         }
-
-        setShowModal(false);
-        setEditingId(null);
-        setForm({ prefix: "", name: "", adminUsername: "", adminPassword: "" });
-        fetchNetworks();
     };
 
     const handleEdit = (network: Network) => {
@@ -111,196 +92,172 @@ export default function NetworksPage() {
         setShowModal(true);
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm("ยืนยันการลบเครือข่าย?")) return;
-        const token = getToken();
-        const res = await fetch(`/api/master/networks/${id}`, {
-            method: "DELETE",
-            headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (res.status === 401) {
-            handleUnauthorized();
-            return;
-        }
-
-        fetchNetworks();
-    };
-
     const handleToggle = async (network: Network) => {
-        const token = getToken();
-        const res = await fetch(`/api/master/networks/${network.id}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ isActive: !network.isActive }),
-        });
-
-        if (res.status === 401) {
-            handleUnauthorized();
-            return;
+        try {
+            await masterFetch(`/api/master/networks/${network.id}`, {
+                method: "PUT",
+                body: JSON.stringify({ isActive: !network.isActive }),
+            });
+            await fetchNetworks();
+        } catch (error) {
+            showToast({ type: "error", title: "เปลี่ยนสถานะไม่สำเร็จ", message: error instanceof Error ? error.message : "NETWORK_TOGGLE_FAILED" });
         }
-
-        fetchNetworks();
     };
 
-    if (loading) {
-        return <div className="loading"><div className="spinner" /></div>;
-    }
+    const deleteNetwork = async () => {
+        if (!confirmDelete) return;
+        try {
+            await masterFetch(`/api/master/networks/${confirmDelete.id}`, { method: "DELETE" });
+            showToast({ type: "success", title: "ลบสำเร็จ", message: `ลบ ${confirmDelete.name} แล้ว` });
+            setConfirmDelete(null);
+            await fetchNetworks();
+        } catch (error) {
+            showToast({ type: "error", title: "ลบไม่สำเร็จ", message: error instanceof Error ? error.message : "NETWORK_DELETE_FAILED" });
+        }
+    };
+
+    if (loading) return <div className="loading"><div className="spinner" /></div>;
 
     return (
         <div>
-            <div className="page-header">
-                <h1 className="page-title">จัดการเครือข่าย</h1>
-                <button className="btn btn-primary" onClick={() => { setForm({ prefix: "", name: "", adminUsername: "", adminPassword: "" }); setEditingId(null); setShowModal(true); }}>
-                    + เพิ่มเครือข่าย
-                </button>
+            <PageHeader
+                eyebrow="Tenant Network"
+                title="จัดการเครือข่าย"
+                description="สร้าง tenant ใหม่ ตรวจยอดรวม เปิดปิดการใช้งาน และเข้าไปตั้งค่ารายเครือข่าย"
+                actions={<button className="btn btn-primary" onClick={openCreate}>เพิ่มเครือข่าย</button>}
+            />
+
+            <div className="stats-grid">
+                <StatCard label="เครือข่าย" value={networks.length} tone="gold" />
+                <StatCard label="เปิดใช้งาน" value={networks.filter((item) => item.isActive).length} tone="green" />
+                <StatCard label="หมดอายุ" value={expiredCount} tone={expiredCount > 0 ? "red" : "violet"} />
+                <StatCard label="ยอดรวม" value={`฿${totalBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`} tone="cyan" />
             </div>
 
-            <div className="card">
-                {networks.length === 0 ? (
-                    <div className="empty-state">ยังไม่มีเครือข่าย</div>
+            <TableShell>
+                <div style={{ padding: 18, borderBottom: "1px solid var(--border)", display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "space-between" }}>
+                    <input className="form-input" style={{ maxWidth: 360 }} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ค้นหาชื่อหรือ prefix" />
+                    <select className="form-input" style={{ maxWidth: 190 }} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                        <option value="all">ทุกสถานะ</option>
+                        <option value="active">เปิดใช้งาน</option>
+                        <option value="inactive">ปิดใช้งาน</option>
+                    </select>
+                </div>
+
+                {filteredNetworks.length === 0 ? (
+                    <EmptyState title="ไม่พบเครือข่าย" description="ลองเปลี่ยนคำค้นหาหรือสร้างเครือข่ายใหม่" action={<button className="btn btn-primary" onClick={openCreate}>เพิ่มเครือข่าย</button>} />
                 ) : (
-                    <table className="table">
-                        <thead>
-                            <tr>
-                                <th>ชื่อ</th>
-                                <th>Prefix</th>
-                                <th>ยอดรวม</th>
-                                <th>บัญชี</th>
-                                <th>หมดอายุ</th>
-                                <th>สถานะ</th>
-                                <th>จัดการ</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {networks.map((n) => (
-                                <tr key={n.id}>
-                                    <td>{n.name}</td>
-                                    <td>
-                                        <code>{n.prefix}</code>
-                                        <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
-                                            {n.prefix}.{baseDomain}
-                                        </div>
-                                    </td>
-                                    <td style={{ color: "var(--success)", fontWeight: 600 }}>
-                                        ฿ {n.totalBalance?.toLocaleString("th-TH", { minimumFractionDigits: 2 }) || "0.00"}
-                                    </td>
-                                    <td>{n._count.accounts}</td>
-                                    <td>
-                                        {n.expiredAt ? (
-                                            <span style={{
-                                                color: new Date(n.expiredAt) > new Date() ? "#22c55e" : "#ef4444",
-                                                fontWeight: 500
-                                            }}>
-                                                {new Date(n.expiredAt) > new Date()
-                                                    ? `${Math.ceil((new Date(n.expiredAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} วัน`
-                                                    : "หมดอายุ!"
-                                                }
-                                            </span>
-                                        ) : (
-                                            <span style={{ color: "#9ca3af" }}>ไม่มีกำหนด</span>
-                                        )}
-                                    </td>
-                                    <td>
-                                        <span className={`badge ${n.isActive ? "badge-success" : "badge-error"}`}>
-                                            {n.isActive ? "ใช้งาน" : "ปิด"}
-                                        </span>
-                                    </td>
-                                    <td style={{ display: "flex", gap: 8 }}>
-                                        <a
-                                            href={`/master/networks/${n.id}`}
-                                            className="btn btn-primary"
-                                            style={{ padding: "8px 12px" }}
-                                        >
-                                            ⚙️ ตั้งค่า
-                                        </a>
-                                        <button className="btn btn-secondary" style={{ padding: "8px 12px" }} onClick={() => handleToggle(n)}>
-                                            {n.isActive ? "ปิด" : "เปิด"}
-                                        </button>
-                                        <button className="btn btn-secondary" style={{ padding: "8px 12px" }} onClick={() => handleEdit(n)}>
-                                            แก้ไข
-                                        </button>
-                                        <button className="btn btn-danger" style={{ padding: "8px 12px" }} onClick={() => handleDelete(n.id)}>
-                                            ลบ
-                                        </button>
-                                    </td>
+                    <div className="table-wrap">
+                        <table className="table">
+                            <thead>
+                                <tr>
+                                    <th>เครือข่าย</th>
+                                    <th>ยอดรวม</th>
+                                    <th>บัญชี</th>
+                                    <th>อายุบริการ</th>
+                                    <th>สถานะ</th>
+                                    <th>จัดการ</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {filteredNetworks.map((network) => {
+                                    const expired = network.expiredAt ? new Date(network.expiredAt) <= new Date() : false;
+                                    const daysLeft = network.expiredAt ? Math.ceil((new Date(network.expiredAt).getTime() - Date.now()) / 86400000) : null;
+                                    return (
+                                        <tr key={network.id}>
+                                            <td>
+                                                <div className="table-title">{network.name}</div>
+                                                <div className="table-subtitle">
+                                                    <code>{network.prefix}</code> {network.prefix}.{baseDomain}
+                                                </div>
+                                            </td>
+                                            <td style={{ color: "var(--success)", fontWeight: 900 }}>
+                                                ฿{(network.totalBalance || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td>{network._count.accounts}</td>
+                                            <td>
+                                                {network.expiredAt ? (
+                                                    <span className={`badge ${expired ? "badge-error" : "badge-success"}`}>
+                                                        {expired ? "หมดอายุ" : `${daysLeft} วัน`}
+                                                    </span>
+                                                ) : (
+                                                    <span className="badge badge-secondary">ไม่มีกำหนด</span>
+                                                )}
+                                            </td>
+                                            <td><StatusBadge active={network.isActive} /></td>
+                                            <td>
+                                                <div className="table-actions">
+                                                    <Link href={`/master/networks/${network.id}`} className="btn btn-primary btn-compact">ตั้งค่า</Link>
+                                                    <button className="btn btn-secondary btn-compact" onClick={() => handleToggle(network)}>
+                                                        {network.isActive ? "ปิด" : "เปิด"}
+                                                    </button>
+                                                    <button className="btn btn-secondary btn-compact" onClick={() => handleEdit(network)}>แก้ไข</button>
+                                                    <button className="btn btn-danger btn-compact" onClick={() => setConfirmDelete(network)}>ลบ</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
                 )}
-            </div>
+            </TableShell>
 
             {showModal && (
                 <div className="modal-overlay" onClick={() => setShowModal(false)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal" onClick={(event) => event.stopPropagation()}>
                         <h2 className="modal-title">{editingId ? "แก้ไขเครือข่าย" : "เพิ่มเครือข่าย"}</h2>
                         <form onSubmit={handleSubmit}>
-                            <div className="form-group">
-                                <label className="form-label">Prefix (ใช้ใน URL)</label>
-                                <input
-                                    type="text"
-                                    className="form-input"
-                                    value={form.prefix}
-                                    onChange={(e) => setForm({ ...form, prefix: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, "") })}
-                                    placeholder="shop1"
-                                    required
-                                    disabled={!!editingId}
-                                />
-                                {!editingId && form.prefix && (
-                                    <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
-                                        Tenant URL: https://{form.prefix}.{baseDomain}
-                                    </div>
-                                )}
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label className="form-label">Prefix</label>
+                                    <input
+                                        className="form-input"
+                                        value={form.prefix}
+                                        onChange={(event) => setForm({ ...form, prefix: event.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, "") })}
+                                        placeholder="jga88"
+                                        required
+                                        disabled={!!editingId}
+                                    />
+                                    {!editingId && form.prefix && <div className="form-hint">https://{form.prefix}.{baseDomain}</div>}
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">ชื่อเครือข่าย</label>
+                                    <input className="form-input" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required placeholder="JGA88" />
+                                </div>
                             </div>
-                            <div className="form-group">
-                                <label className="form-label">ชื่อเครือข่าย</label>
-                                <input
-                                    type="text"
-                                    className="form-input"
-                                    value={form.name}
-                                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                                    placeholder="ร้านค้า ABC"
-                                    required
-                                />
-                            </div>
+
                             {!editingId && (
-                                <>
+                                <div className="form-row">
                                     <div className="form-group">
                                         <label className="form-label">Tenant Admin Username</label>
-                                        <input
-                                            type="text"
-                                            className="form-input"
-                                            value={form.adminUsername}
-                                            onChange={(e) => setForm({ ...form, adminUsername: e.target.value })}
-                                            placeholder={`${form.prefix || "tenant"}admin`}
-                                            autoComplete="off"
-                                        />
+                                        <input className="form-input" value={form.adminUsername} onChange={(event) => setForm({ ...form, adminUsername: event.target.value })} placeholder="เว้นว่างได้" autoComplete="off" />
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label">Tenant Admin Password</label>
-                                        <input
-                                            type="password"
-                                            className="form-input"
-                                            value={form.adminPassword}
-                                            onChange={(e) => setForm({ ...form, adminPassword: e.target.value })}
-                                            placeholder="อย่างน้อย 6 ตัวอักษร"
-                                            autoComplete="new-password"
-                                        />
+                                        <input className="form-input" type="password" value={form.adminPassword} onChange={(event) => setForm({ ...form, adminPassword: event.target.value })} placeholder="อย่างน้อย 6 ตัวอักษร" autoComplete="new-password" />
                                     </div>
-                                </>
+                                </div>
                             )}
+
                             <div className="modal-actions">
-                                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
-                                    ยกเลิก
-                                </button>
-                                <button type="submit" className="btn btn-primary">
-                                    {editingId ? "บันทึก" : "เพิ่ม"}
-                                </button>
+                                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>ยกเลิก</button>
+                                <button type="submit" className="btn btn-primary">{editingId ? "บันทึก" : "สร้างเครือข่าย"}</button>
                             </div>
                         </form>
                     </div>
                 </div>
+            )}
+
+            {confirmDelete && (
+                <ConfirmModal
+                    title="ลบเครือข่ายนี้?"
+                    message={`การลบ ${confirmDelete.name} จะลบข้อมูล tenant ที่เกี่ยวข้องตาม relation ในฐานข้อมูล`}
+                    confirmText="ลบเครือข่าย"
+                    onCancel={() => setConfirmDelete(null)}
+                    onConfirm={deleteNetwork}
+                />
             )}
         </div>
     );

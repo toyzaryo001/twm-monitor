@@ -13,9 +13,6 @@ router.use("/auth", authRouter);
 // Networks management
 router.use("/networks", networksRouter);
 
-// Networks management
-router.use("/networks", networksRouter);
-
 import settingsRouter from "./settings";
 import announcementsRouter from "./announcements";
 import packagesRouter from "./packages";

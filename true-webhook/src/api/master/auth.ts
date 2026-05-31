@@ -15,9 +15,13 @@ router.post("/login", async (req, res, next) => {
         });
 
         const { username, password } = schema.parse(req.body);
+        const normalizedUsername = username.trim();
+        if (!normalizedUsername) {
+            return res.status(401).json({ ok: false, error: "INVALID_CREDENTIALS" });
+        }
 
         // Find user by email field (used as username)
-        const user = await prisma.user.findUnique({ where: { email: username } });
+        const user = await prisma.user.findUnique({ where: { email: normalizedUsername } });
         if (!user) {
             return res.status(401).json({ ok: false, error: "INVALID_CREDENTIALS" });
         }
@@ -77,14 +81,18 @@ router.post("/setup", async (req, res, next) => {
         });
 
         const { username, password } = schema.parse(req.body);
+        const normalizedUsername = username.trim();
+        if (normalizedUsername.length < 3) {
+            return res.status(400).json({ ok: false, error: "USERNAME_TOO_SHORT" });
+        }
 
         const passwordHash = await hashPassword(password);
 
         const user = await prisma.user.create({
             data: {
-                email: username, // Store username in email field
+                email: normalizedUsername, // Store username in email field
                 passwordHash,
-                displayName: username,
+                displayName: normalizedUsername,
                 role: "MASTER",
             },
         });
