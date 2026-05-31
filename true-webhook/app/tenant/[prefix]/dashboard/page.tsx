@@ -199,7 +199,7 @@ export default function TenantDashboard() {
                     <div className="tenant-hero-kicker">Private Wallet Operations</div>
                     <h1 className="tenant-hero-title">แดชบอร์ด</h1>
                     <p className="tenant-hero-subtitle">
-                        ภาพรวมเงินคงเหลือและสถานะวอลเล็ตทั้งหมดในเครือข่าย พร้อมลัดไปจัดการวอลเล็ตและประวัติรายการได้ทันที
+                        ภาพรวมเงินคงเหลือและสถานะวอลเล็ตทั้งหมดในเครือข่าย
                     </p>
                     <div className="tenant-hero-meta" style={{ marginTop: 20 }}>
                         <span className="tenant-pill">{stats?.total || 0} wallets</span>
@@ -301,22 +301,6 @@ export default function TenantDashboard() {
                 )}
             </div>
 
-            <div className="tenant-card">
-                <div className="tenant-section-head">
-                    <h2 className="tenant-section-title">การดำเนินการ</h2>
-                </div>
-                <div className="tenant-quick-actions">
-                    <Link href={`/tenant/${prefix}/wallets`} className="tenant-btn tenant-btn-secondary">
-                        จัดการวอลเล็ต
-                    </Link>
-                    <Link href={`/tenant/${prefix}/history`} className="tenant-btn tenant-btn-secondary">
-                        ดูประวัติยอด
-                    </Link>
-                    <Link href={`/tenant/${prefix}/settings`} className="tenant-btn tenant-btn-secondary">
-                        ตั้งค่า
-                    </Link>
-                </div>
-            </div>
         </div>
     );
 }
