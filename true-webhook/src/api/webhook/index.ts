@@ -200,9 +200,7 @@ router.all("/:prefix", async (req: Request, res: Response) => {
             return res.status(200).json({ status: "ignored", reason: "Account not found" });
         }
 
-        // [DISABLED] Webhook Authorization Key check - ยกเลิกการใช้งาน
-        // ระบบจะรับข้อมูลทั้งหมดโดยไม่ต้องตรวจสอบ Key
-        /*
+        // Enforce webhook authorization only for accounts that explicitly set a secret.
         if ((account as any).webhookSecret) {
             const authHeader = req.headers.authorization || "";
             const token = authHeader.replace(/^Bearer\s+/i, ""); // Remove Bearer if present
@@ -228,9 +226,6 @@ router.all("/:prefix", async (req: Request, res: Response) => {
                 return res.status(401).json({ error: "Unauthorized: Invalid Webhook Secret" });
             }
         }
-        */
-
-
         // 4. Save Transaction (only if feature is enabled)
         const amount = typeof amountRaw === 'string' ? parseFloat(amountRaw) : amountRaw;
         const fee = typeof feeRaw === 'string' ? parseFloat(feeRaw) : feeRaw;
@@ -264,7 +259,7 @@ router.all("/:prefix", async (req: Request, res: Response) => {
                     accountId: (account as any).id,
                     amount: amount,
                     fee: fee,
-                    type: transactionType,
+                    type: determinedType,
                     status: payload.status || "SUCCESS",
                     senderMobile: payload.sender_mobile,
                     senderName: payload.sender_name,
@@ -282,7 +277,7 @@ router.all("/:prefix", async (req: Request, res: Response) => {
                     type: "webhook_debug" as any,
                     message: "Transaction Saved Successfully",
                     accountId: (account as any).id,
-                    payload: { transactionId, amount, fee, type: transactionType } as any
+                    payload: { transactionId, amount, fee, type: determinedType } as any
                 }
             });
             console.log(`[Webhook] Transaction saved successfully!`);
@@ -315,7 +310,7 @@ router.all("/:prefix", async (req: Request, res: Response) => {
             transaction: {
                 amount,
                 fee,
-                type: transactionType
+                type: determinedType
             }
         });
 

@@ -1,8 +1,11 @@
 import { Router } from "express";
 import { prisma } from "../../lib/prisma";
 import { z } from "zod";
+import { requireAuth, requireMaster } from "../../middleware/auth";
 
 const router = Router();
+
+router.use(requireAuth, requireMaster);
 
 // Get bank settings
 router.get("/", async (req, res, next) => {

@@ -16,7 +16,10 @@ export function isTokenExpired(token: string): boolean {
     const decoded = parseJwt(token);
     if (!decoded || !decoded.exp) return true;
 
-    // exp is in seconds, Date.now() is in ms
-    const currentTime = Date.now() / 1000;
-    return decoded.exp < currentTime;
+    const exp = Number(decoded.exp);
+    if (!Number.isFinite(exp)) return true;
+
+    // Server tokens use milliseconds; accept seconds for JWT-compatible tokens.
+    const expMs = exp < 10_000_000_000 ? exp * 1000 : exp;
+    return expMs < Date.now();
 }

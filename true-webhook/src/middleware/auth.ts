@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyToken } from "../lib/auth";
+import { prisma } from "../lib/prisma";
 
 declare global {
     namespace Express {
@@ -38,7 +39,7 @@ export function requireMaster(req: Request, res: Response, next: NextFunction) {
     next();
 }
 
-export function requireNetworkAccess(req: Request, res: Response, next: NextFunction) {
+export async function requireNetworkAccess(req: Request, res: Response, next: NextFunction) {
     const { prefix } = req.params;
 
     // Master can access all networks
@@ -46,10 +47,29 @@ export function requireNetworkAccess(req: Request, res: Response, next: NextFunc
         return next();
     }
 
-    // Check if user belongs to this network (by prefix lookup needed)
-    // For now, allow NETWORK_ADMIN and NETWORK_USER
     if (req.user?.role === "NETWORK_ADMIN" || req.user?.role === "NETWORK_USER") {
-        return next();
+        if (!req.user.networkId) {
+            return res.status(403).json({ ok: false, error: "NETWORK_ACCESS_DENIED" });
+        }
+
+        try {
+            const network = await prisma.network.findUnique({
+                where: { prefix },
+                select: { id: true },
+            });
+
+            if (!network) {
+                return res.status(404).json({ ok: false, error: "NETWORK_NOT_FOUND" });
+            }
+
+            if (network.id !== req.user.networkId) {
+                return res.status(403).json({ ok: false, error: "NETWORK_ACCESS_DENIED" });
+            }
+
+            return next();
+        } catch (err) {
+            return next(err);
+        }
     }
 
     return res.status(403).json({ ok: false, error: "NETWORK_ACCESS_DENIED" });

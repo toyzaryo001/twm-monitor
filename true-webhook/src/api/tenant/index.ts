@@ -10,6 +10,14 @@ function isLocalJga88(prefix: string) {
     return process.env.LOCAL_JGA88_MODE === "true" && prefix === "jga88";
 }
 
+function requireRecoveryToolAccess(req: Request, res: Response, next: NextFunction) {
+    if (req.user?.role === "MASTER" || process.env.ALLOW_TENANT_RECOVERY_TOOLS === "true") {
+        return next();
+    }
+
+    return res.status(403).json({ ok: false, error: "RECOVERY_TOOL_ACCESS_DENIED" });
+}
+
 // Auth routes (no auth required - public endpoints)
 router.use("/auth", authRouter);
 
@@ -141,7 +149,7 @@ router.get("/stats", async (req: Request<{ prefix: string }>, res: Response, nex
 });
 
 // Recover missed transactions from NotificationLog
-router.post("/recover-transactions", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
+router.post("/recover-transactions", requireRecoveryToolAccess, async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     try {
         const network = await prisma.network.findUnique({
             where: { prefix: req.params.prefix },
@@ -281,7 +289,7 @@ router.post("/recover-transactions", async (req: Request<{ prefix: string }>, re
 });
 
 // Debug: Check which transactions are missing
-router.get("/debug-missing", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
+router.get("/debug-missing", requireRecoveryToolAccess, async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     try {
         const network = await prisma.network.findUnique({
             where: { prefix: req.params.prefix },
@@ -362,7 +370,7 @@ router.get("/debug-missing", async (req: Request<{ prefix: string }>, res: Respo
 });
 
 // Fix misassigned transactions
-router.post("/fix-transactions", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
+router.post("/fix-transactions", requireRecoveryToolAccess, async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     try {
         const network = await prisma.network.findUnique({
             where: { prefix: req.params.prefix },
@@ -524,7 +532,7 @@ router.post("/fix-transactions", async (req: Request<{ prefix: string }>, res: R
 });
 
 // Force recover all transactions from 18:18 using log ID as unique key
-router.post("/force-recover", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
+router.post("/force-recover", requireRecoveryToolAccess, async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     try {
         const network = await prisma.network.findUnique({
             where: { prefix: req.params.prefix },
@@ -636,7 +644,7 @@ router.post("/force-recover", async (req: Request<{ prefix: string }>, res: Resp
 });
 
 // Move transactions from อรปภา to โสวัฒน์
-router.post("/move-transactions", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
+router.post("/move-transactions", requireRecoveryToolAccess, async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     try {
         const network = await prisma.network.findUnique({
             where: { prefix: req.params.prefix },
