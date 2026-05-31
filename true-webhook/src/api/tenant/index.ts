@@ -3,6 +3,8 @@ import accountsRouter from "./accounts";
 import authRouter from "./auth";
 import { requireAuth, requireNetworkAccess } from "../../middleware/auth";
 import { prisma } from "../../lib/prisma";
+import { signSseTicket } from "../../lib/auth";
+import { logEvent } from "../../lib/logging";
 
 const router = Router({ mergeParams: true });
 
@@ -11,11 +13,20 @@ function isLocalJga88(prefix: string) {
 }
 
 function requireRecoveryToolAccess(req: Request, res: Response, next: NextFunction) {
-    if (req.user?.role === "MASTER" || process.env.ALLOW_TENANT_RECOVERY_TOOLS === "true") {
+    if (req.user?.role === "MASTER" && process.env.ALLOW_TENANT_RECOVERY_TOOLS === "true") {
         return next();
     }
 
     return res.status(403).json({ ok: false, error: "RECOVERY_TOOL_ACCESS_DENIED" });
+}
+
+function logRecoveryToolUse(req: Request<{ prefix: string }>, result: Record<string, unknown>) {
+    logEvent("warn", "recovery_tool_used", {
+        userId: req.user?.userId,
+        prefix: req.params.prefix,
+        route: req.path,
+        result,
+    });
 }
 
 // Auth routes (no auth required - public endpoints)
@@ -53,6 +64,43 @@ router.get("/contact-info", async (req: Request, res: Response, next: NextFuncti
 
 // Protected routes below
 router.use(requireAuth, requireNetworkAccess);
+
+router.get("/sse-ticket", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
+    try {
+        const accountId = typeof req.query.accountId === "string" ? req.query.accountId : "";
+        if (!accountId) {
+            return res.status(400).json({ ok: false, error: "ACCOUNT_ID_REQUIRED" });
+        }
+
+        const network = await prisma.network.findUnique({
+            where: { prefix: req.params.prefix },
+            select: { id: true },
+        });
+
+        if (!network) {
+            return res.status(404).json({ ok: false, error: "NETWORK_NOT_FOUND" });
+        }
+
+        const account = await prisma.account.findFirst({
+            where: { id: accountId, networkId: network.id },
+            select: { id: true, networkId: true },
+        });
+
+        if (!account) {
+            return res.status(404).json({ ok: false, error: "ACCOUNT_NOT_FOUND" });
+        }
+
+        const ticket = signSseTicket({
+            accountId: account.id,
+            networkId: account.networkId,
+            userId: req.user!.userId,
+        });
+
+        return res.json({ ok: true, data: { ticket, expiresInSeconds: 120 } });
+    } catch (err) {
+        next(err);
+    }
+});
 
 // Accounts management
 router.use("/accounts", accountsRouter);
@@ -274,14 +322,17 @@ router.post("/recover-transactions", requireRecoveryToolAccess, async (req: Requ
             }
         }
 
+        const result = {
+            totalLogs: logs.length,
+            recovered,
+            skipped,
+            errors: errors.slice(0, 10) // Limit error messages
+        };
+        logRecoveryToolUse(req, result);
+
         return res.json({
             ok: true,
-            data: {
-                totalLogs: logs.length,
-                recovered,
-                skipped,
-                errors: errors.slice(0, 10) // Limit error messages
-            }
+            data: result
         });
     } catch (err) {
         next(err);
@@ -354,15 +405,18 @@ router.get("/debug-missing", requireRecoveryToolAccess, async (req: Request<{ pr
         const missing = analysis.filter(a => a.status === "MISSING");
         const existing = analysis.filter(a => a.status === "ALREADY_EXISTS");
 
+        const result = {
+            totalLogs: logs.length,
+            missing: missing.length,
+            existing: existing.length,
+            missingDetails: missing.slice(0, 20),
+            existingDetails: existing.slice(0, 5)
+        };
+        logRecoveryToolUse(req, result);
+
         return res.json({
             ok: true,
-            data: {
-                totalLogs: logs.length,
-                missing: missing.length,
-                existing: existing.length,
-                missingDetails: missing.slice(0, 20),
-                existingDetails: existing.slice(0, 5)
-            }
+            data: result
         });
     } catch (err) {
         next(err);
@@ -516,15 +570,18 @@ router.post("/fix-transactions", requireRecoveryToolAccess, async (req: Request<
             }
         }
 
+        const result = {
+            deleted: deleted.count,
+            recovered,
+            skipped,
+            correctAccountId,
+            wrongAccountId
+        };
+        logRecoveryToolUse(req, result);
+
         return res.json({
             ok: true,
-            data: {
-                deleted: deleted.count,
-                recovered,
-                skipped,
-                correctAccountId,
-                wrongAccountId
-            }
+            data: result
         });
     } catch (err) {
         next(err);
@@ -628,15 +685,18 @@ router.post("/force-recover", requireRecoveryToolAccess, async (req: Request<{ p
             }
         }
 
+        const result = {
+            totalLogs: logs.length,
+            recovered,
+            skipped,
+            targetAccountId,
+            details: details.slice(0, 20)
+        };
+        logRecoveryToolUse(req, result);
+
         return res.json({
             ok: true,
-            data: {
-                totalLogs: logs.length,
-                recovered,
-                skipped,
-                targetAccountId,
-                details: details.slice(0, 20)
-            }
+            data: result
         });
     } catch (err) {
         next(err);
@@ -722,15 +782,18 @@ router.post("/move-transactions", requireRecoveryToolAccess, async (req: Request
             });
         }
 
+        const result = {
+            sourceAccount: "อรปภา",
+            targetAccount: "โสวัฒน์",
+            totalFound: transactionsToMove.length,
+            moved: moved,
+            deletedDuplicates: duplicates.length
+        };
+        logRecoveryToolUse(req, result);
+
         return res.json({
             ok: true,
-            data: {
-                sourceAccount: "อรปภา",
-                targetAccount: "โสวัฒน์",
-                totalFound: transactionsToMove.length,
-                moved: moved,
-                deletedDuplicates: duplicates.length
-            }
+            data: result
         });
     } catch (err) {
         next(err);

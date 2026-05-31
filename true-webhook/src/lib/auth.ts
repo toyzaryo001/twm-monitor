@@ -1,7 +1,8 @@
 import crypto from "crypto";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-in-production";
-const TOKEN_EXPIRY = 7 * 24 * 60 * 60 * 1000; // 7 days
+const TOKEN_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const SSE_TICKET_EXPIRY_MS = 2 * 60 * 1000; // 2 minutes
 
 interface TokenPayload {
     userId: string;
@@ -10,30 +11,70 @@ interface TokenPayload {
     networkId?: string | null;
 }
 
-// Simple JWT implementation
-export function signToken(payload: TokenPayload, expiresIn: number = TOKEN_EXPIRY): string {
-    const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
-    const exp = Date.now() + expiresIn;
-    const body = Buffer.from(JSON.stringify({ ...payload, exp })).toString("base64url");
-    const signature = crypto
+interface SseTicketPayload {
+    accountId: string;
+    networkId: string;
+    userId: string;
+    exp: number;
+    purpose: "sse_balance";
+}
+
+function signBody(body: string, header: string): string {
+    return crypto
         .createHmac("sha256", JWT_SECRET)
         .update(`${header}.${body}`)
         .digest("base64url");
+}
+
+// Simple JWT implementation
+export function signToken(payload: TokenPayload, expiresIn: number = TOKEN_EXPIRY_MS): string {
+    const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+    const exp = Math.floor((Date.now() + expiresIn) / 1000);
+    const body = Buffer.from(JSON.stringify({ ...payload, exp })).toString("base64url");
+    const signature = signBody(body, header);
     return `${header}.${body}.${signature}`;
 }
 
 export function verifyToken(token: string): TokenPayload | null {
     try {
         const [header, body, signature] = token.split(".");
-        const expectedSig = crypto
-            .createHmac("sha256", JWT_SECRET)
-            .update(`${header}.${body}`)
-            .digest("base64url");
+        const expectedSig = signBody(body, header);
 
         if (signature !== expectedSig) return null;
 
         const payload = JSON.parse(Buffer.from(body, "base64url").toString());
-        if (payload.exp < Date.now()) return null;
+        const exp = Number(payload.exp);
+        const expMs = exp < 10_000_000_000 ? exp * 1000 : exp;
+        if (!Number.isFinite(expMs) || expMs < Date.now()) return null;
+
+        return payload;
+    } catch {
+        return null;
+    }
+}
+
+export function signSseTicket(payload: Omit<SseTicketPayload, "exp" | "purpose">): string {
+    const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "SSE" })).toString("base64url");
+    const body = Buffer.from(JSON.stringify({
+        ...payload,
+        purpose: "sse_balance",
+        exp: Math.floor((Date.now() + SSE_TICKET_EXPIRY_MS) / 1000),
+    })).toString("base64url");
+    const signature = signBody(body, header);
+    return `${header}.${body}.${signature}`;
+}
+
+export function verifySseTicket(ticket: string, accountId: string): SseTicketPayload | null {
+    try {
+        const [header, body, signature] = ticket.split(".");
+        const expectedSig = signBody(body, header);
+        if (signature !== expectedSig) return null;
+
+        const payload = JSON.parse(Buffer.from(body, "base64url").toString()) as SseTicketPayload;
+        if (payload.purpose !== "sse_balance") return null;
+        if (payload.accountId !== accountId) return null;
+        if (payload.exp < Math.floor(Date.now() / 1000)) return null;
+        if (!payload.networkId || !payload.userId) return null;
 
         return payload;
     } catch {

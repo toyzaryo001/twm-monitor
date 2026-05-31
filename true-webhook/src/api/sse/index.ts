@@ -1,5 +1,7 @@
 import { Router, Request, Response } from "express";
 import { prisma } from "../../lib/prisma";
+import { verifySseTicket } from "../../lib/auth";
+import { logEvent } from "../../lib/logging";
 
 const router = Router();
 
@@ -9,13 +11,19 @@ const clients = new Map<string, Set<Response>>();
 // SSE endpoint for real-time balance updates
 router.get("/balance/:accountId", async (req: Request, res: Response) => {
     const { accountId } = req.params;
+    const ticket = typeof req.query.ticket === "string" ? req.query.ticket : "";
+    const ticketPayload = verifySseTicket(ticket, accountId);
+
+    if (!ticketPayload) {
+        return res.status(401).json({ ok: false, error: "INVALID_SSE_TICKET" });
+    }
 
     // Verify account exists
     const account = await prisma.account.findUnique({
         where: { id: accountId },
     });
 
-    if (!account) {
+    if (!account || account.networkId !== ticketPayload.networkId) {
         return res.status(404).json({ ok: false, error: "ACCOUNT_NOT_FOUND" });
     }
 
@@ -23,7 +31,6 @@ router.get("/balance/:accountId", async (req: Request, res: Response) => {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
-    res.setHeader("Access-Control-Allow-Origin", "*");
     res.flushHeaders();
 
     // Add client to set
@@ -32,7 +39,12 @@ router.get("/balance/:accountId", async (req: Request, res: Response) => {
     }
     clients.get(accountId)!.add(res);
 
-    console.log(`[SSE] Client connected for account ${accountId}. Total: ${clients.get(accountId)!.size}`);
+    logEvent("info", "sse_client_connected", {
+        accountId,
+        networkId: ticketPayload.networkId,
+        userId: ticketPayload.userId,
+        clients: clients.get(accountId)!.size,
+    });
 
     // Send initial data
     const latestSnapshot = await prisma.balanceSnapshot.findFirst({
@@ -58,7 +70,10 @@ router.get("/balance/:accountId", async (req: Request, res: Response) => {
     req.on("close", () => {
         clearInterval(heartbeat);
         clients.get(accountId)?.delete(res);
-        console.log(`[SSE] Client disconnected for account ${accountId}. Remaining: ${clients.get(accountId)?.size || 0}`);
+        logEvent("info", "sse_client_disconnected", {
+            accountId,
+            remaining: clients.get(accountId)?.size || 0,
+        });
     });
 });
 
@@ -84,7 +99,7 @@ export function broadcastBalanceUpdate(accountId: string, data: {
         ...data,
     });
 
-    console.log(`[SSE] Broadcasting to ${accountClients.size} clients for account ${accountId}`);
+    logEvent("info", "sse_broadcast", { accountId, clients: accountClients.size });
 
     accountClients.forEach((client) => {
         try {
@@ -98,6 +113,17 @@ export function broadcastBalanceUpdate(accountId: string, data: {
 
 // Get connected clients count (for debugging)
 router.get("/status", (req: Request, res: Response) => {
+    const secret = process.env.HEALTH_CHECK_SECRET;
+    const headerSecret = req.headers["x-health-secret"];
+    const querySecret = typeof req.query.secret === "string" ? req.query.secret : "";
+    const providedSecret = (Array.isArray(headerSecret) ? headerSecret[0] : headerSecret) ||
+        req.headers.authorization?.replace(/^Bearer\s+/i, "") ||
+        querySecret;
+
+    if (process.env.NODE_ENV === "production" && (!secret || providedSecret !== secret)) {
+        return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+    }
+
     const status: Record<string, number> = {};
     clients.forEach((clientSet, accountId) => {
         status[accountId] = clientSet.size;

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useToast } from "../../../components/Toast";
+import { openTenantBalanceStream } from "../../../lib/tenantSse";
 
 interface Account {
     id: string;
@@ -158,35 +159,44 @@ export default function WalletsPage() {
     useEffect(() => {
         if (accounts.length === 0) return;
 
+        let cancelled = false;
         const connections: EventSource[] = [];
 
         accounts.forEach(account => {
-            const es = new EventSource(`/api/sse/balance/${account.id}`);
-
-            es.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    if (data.type === "initial" || data.type === "update") {
-                        setBalances(prev => ({
-                            ...prev,
-                            [account.id]: {
-                                balance: data.balance,
-                                checkedAt: data.checkedAt
-                            }
-                        }));
+            openTenantBalanceStream(prefix, account.id)
+                .then((es) => {
+                    if (cancelled) {
+                        es.close();
+                        return;
                     }
-                } catch (e) {
-                    console.error("SSE Parse Error", e);
-                }
-            };
 
-            connections.push(es);
+                    es.onmessage = (event) => {
+                        try {
+                            const data = JSON.parse(event.data);
+                            if (data.type === "initial" || data.type === "update") {
+                                setBalances(prev => ({
+                                    ...prev,
+                                    [account.id]: {
+                                        balance: data.balance,
+                                        checkedAt: data.checkedAt
+                                    }
+                                }));
+                            }
+                        } catch (e) {
+                            console.error("SSE Parse Error", e);
+                        }
+                    };
+
+                    connections.push(es);
+                })
+                .catch((error) => console.error("SSE connection failed", error));
         });
 
         return () => {
+            cancelled = true;
             connections.forEach(es => es.close());
         };
-    }, [accounts]);
+    }, [accounts, prefix]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

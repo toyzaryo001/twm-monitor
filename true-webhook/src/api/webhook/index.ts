@@ -3,24 +3,45 @@ import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { broadcastBalanceUpdate } from "../sse";
+import { logEvent, sanitizeLogPayload } from "../../lib/logging";
 
 const router = Router({ mergeParams: true });
 
 // TrueMoney Webhook Payload Schema
+const numberLikeSchema = z.number().or(z.string());
+const optionalNumberLikeSchema = numberLikeSchema.nullish();
+
 const webhookSchema = z.object({
-    transaction_id: z.string(),
-    amount: z.number().or(z.string()),
-    mobile_no: z.string(), // Sender or Recipient mobile (depends on direction)
-    fee: z.number().or(z.string()).optional().default(0),
+    transaction_id: z.string().optional(),
+    amount: optionalNumberLikeSchema,
+    amount_net: optionalNumberLikeSchema,
+    mobile_no: z.string().optional(), // Sender or Recipient mobile (depends on direction)
+    recipient_mobile: z.string().optional(),
+    sender_mobile: z.string().optional(),
+    fee: optionalNumberLikeSchema,
+    transaction_fee: optionalNumberLikeSchema,
     transaction_date: z.string().optional(),
     status: z.string().optional(),
     transaction_type: z.string().optional(), // 'creditor' (income) or 'debtor' (expense)
-    // Add other fields as discovered
-}).passthrough();
+    event_type: z.string().optional(),
+    iat: numberLikeSchema.optional(),
+    ref_id: z.string().optional(),
+    sender_name: z.string().optional(),
+    recipient_name: z.string().optional(),
+    merchant_name: z.string().optional(),
+    server: z.string().optional(),
+}).passthrough().refine((data) => {
+    return data.server === "handshake" ||
+        data.amount != null ||
+        data.amount_net != null ||
+        Boolean(data.transaction_id) ||
+        Boolean(data.ref_id) ||
+        Boolean(data.event_type);
+}, { message: "INVALID_WEBHOOK_PAYLOAD" });
 
 // POST /api/webhook/:prefix
 router.all("/:prefix", async (req: Request, res: Response) => {
-    console.log(`[Webhook] ${req.method} request for prefix: ${req.params.prefix}`);
+    logEvent("info", "webhook_request", { method: req.method, prefix: req.params.prefix });
 
     // Handle verification requests (HEAD/GET)
     if (req.method === "HEAD" || req.method === "GET") {
@@ -52,7 +73,7 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         // Store feature flag to control History saving (webhook still receives data)
         const shouldSaveToHistory = network.featureWebhookEnabled;
         if (!shouldSaveToHistory) {
-            console.log(`[Webhook] Fee recording disabled for network: ${prefix} - will receive but not save`);
+            logEvent("info", "webhook_history_disabled", { prefix });
         }
 
         // 2. Parse Payload
@@ -67,24 +88,34 @@ router.all("/:prefix", async (req: Request, res: Response) => {
                     const buffer = Buffer.from(parts[1], 'base64');
                     const decodedStr = buffer.toString('utf-8');
                     payload = JSON.parse(decodedStr);
-                    console.log(`[Webhook] Decoded JWT for ${prefix}:`, JSON.stringify(payload));
+                    logEvent("info", "webhook_jwt_decoded", { prefix, payload: sanitizeLogPayload(payload) });
 
                     // Log decoded structure
                     await prisma.notificationLog.create({
                         data: {
                             type: "webhook_debug" as any,
                             message: `Decoded Payload for ${prefix}`,
-                            payload: payload as any,
+                            payload: sanitizeLogPayload(payload) as any,
                         }
                     });
                 }
             } catch (err) {
-                console.error(`[Webhook] Failed to decode JWT:`, err);
+                logEvent("warn", "webhook_jwt_decode_failed", { prefix, error: err instanceof Error ? err.message : String(err) });
             }
         } else {
-            const bodyContent = JSON.stringify(req.body);
-            console.log(`[Webhook] Received plain JSON for ${prefix}:`, bodyContent);
+            logEvent("debug", "webhook_plain_json_received", { prefix, payload: sanitizeLogPayload(req.body) });
         }
+
+        const parsedPayload = webhookSchema.safeParse(payload);
+        if (!parsedPayload.success) {
+            logEvent("warn", "webhook_invalid_payload", {
+                prefix,
+                issues: parsedPayload.error.issues.map((issue) => issue.message),
+                payload: sanitizeLogPayload(payload),
+            });
+            return res.status(400).json({ error: "Invalid webhook payload" });
+        }
+        payload = parsedPayload.data;
 
         // Handle Handshake
         if (payload.server === "handshake") {
@@ -127,7 +158,7 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         }
 
         if (!mobileNo) {
-            console.log(`[Webhook] Missing mobile_no in payload/query. Payload:`, JSON.stringify(payload));
+            logEvent("warn", "webhook_missing_mobile", { prefix, payload: sanitizeLogPayload(payload) });
         }
 
         // 3. Find Account in Network
@@ -179,7 +210,11 @@ router.all("/:prefix", async (req: Request, res: Response) => {
 
             if (accounts.length === 1) {
                 account = accounts[0];
-                console.log(`[Webhook] Account not matched by mobile, but network has single account. Using it: ${account.id} (${account.phoneNumber})`);
+                logEvent("info", "webhook_single_account_fallback", {
+                    prefix,
+                    accountId: account.id,
+                    phoneNumber: account.phoneNumber,
+                });
 
                 // If type wasn't determined by direction matching, rely on payload type (already set)
             }
@@ -190,13 +225,16 @@ router.all("/:prefix", async (req: Request, res: Response) => {
                 data: {
                     type: "webhook_debug" as any,
                     message: "Account NOT found",
-                    payload: {
+                    payload: sanitizeLogPayload({
                         reason: "No matching mobile in payload or query params",
                         mobiles: [payload.recipient_mobile, payload.sender_mobile, payload.mobile_no, req.query.mobile]
-                    } as any
+                    }) as any
                 }
             });
-            console.log(`[Webhook] Account not found. Payload mobiles: ${payload.recipient_mobile}, ${payload.sender_mobile}, ${payload.mobile_no}`);
+            logEvent("warn", "webhook_account_not_found", {
+                prefix,
+                mobiles: sanitizeLogPayload([payload.recipient_mobile, payload.sender_mobile, payload.mobile_no, req.query.mobile]),
+            });
             return res.status(200).json({ status: "ignored", reason: "Account not found" });
         }
 
@@ -206,21 +244,22 @@ router.all("/:prefix", async (req: Request, res: Response) => {
             const token = authHeader.replace(/^Bearer\s+/i, ""); // Remove Bearer if present
 
             if (token !== (account as any).webhookSecret) {
-                console.warn(`[Webhook] Unauthorized access attempt for account ${account.id}.`);
-                console.warn(`Expected: ${(account as any).webhookSecret}`);
-                console.warn(`Got Header: ${authHeader}`);
-                console.warn(`Parsed Token: ${token}`);
+                logEvent("warn", "webhook_unauthorized", {
+                    prefix,
+                    accountId: account.id,
+                    provided: sanitizeLogPayload({ authorization: authHeader, token }),
+                });
 
                 await prisma.notificationLog.create({
                     data: {
                         type: "webhook_debug" as any,
                         message: "Unauthorized Webhook Access",
                         accountId: (account as any).id,
-                        payload: {
+                        payload: sanitizeLogPayload({
                             expected: "***",
                             got_full: authHeader,
                             got_parsed: token
-                        } as any
+                        }) as any
                     }
                 });
                 return res.status(401).json({ error: "Unauthorized: Invalid Webhook Secret" });
@@ -232,7 +271,11 @@ router.all("/:prefix", async (req: Request, res: Response) => {
 
         // Skip saving transaction if fee recording is disabled
         if (!shouldSaveToHistory) {
-            console.log(`[Webhook] Fee recording disabled - skipping save. TX=${transactionId}, Acc=${account.id}`);
+            logEvent("info", "webhook_save_skipped_feature_disabled", {
+                prefix,
+                accountId: account.id,
+                transactionId,
+            });
             return res.status(200).json({
                 status: "ok",
                 message: "Data received but not saved (fee recording disabled)",
@@ -240,7 +283,13 @@ router.all("/:prefix", async (req: Request, res: Response) => {
             });
         }
 
-        console.log(`[Webhook] Saving Transaction: ID=${transactionId}, Acc=${account.id}, Amt=${amount}, Fee=${fee}`);
+        logEvent("info", "webhook_transaction_saving", {
+            prefix,
+            accountId: account.id,
+            transactionId,
+            amount,
+            fee,
+        });
 
         // Check if transaction already exists (idempotency)
         const existingTx = await prisma.financialTransaction.findUnique({
@@ -248,7 +297,7 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         });
 
         if (existingTx) {
-            console.log(`[Webhook] Transaction ${transactionId} already exists. Skipping.`);
+            logEvent("info", "webhook_duplicate_transaction", { prefix, accountId: account.id, transactionId });
             return res.status(200).json({ status: "ok", message: "Transaction already processed" });
         }
 
@@ -280,9 +329,14 @@ router.all("/:prefix", async (req: Request, res: Response) => {
                     payload: { transactionId, amount, fee, type: determinedType } as any
                 }
             });
-            console.log(`[Webhook] Transaction saved successfully!`);
+            logEvent("info", "webhook_transaction_saved", { prefix, accountId: account.id, transactionId });
         } catch (saveErr: any) {
-            console.error(`[Webhook] DB Save Failed:`, saveErr);
+            logEvent("error", "webhook_db_save_failed", {
+                prefix,
+                accountId: account.id,
+                transactionId,
+                error: saveErr?.message || String(saveErr),
+            });
 
             await prisma.notificationLog.create({
                 data: {
@@ -317,7 +371,7 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         return res.status(200).json({ status: "ok" });
 
     } catch (error) {
-        console.error(`[Webhook] Error processing for ${prefix}:`, error);
+        logEvent("error", "webhook_processing_failed", { prefix, error: error instanceof Error ? error.message : String(error) });
         return res.status(500).json({ error: "Internal processing error" });
     }
 });

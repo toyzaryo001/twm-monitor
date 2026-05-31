@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
+import { openTenantBalanceStream } from "../../../lib/tenantSse";
 
 interface Account {
     id: string;
@@ -225,9 +226,8 @@ export default function HistoryPage() {
         }
     }, [selectedAccount, fetchHistory]);
 
-    // SSE (Keep existing)
+    // SSE
     useEffect(() => {
-        // ... existing code ...
         if (!selectedAccount || selectedAccount === "all") {
             if (eventSourceRef.current) eventSourceRef.current.close();
             setIsConnected(false);
@@ -236,23 +236,44 @@ export default function HistoryPage() {
 
         if (eventSourceRef.current) eventSourceRef.current.close();
 
-        const eventSource = new EventSource(`/api/sse/balance/${selectedAccount}`);
-        eventSourceRef.current = eventSource;
+        let cancelled = false;
 
-        eventSource.onopen = () => setIsConnected(true);
-        eventSource.onmessage = (event) => {
+        const connect = async () => {
             try {
-                const data = JSON.parse(event.data);
-                if (data.type === "update") fetchHistory(false);
-            } catch (e) { }
+                const eventSource = await openTenantBalanceStream(prefix, selectedAccount);
+                if (cancelled) {
+                    eventSource.close();
+                    return;
+                }
+
+                eventSourceRef.current = eventSource;
+                eventSource.onopen = () => setIsConnected(true);
+                eventSource.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.type === "update") fetchHistory(false);
+                    } catch (e) { }
+                };
+                eventSource.onerror = () => setIsConnected(false);
+            } catch (error) {
+                if (!cancelled) {
+                    console.error("SSE connection failed", error);
+                    setIsConnected(false);
+                }
+            }
         };
-        eventSource.onerror = () => setIsConnected(false);
+
+        connect();
 
         return () => {
-            eventSource.close();
+            cancelled = true;
+            if (eventSourceRef.current) {
+                eventSourceRef.current.close();
+                eventSourceRef.current = null;
+            }
             setIsConnected(false);
         };
-    }, [selectedAccount, fetchHistory]);
+    }, [selectedAccount, fetchHistory, prefix]);
 
     // Helpers
     const isFee = (entry: HistoryEntry) => {
