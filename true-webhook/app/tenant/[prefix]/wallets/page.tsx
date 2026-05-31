@@ -130,6 +130,36 @@ export default function WalletsPage() {
         setCheckingId(null);
     };
 
+    const handleCopyRoundedBalance = async (account: Account) => {
+        const balance = balances[account.id]?.balance;
+
+        if (typeof balance !== "number") {
+            showToast({
+                type: "error",
+                title: "ยังไม่มียอดเงิน",
+                message: "กรุณารอโหลดข้อมูล หรือกดเช็คยอดก่อนคัดลอก",
+            });
+            return;
+        }
+
+        const roundedBalance = Math.round(balance);
+
+        try {
+            await navigator.clipboard.writeText(String(roundedBalance));
+            showToast({
+                type: "success",
+                title: "คัดลอกยอดแล้ว",
+                message: `ยอดปัดเศษ: ฿ ${roundedBalance.toLocaleString("th-TH")}`,
+            });
+        } catch {
+            showToast({
+                type: "error",
+                title: "คัดลอกไม่สำเร็จ",
+                message: "เบราว์เซอร์ไม่อนุญาตให้คัดลอกอัตโนมัติ",
+            });
+        }
+    };
+
     // Auto-Withdraw feature disabled - TrueMoney API not accessible
     const [featureAutoWithdrawEnabled, setFeatureAutoWithdrawEnabled] = useState(false);
 
@@ -410,7 +440,22 @@ export default function WalletsPage() {
                             </div>
 
                             <div className="wallet-balance">
-                                <div className="wallet-balance-label">ยอดเงินคงเหลือ</div>
+                                <div className="wallet-balance-topline">
+                                    <div className="wallet-balance-label">ยอดเงินคงเหลือ</div>
+                                    <button
+                                        type="button"
+                                        className="wallet-copy-btn"
+                                        onClick={() => handleCopyRoundedBalance(account)}
+                                        disabled={!balances[account.id]}
+                                        title={
+                                            balances[account.id]
+                                                ? `คัดลอก ${Math.round(balances[account.id]!.balance).toLocaleString("th-TH")}`
+                                                : "รอโหลดข้อมูลยอดเงิน"
+                                        }
+                                    >
+                                        คัดลอก
+                                    </button>
+                                </div>
                                 <div className="wallet-balance-value">
                                     {balances[account.id]
                                         ? `฿ ${balances[account.id]!.balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`

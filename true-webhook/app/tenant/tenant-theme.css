@@ -352,10 +352,51 @@
     border: 1px solid rgba(218, 188, 121, 0.18);
 }
 
+.wallet-balance-topline {
+    min-height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
 .wallet-balance-label {
     font-size: 0.875rem;
     color: var(--tenant-text-muted);
     margin-bottom: 8px;
+}
+
+.wallet-balance-topline .wallet-balance-label {
+    margin-bottom: 0;
+}
+
+.wallet-copy-btn {
+    height: 28px;
+    min-width: 68px;
+    padding: 0 10px;
+    border: 1px solid rgba(242, 217, 139, 0.46);
+    border-radius: 7px;
+    background: linear-gradient(135deg, #f2d98b 0%, #26cad3 100%);
+    color: #061016;
+    font-size: 0.75rem;
+    font-weight: 800;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    box-shadow: 0 10px 20px rgba(38, 202, 211, 0.16);
+    transition: transform 0.18s ease, filter 0.18s ease, opacity 0.18s ease;
+}
+
+.wallet-copy-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    filter: brightness(1.05);
+}
+
+.wallet-copy-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+    box-shadow: none;
 }
 
 .wallet-balance-value {
