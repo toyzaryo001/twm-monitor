@@ -77,13 +77,22 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         }
 
         // 2. Parse Payload
-        let payload = req.body;
+        let payload: any = req.body;
+
+        if (typeof payload === "string") {
+            const rawPayload = payload.trim();
+            try {
+                payload = rawPayload.startsWith("{") ? JSON.parse(rawPayload) : { message: rawPayload };
+            } catch {
+                payload = { message: rawPayload };
+            }
+        }
 
         // Check if payload is wrapped in JWT "message" field
-        if (req.body.message && typeof req.body.message === 'string') {
+        if (payload.message && typeof payload.message === 'string') {
             try {
                 // Initial JWT decode (header.body.signature)
-                const parts = req.body.message.split('.');
+                const parts = payload.message.split('.');
                 if (parts.length === 3) {
                     const buffer = Buffer.from(parts[1], 'base64');
                     const decodedStr = buffer.toString('utf-8');

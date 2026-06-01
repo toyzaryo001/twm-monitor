@@ -64,6 +64,8 @@ async function main() {
         })(req, res, nextMiddleware);
     });
     server.use(express.json({ limit: "1mb" }));
+    server.use(express.urlencoded({ extended: false, limit: "1mb" }));
+    server.use(express.text({ type: ["text/plain", "application/jwt"], limit: "1mb" }));
 
     // Serve uploaded files (slips)
     server.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
