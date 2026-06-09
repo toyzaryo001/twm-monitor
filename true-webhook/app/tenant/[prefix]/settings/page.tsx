@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { useToast } from "../../../components/Toast";
 
 interface NetworkInfo {
     id: string;
@@ -19,35 +20,76 @@ interface NetworkInfo {
     isAutoReceiveEnabled?: boolean;
 }
 
+interface AccountInfo {
+    id: string;
+    name: string;
+    phoneNumber?: string;
+    isActive: boolean;
+    webhookSecret?: string | null;
+}
+
 export default function TenantSettingsPage() {
     const params = useParams();
     const prefix = params.prefix as string;
+    const { showToast } = useToast();
     const [network, setNetwork] = useState<NetworkInfo | null>(null);
+    const [accounts, setAccounts] = useState<AccountInfo[]>([]);
     const [loading, setLoading] = useState(true);
 
     const getToken = () => localStorage.getItem("tenantToken") || "";
 
     useEffect(() => {
-        const fetchNetwork = async () => {
+        const fetchSettings = async () => {
             const token = getToken();
             if (!token) return;
 
             try {
-                const res = await fetch(`/api/tenant/${prefix}/stats`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-                const data = await res.json();
-                if (data.ok && data.data.network) {
-                    setNetwork(data.data.network);
+                const [statsRes, accountsRes] = await Promise.all([
+                    fetch(`/api/tenant/${prefix}/stats`, {
+                        headers: { Authorization: `Bearer ${token}` },
+                    }),
+                    fetch(`/api/tenant/${prefix}/accounts`, {
+                        headers: { Authorization: `Bearer ${token}` },
+                    }),
+                ]);
+
+                const statsData = await statsRes.json();
+                if (statsData.ok && statsData.data.network) {
+                    setNetwork(statsData.data.network);
+                }
+
+                const accountsData = await accountsRes.json();
+                if (accountsData.ok) {
+                    setAccounts(accountsData.data);
                 }
             } catch (e) {
-                console.error("Error fetching network", e);
+                console.error("Error fetching settings", e);
             }
             setLoading(false);
         };
 
-        fetchNetwork();
+        fetchSettings();
     }, [prefix]);
+
+    const getWebhookUrl = (phoneNumber?: string) => {
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        return `${origin}/api/webhook/${prefix}?mobile=${phoneNumber || "08x..."}`;
+    };
+
+    const maskSecret = (secret?: string | null) => {
+        if (!secret) return "ยังไม่ได้ตั้งค่า";
+        if (secret.length <= 10) return `${secret.slice(0, 2)}••••${secret.slice(-2)}`;
+        return `${secret.slice(0, 6)}••••••••${secret.slice(-6)}`;
+    };
+
+    const copyText = async (value: string, label: string) => {
+        try {
+            await navigator.clipboard.writeText(value);
+            showToast({ type: "success", title: "คัดลอกแล้ว", message: label });
+        } catch {
+            showToast({ type: "error", title: "คัดลอกไม่สำเร็จ", message: "เบราว์เซอร์ไม่อนุญาตให้คัดลอกอัตโนมัติ" });
+        }
+    };
 
     const getIntervalLabel = (ms: number) => {
         if (ms <= 1000) return "ทุก 1 วินาที";
@@ -130,47 +172,75 @@ export default function TenantSettingsPage() {
             {(network?.isAutoReceiveEnabled !== false) && (
                 <div className="tenant-card" style={{ marginBottom: 24 }}>
                     <div className="settings-section">
-                        <div className="settings-section-title">🔗 Webhook (รับยอดอัตโนมัติ)</div>
-                        <div style={{ padding: "12px 0", color: "var(--tenant-text-muted)", fontSize: "0.9rem", lineHeight: 1.5 }}>
-                            นำลิ้งก์ด้านล่างไปใส่ในแอพ TrueMoney เพื่อรับยอดโอนและค่าธรรมเนียมแบบ Real-time
-                        </div>
-                        <div className="settings-row" style={{ display: "block" }}>
-                            <div style={{
-                                background: "rgba(0,0,0,0.2)",
-                                padding: "12px",
-                                borderRadius: "8px",
-                                fontFamily: "monospace",
-                                wordBreak: "break-all",
-                                border: "1px solid var(--tenant-border)",
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                gap: 10
-                            }}>
-                                <span style={{ color: "var(--accent)" }}>
-                                    {typeof window !== 'undefined' ? `${window.location.origin}/api/webhook/${prefix}?mobile=` : `/api/webhook/${prefix}?mobile=`}
-                                    <span style={{ opacity: 0.5 }}>08x...</span>
-                                </span>
-                                <button
-                                    onClick={() => {
-                                        const url = `${window.location.origin}/api/webhook/${prefix}?mobile=098xxxxxxx`;
-                                        navigator.clipboard.writeText(url);
-                                        alert("คัดลอกลิ้งก์แล้ว! (อย่าลืมเปลี่ยนเบอร์โทรเป็นเบอร์จริงของวอลเล็ทนั้นๆ)");
-                                    }}
-                                    style={{
-                                        background: "var(--tenant-primary)",
-                                        border: "none",
-                                        borderRadius: "4px",
-                                        padding: "4px 8px",
-                                        color: "white",
-                                        cursor: "pointer",
-                                        fontSize: "12px"
-                                    }}
-                                >
-                                    คัดลอก
-                                </button>
+                        <div className="settings-section-title">🔗 Webhook รับค่าธรรมเนียมและถอนเงิน</div>
+                        <div className="webhook-guide">
+                            <div>
+                                <div className="webhook-guide-title">ตั้งค่าในแอพ TrueMoney ต่อวอลเล็ท</div>
+                                <div className="webhook-guide-text">
+                                    ใช้ Endpoint URL ของเบอร์นั้น ๆ และใส่ Header name เป็น <code>Authorization</code>
+                                    ส่วน Header key ให้นำค่าจากหน้าแจ้งหักค่าธรรมเนียมมาใส่ในช่อง Webhook Header Key ที่หน้าแก้ไขวอลเล็ท
+                                </div>
                             </div>
+                            <a className="tenant-btn tenant-btn-secondary tenant-btn-sm" href={`/tenant/${prefix}/wallets`}>
+                                ไปจัดการวอลเล็ท
+                            </a>
                         </div>
+
+                        {accounts.length === 0 ? (
+                            <div className="webhook-empty">
+                                ยังไม่มีวอลเล็ทสำหรับสร้าง Endpoint URL
+                            </div>
+                        ) : (
+                            <div className="webhook-account-list">
+                                {accounts.map((account) => {
+                                    const url = getWebhookUrl(account.phoneNumber);
+                                    return (
+                                        <div className="webhook-account-card" key={account.id}>
+                                            <div className="webhook-account-head">
+                                                <div>
+                                                    <div className="webhook-account-name">{account.name}</div>
+                                                    <div className="webhook-account-phone">{account.phoneNumber || "ยังไม่ระบุเบอร์"}</div>
+                                                </div>
+                                                <span className={account.webhookSecret ? "webhook-status ready" : "webhook-status missing"}>
+                                                    {account.webhookSecret ? "พร้อมตรวจ Header" : "ยังไม่ใส่ Header Key"}
+                                                </span>
+                                            </div>
+
+                                            <div className="webhook-field">
+                                                <div className="webhook-field-label">Endpoint URL</div>
+                                                <div className="webhook-code-row">
+                                                    <code>{url}</code>
+                                                    <button type="button" onClick={() => copyText(url, "Endpoint URL")}>คัดลอก</button>
+                                                </div>
+                                            </div>
+
+                                            <div className="webhook-field-grid">
+                                                <div className="webhook-field">
+                                                    <div className="webhook-field-label">Header Name</div>
+                                                    <div className="webhook-code-row">
+                                                        <code>Authorization</code>
+                                                        <button type="button" onClick={() => copyText("Authorization", "Header Name")}>คัดลอก</button>
+                                                    </div>
+                                                </div>
+                                                <div className="webhook-field">
+                                                    <div className="webhook-field-label">Header Key</div>
+                                                    <div className="webhook-code-row">
+                                                        <code>{maskSecret(account.webhookSecret)}</code>
+                                                        <button
+                                                            type="button"
+                                                            disabled={!account.webhookSecret}
+                                                            onClick={() => account.webhookSecret && copyText(account.webhookSecret, "Header Key")}
+                                                        >
+                                                            คัดลอก
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

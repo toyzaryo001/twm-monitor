@@ -479,9 +479,14 @@ router.post("/", async (req: Request<{ prefix: string }>, res: Response, next: N
             phoneNumber: z.string().optional(),
             walletEndpointUrl: z.string().url(),
             walletBearerToken: z.string().min(1),
+            webhookSecret: z.string().optional().or(z.literal("")),
         });
 
-        const data = schema.parse(req.body);
+        const parsed = schema.parse(req.body);
+        const data = {
+            ...parsed,
+            webhookSecret: parsed.webhookSecret?.trim() || null,
+        };
 
         if (isLocalJga88(req.params.prefix)) {
             const now = new Date();
@@ -528,7 +533,11 @@ router.put("/:id", async (req: Request<{ prefix: string; id: string }>, res: Res
             isActive: z.boolean().optional(),
         });
 
-        const data = schema.parse(req.body);
+        const parsed = schema.parse(req.body);
+        const data: any = { ...parsed };
+        if ("webhookSecret" in data) {
+            data.webhookSecret = data.webhookSecret?.trim() || null;
+        }
 
         if (isLocalJga88(req.params.prefix)) {
             const current = localJga88Accounts.get(req.params.id);

@@ -568,7 +568,7 @@ export default function WalletsPage() {
                 >
                     <div
                         className="tenant-card"
-                        style={{ maxWidth: 480, width: "100%" }}
+                        style={{ maxWidth: 560, width: "100%" }}
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="tenant-card-title" style={{ marginBottom: 24 }}>
@@ -600,7 +600,7 @@ export default function WalletsPage() {
                             </div>
 
                             <div className="tenant-form-group">
-                                <label className="tenant-form-label">Wallet API Endpoint</label>
+                                <label className="tenant-form-label">Wallet API Endpoint (เช็คยอดเงิน)</label>
                                 <input
                                     type="url"
                                     className="tenant-form-input"
@@ -609,10 +609,13 @@ export default function WalletsPage() {
                                     placeholder="https://api.example.com/wallet"
                                     required
                                 />
+                                <div className="tenant-form-hint">
+                                    URL นี้ใช้สำหรับให้ระบบเรียกไปเช็คยอดคงเหลือของวอลเล็ท
+                                </div>
                             </div>
 
                             <div className="tenant-form-group">
-                                <label className="tenant-form-label">Bearer Token</label>
+                                <label className="tenant-form-label">Balance Bearer Token</label>
                                 <input
                                     type="text"
                                     className="tenant-form-input"
@@ -621,6 +624,25 @@ export default function WalletsPage() {
                                     placeholder="API Token"
                                     required={!editingId}
                                 />
+                                <div className="tenant-form-hint">
+                                    Token สำหรับเช็คยอดเงินเท่านั้น ไม่ใช่ Header Key จากหน้าแจ้งหักค่าธรรมเนียม
+                                    {editingId ? " เว้นว่างไว้ถ้าไม่ต้องการเปลี่ยน token เช็คยอด" : ""}
+                                </div>
+                            </div>
+
+                            <div className="tenant-form-group">
+                                <label className="tenant-form-label">Webhook Header Key (Authorization)</label>
+                                <input
+                                    type="text"
+                                    className="tenant-form-input"
+                                    value={form.webhookSecret}
+                                    onChange={(e) => setForm({ ...form, webhookSecret: e.target.value })}
+                                    placeholder="วาง Key จากหน้าแจ้งหักค่าธรรมเนียม"
+                                />
+                                <div className="tenant-form-hint">
+                                    Key นี้ใช้ตรวจ header <code>Authorization</code> ของ webhook ค่าธรรมเนียม/ถอนเงิน
+                                    หากเว้นว่าง ระบบจะรับ webhook ของวอลเล็ทนี้โดยไม่ตรวจ header
+                                </div>
                             </div>
 
                             <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
