@@ -23,6 +23,16 @@ interface BalanceData {
     checkedAt: string;
 }
 
+const TRUE_MONEY_BALANCE_ENDPOINT = "https://apis.truemoneyservices.com/account/v1/balance";
+
+const createEmptyWalletForm = () => ({
+    name: "",
+    phoneNumber: "",
+    walletEndpointUrl: TRUE_MONEY_BALANCE_ENDPOINT,
+    walletBearerToken: "",
+    webhookSecret: "",
+});
+
 function getWalletErrorMessage(data: any) {
     if (data.error === "WALLET_API_UNREACHABLE") {
         return "ไม่สามารถเชื่อมต่อ Wallet API ได้";
@@ -52,7 +62,7 @@ export default function WalletsPage() {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
-    const [form, setForm] = useState({ name: "", phoneNumber: "", walletEndpointUrl: "", walletBearerToken: "", webhookSecret: "" });
+    const [form, setForm] = useState(createEmptyWalletForm);
 
     const getToken = () => localStorage.getItem("tenantToken") || "";
 
@@ -237,7 +247,7 @@ export default function WalletsPage() {
         const method = editingId ? "PUT" : "POST";
 
         // Prepare payload, remove empty token if editing
-        const payload: any = { ...form };
+        const payload: any = { ...form, walletEndpointUrl: TRUE_MONEY_BALANCE_ENDPOINT };
         if (editingId && !payload.walletBearerToken) {
             delete payload.walletBearerToken;
         }
@@ -259,7 +269,7 @@ export default function WalletsPage() {
 
             setShowModal(false);
             setEditingId(null);
-            setForm({ name: "", phoneNumber: "", walletEndpointUrl: "", walletBearerToken: "", webhookSecret: "" });
+            setForm(createEmptyWalletForm());
             fetchAccounts();
         } catch (e) {
             showToast({ type: "error", title: "ล้มเหลว", message: "เกิดข้อผิดพลาดในการบันทึก" });
@@ -270,7 +280,7 @@ export default function WalletsPage() {
         setForm({
             name: account.name,
             phoneNumber: account.phoneNumber || "",
-            walletEndpointUrl: account.walletEndpointUrl,
+            walletEndpointUrl: TRUE_MONEY_BALANCE_ENDPOINT,
             walletBearerToken: "", // Leave blank to keep existing
             webhookSecret: account.webhookSecret || "",
         });
@@ -304,6 +314,21 @@ export default function WalletsPage() {
             }
         } catch (e) {
             showToast({ type: "error", title: "เกิดข้อผิดพลาด", message: "เกิดข้อผิดพลาดในการลบ" });
+        }
+    };
+
+    const getWebhookUrl = (phoneNumber?: string) => {
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const mobile = phoneNumber?.trim() || "08x...";
+        return `${origin}/api/webhook/${prefix}?mobile=${mobile}`;
+    };
+
+    const copyText = async (value: string, label: string) => {
+        try {
+            await navigator.clipboard.writeText(value);
+            showToast({ type: "success", title: "คัดลอกแล้ว", message: label });
+        } catch {
+            showToast({ type: "error", title: "คัดลอกไม่สำเร็จ", message: "เบราว์เซอร์ไม่อนุญาตให้คัดลอกอัตโนมัติ" });
         }
     };
 
@@ -399,7 +424,7 @@ export default function WalletsPage() {
             <div className="tenant-page-header">
                 <h1 className="tenant-page-title">จัดการวอลเล็ท</h1>
                 <button className="tenant-btn tenant-btn-primary" onClick={() => {
-                    setForm({ name: "", phoneNumber: "", walletEndpointUrl: "", walletBearerToken: "", webhookSecret: "" });
+                    setForm(createEmptyWalletForm());
                     setEditingId(null);
                     setShowModal(true);
                 }}>
@@ -416,7 +441,7 @@ export default function WalletsPage() {
                             className="tenant-btn tenant-btn-primary"
                             style={{ marginTop: 16 }}
                             onClick={() => {
-                                setForm({ name: "", phoneNumber: "", walletEndpointUrl: "", walletBearerToken: "", webhookSecret: "" });
+                                setForm(createEmptyWalletForm());
                                 setEditingId(null);
                                 setShowModal(true);
                             }}
@@ -601,16 +626,12 @@ export default function WalletsPage() {
 
                             <div className="tenant-form-group">
                                 <label className="tenant-form-label">Wallet API Endpoint (เช็คยอดเงิน)</label>
-                                <input
-                                    type="url"
-                                    className="tenant-form-input"
-                                    value={form.walletEndpointUrl}
-                                    onChange={(e) => setForm({ ...form, walletEndpointUrl: e.target.value })}
-                                    placeholder="https://api.example.com/wallet"
-                                    required
-                                />
+                                <div className="locked-endpoint-box">
+                                    <code>{TRUE_MONEY_BALANCE_ENDPOINT}</code>
+                                    <span>ล็อกค่าไว้แล้ว</span>
+                                </div>
                                 <div className="tenant-form-hint">
-                                    URL นี้ใช้สำหรับให้ระบบเรียกไปเช็คยอดคงเหลือของวอลเล็ท
+                                    ระบบใช้ URL นี้เช็คยอดเงินอัตโนมัติทุกวอลเล็ท ไม่ต้องกรอกหรือแก้ไขเอง
                                 </div>
                             </div>
 
@@ -642,6 +663,59 @@ export default function WalletsPage() {
                                 <div className="tenant-form-hint">
                                     Key นี้ใช้ตรวจ header <code>Authorization</code> ของ webhook ค่าธรรมเนียม/ถอนเงิน
                                     หากเว้นว่าง ระบบจะรับ webhook ของวอลเล็ทนี้โดยไม่ตรวจ header
+                                </div>
+                            </div>
+
+                            <div className="wallet-webhook-quickbox">
+                                <div className="wallet-webhook-quickhead">
+                                    <div>
+                                        <div className="wallet-webhook-title">ลิงก์รับแจ้งถอน / ค่าธรรมเนียม</div>
+                                        <div className="wallet-webhook-subtitle">
+                                            ใช้ข้อมูลชุดนี้ในหน้าแจ้งหักค่าธรรมเนียมของแอพ
+                                        </div>
+                                    </div>
+                                    <span className={form.phoneNumber.trim() ? "webhook-status ready" : "webhook-status missing"}>
+                                        {form.phoneNumber.trim() ? "พร้อมคัดลอก" : "กรอกเบอร์ก่อน"}
+                                    </span>
+                                </div>
+
+                                <div className="webhook-field">
+                                    <div className="webhook-field-label">Endpoint URL</div>
+                                    <div className="webhook-code-row">
+                                        <code>{getWebhookUrl(form.phoneNumber)}</code>
+                                        <button
+                                            type="button"
+                                            disabled={!form.phoneNumber.trim()}
+                                            onClick={() => copyText(getWebhookUrl(form.phoneNumber), "Endpoint URL")}
+                                        >
+                                            คัดลอก
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="webhook-field-grid">
+                                    <div className="webhook-field">
+                                        <div className="webhook-field-label">Header Name</div>
+                                        <div className="webhook-code-row">
+                                            <code>Authorization</code>
+                                            <button type="button" onClick={() => copyText("Authorization", "Header Name")}>
+                                                คัดลอก
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="webhook-field">
+                                        <div className="webhook-field-label">Header Key</div>
+                                        <div className="webhook-code-row">
+                                            <code>{form.webhookSecret.trim() || "วาง Key ด้านบนก่อน"}</code>
+                                            <button
+                                                type="button"
+                                                disabled={!form.webhookSecret.trim()}
+                                                onClick={() => copyText(form.webhookSecret.trim(), "Header Key")}
+                                            >
+                                                คัดลอก
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 

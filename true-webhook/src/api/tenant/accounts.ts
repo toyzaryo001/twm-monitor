@@ -11,6 +11,7 @@ const localJga88Accounts = new Map<string, any>();
 const localJga88AutoWithdraw = new Map<string, any>();
 const localJga88Balances = new Map<string, any>();
 const localJga88StatePath = path.join(process.cwd(), ".local-jga88-state.json");
+const TRUE_MONEY_BALANCE_ENDPOINT = "https://apis.truemoneyservices.com/account/v1/balance";
 let localJga88StateLoaded = false;
 
 function isLocalJga88(prefix: string) {
@@ -66,7 +67,7 @@ function withLocalStats(account: any) {
 }
 
 async function fetchLocalWalletBalance(account: any) {
-    const walletRes = await fetch(account.walletEndpointUrl, {
+    const walletRes = await fetch(TRUE_MONEY_BALANCE_ENDPOINT, {
         method: "GET",
         headers: {
             "Authorization": `Bearer ${account.walletBearerToken}`,
@@ -477,7 +478,7 @@ router.post("/", async (req: Request<{ prefix: string }>, res: Response, next: N
         const schema = z.object({
             name: z.string().min(1),
             phoneNumber: z.string().optional(),
-            walletEndpointUrl: z.string().url(),
+            walletEndpointUrl: z.string().url().optional(),
             walletBearerToken: z.string().min(1),
             webhookSecret: z.string().optional().or(z.literal("")),
         });
@@ -485,6 +486,7 @@ router.post("/", async (req: Request<{ prefix: string }>, res: Response, next: N
         const parsed = schema.parse(req.body);
         const data = {
             ...parsed,
+            walletEndpointUrl: TRUE_MONEY_BALANCE_ENDPOINT,
             webhookSecret: parsed.webhookSecret?.trim() || null,
         };
 
@@ -493,7 +495,6 @@ router.post("/", async (req: Request<{ prefix: string }>, res: Response, next: N
             const account = {
                 id: `local-wallet-${Date.now()}`,
                 ...data,
-                webhookSecret: null,
                 isActive: true,
                 networkId: "local-jga88-network",
                 telegramConfig: null,
@@ -535,6 +536,9 @@ router.put("/:id", async (req: Request<{ prefix: string; id: string }>, res: Res
 
         const parsed = schema.parse(req.body);
         const data: any = { ...parsed };
+        if ("walletEndpointUrl" in data) {
+            data.walletEndpointUrl = TRUE_MONEY_BALANCE_ENDPOINT;
+        }
         if ("webhookSecret" in data) {
             data.webhookSecret = data.webhookSecret?.trim() || null;
         }
@@ -676,7 +680,7 @@ router.post("/:id/balance", async (req: Request<{ prefix: string; id: string }>,
 
         // Fetch balance from external wallet API
         try {
-            const walletRes = await fetch(account.walletEndpointUrl, {
+            const walletRes = await fetch(TRUE_MONEY_BALANCE_ENDPOINT, {
                 method: "GET",
                 headers: {
                     "Authorization": `Bearer ${account.walletBearerToken}`,

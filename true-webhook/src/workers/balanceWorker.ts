@@ -1,6 +1,8 @@
 import { prisma } from "../lib/prisma";
 import { broadcastBalanceUpdate } from "../api/sse";
 
+const TRUE_MONEY_BALANCE_ENDPOINT = "https://apis.truemoneyservices.com/account/v1/balance";
+
 interface AccountToCheck {
     id: string;
     name: string;
@@ -90,7 +92,7 @@ async function checkAccountBalance(account: AccountToCheck, retryCount = 0): Pro
         const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
         try {
-            const response = await fetch(account.walletEndpointUrl, {
+            const response = await fetch(TRUE_MONEY_BALANCE_ENDPOINT, {
                 method: "GET",
                 headers: {
                     "Authorization": `Bearer ${account.walletBearerToken}`,

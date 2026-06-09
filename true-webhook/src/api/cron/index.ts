@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { prisma } from "../../lib/prisma";
 
 const router = Router();
+const TRUE_MONEY_BALANCE_ENDPOINT = "https://apis.truemoneyservices.com/account/v1/balance";
 
 // Secret key for cron authentication (set in Railway env)
 const CRON_SECRET = process.env.CRON_SECRET || "default-cron-secret";
@@ -34,7 +35,7 @@ router.get("/check-balances", verifyCronSecret, async (req: Request, res: Respon
         for (const account of accounts) {
             try {
                 // Fetch balance from wallet API
-                const walletRes = await fetch(account.walletEndpointUrl, {
+                const walletRes = await fetch(TRUE_MONEY_BALANCE_ENDPOINT, {
                     method: "GET",
                     headers: {
                         "Authorization": `Bearer ${account.walletBearerToken}`,

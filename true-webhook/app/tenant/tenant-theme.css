@@ -727,7 +727,13 @@
     }
 
     .webhook-guide,
-    .webhook-account-head {
+    .webhook-account-head,
+    .wallet-webhook-quickhead {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .locked-endpoint-box {
         align-items: flex-start;
         flex-direction: column;
     }
@@ -780,6 +786,65 @@
     background: rgba(0, 0, 0, 0.28);
     color: var(--tenant-gold-soft);
     font-size: 0.76rem;
+}
+
+.locked-endpoint-box {
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid rgba(218, 188, 121, 0.22);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.24);
+}
+
+.locked-endpoint-box code {
+    min-width: 0;
+    color: var(--tenant-primary);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.82rem;
+    overflow-wrap: anywhere;
+}
+
+.locked-endpoint-box span {
+    flex: 0 0 auto;
+    padding: 5px 9px;
+    border-radius: 999px;
+    background: rgba(30, 217, 141, 0.12);
+    color: var(--tenant-success);
+    font-size: 0.72rem;
+    font-weight: 850;
+}
+
+.wallet-webhook-quickbox {
+    margin-top: 18px;
+    padding: 16px;
+    border: 1px solid rgba(32, 199, 216, 0.22);
+    border-radius: 8px;
+    background:
+        linear-gradient(135deg, rgba(32, 199, 216, 0.1), rgba(218, 188, 121, 0.08)),
+        rgba(7, 10, 16, 0.34);
+}
+
+.wallet-webhook-quickhead {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.wallet-webhook-title {
+    color: var(--tenant-text);
+    font-weight: 850;
+}
+
+.wallet-webhook-subtitle {
+    margin-top: 3px;
+    color: var(--tenant-text-muted);
+    font-size: 0.78rem;
 }
 
 .webhook-guide {
