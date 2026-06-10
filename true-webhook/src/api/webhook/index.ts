@@ -230,6 +230,8 @@ router.all("/:prefix", async (req: Request, res: Response) => {
             payload.recipient_mobile ||
             payload.sender_mobile ||
             (req.query.mobile as string); // Support ?mobile=08x on URL
+        const authHeader = req.headers.authorization || "";
+        const authToken = authHeader.replace(/^Bearer\s+/i, "").trim();
 
         let transactionType = payload.transaction_type;
         if (!transactionType) {
@@ -240,7 +242,7 @@ router.all("/:prefix", async (req: Request, res: Response) => {
             }
         }
 
-        if (!mobileNo) {
+        if (!mobileNo && !authToken) {
             logEvent("warn", "webhook_missing_mobile", { prefix, payload: sanitizeLogPayload(payload) });
         }
 
@@ -279,6 +281,37 @@ router.all("/:prefix", async (req: Request, res: Response) => {
                     phoneNumber: { contains: mobileNo }
                 }
             });
+        }
+
+        // Header key fallback: fee events often do not include a mobile number.
+        // If TrueMoney sends Authorization, use that per-wallet secret to map the account.
+        if (!account && authToken) {
+            const matches = await prisma.account.findMany({
+                where: {
+                    networkId: network.id,
+                    webhookSecret: authToken,
+                } as any,
+                select: { id: true, phoneNumber: true, webhookSecret: true } as any,
+                take: 2,
+            });
+
+            if (matches.length === 1) {
+                account = matches[0];
+                logEvent("info", "webhook_account_matched_by_secret", {
+                    prefix,
+                    accountId: account.id,
+                    eventType: payload.event_type || null,
+                });
+            } else if (matches.length > 1) {
+                await writeWebhookDebugLog(`Webhook secret matched multiple accounts for ${prefix}`, {
+                    prefix,
+                    transactionId,
+                    eventType: payload.event_type || null,
+                    reason: "Duplicate webhookSecret in the same network.",
+                });
+                logEvent("warn", "webhook_secret_ambiguous", { prefix, eventType: payload.event_type || null });
+                return res.status(200).json({ status: "ignored", reason: "Ambiguous webhook secret" });
+            }
         }
 
         // 3.5 SMART FALLBACK: Single Account Network
@@ -323,10 +356,7 @@ router.all("/:prefix", async (req: Request, res: Response) => {
 
         // Enforce webhook authorization only for accounts that explicitly set a secret.
         if ((account as any).webhookSecret) {
-            const authHeader = req.headers.authorization || "";
-            const token = authHeader.replace(/^Bearer\s+/i, "").trim(); // Remove Bearer if present
-
-            if (!token) {
+            if (!authToken) {
                 await writeWebhookDebugLog(`Webhook missing Authorization accepted for ${prefix}`, {
                     prefix,
                     accountId: account.id,
@@ -335,11 +365,11 @@ router.all("/:prefix", async (req: Request, res: Response) => {
                     queryMobile: req.query.mobile || null,
                     reason: "Provider did not send Authorization header; accepted because account was matched by webhook URL/mobile.",
                 }, (account as any).id);
-            } else if (token !== (account as any).webhookSecret) {
+            } else if (authToken !== (account as any).webhookSecret) {
                 logEvent("warn", "webhook_unauthorized", {
                     prefix,
                     accountId: account.id,
-                    provided: sanitizeLogPayload({ authorization: authHeader, token }),
+                    provided: sanitizeLogPayload({ authorization: authHeader, token: authToken }),
                 });
 
                 await prisma.notificationLog.create({
@@ -350,7 +380,7 @@ router.all("/:prefix", async (req: Request, res: Response) => {
                         payload: sanitizeLogPayload({
                             expected: "***",
                             got_full: authHeader,
-                            got_parsed: token
+                            got_parsed: authToken
                         }) as any
                     }
                 });

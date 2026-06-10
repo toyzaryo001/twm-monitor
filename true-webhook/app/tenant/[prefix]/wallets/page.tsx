@@ -317,8 +317,9 @@ export default function WalletsPage() {
         }
     };
 
-    const getWebhookUrl = (phoneNumber?: string) => {
+    const getWebhookUrl = (phoneNumber?: string, webhookSecret?: string) => {
         const origin = typeof window !== "undefined" ? window.location.origin : "";
+        if (webhookSecret?.trim()) return `${origin}/api/webhook/${prefix}`;
         const mobile = phoneNumber?.trim() || "08x...";
         return `${origin}/api/webhook/${prefix}?mobile=${mobile}`;
     };
@@ -661,8 +662,8 @@ export default function WalletsPage() {
                                     placeholder="วาง Key จากหน้าแจ้งหักค่าธรรมเนียม"
                                 />
                                 <div className="tenant-form-hint">
-                                    Key นี้ใช้ตรวจ header <code>Authorization</code> ของ webhook ค่าธรรมเนียม/ถอนเงิน
-                                    หากเว้นว่าง ระบบจะรับ webhook ของวอลเล็ทนี้โดยไม่ตรวจ header
+                                    Key นี้ใช้ตรวจ header <code>Authorization</code> และใช้แยกวอลเล็ทได้โดยไม่ต้องใส่เบอร์ใน Endpoint URL
+                                    หากเว้นว่าง ระบบจะใช้เบอร์ใน URL เพื่อแยกวอลเล็ทแทน
                                 </div>
                             </div>
 
@@ -674,19 +675,19 @@ export default function WalletsPage() {
                                             ใช้ข้อมูลชุดนี้ในหน้าแจ้งหักค่าธรรมเนียมของแอพ
                                         </div>
                                     </div>
-                                    <span className={form.phoneNumber.trim() ? "webhook-status ready" : "webhook-status missing"}>
-                                        {form.phoneNumber.trim() ? "พร้อมคัดลอก" : "กรอกเบอร์ก่อน"}
+                                    <span className={(form.webhookSecret.trim() || form.phoneNumber.trim()) ? "webhook-status ready" : "webhook-status missing"}>
+                                        {form.webhookSecret.trim() ? "ใช้ Header Key แยกวอลเล็ท" : form.phoneNumber.trim() ? "ใช้เบอร์ใน URL" : "ใส่ Key หรือเบอร์ก่อน"}
                                     </span>
                                 </div>
 
                                 <div className="webhook-field">
                                     <div className="webhook-field-label">Endpoint URL</div>
                                     <div className="webhook-code-row">
-                                        <code>{getWebhookUrl(form.phoneNumber)}</code>
+                                        <code>{getWebhookUrl(form.phoneNumber, form.webhookSecret)}</code>
                                         <button
                                             type="button"
-                                            disabled={!form.phoneNumber.trim()}
-                                            onClick={() => copyText(getWebhookUrl(form.phoneNumber), "Endpoint URL")}
+                                            disabled={!form.webhookSecret.trim() && !form.phoneNumber.trim()}
+                                            onClick={() => copyText(getWebhookUrl(form.phoneNumber, form.webhookSecret), "Endpoint URL")}
                                         >
                                             คัดลอก
                                         </button>

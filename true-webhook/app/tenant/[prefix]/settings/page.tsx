@@ -71,9 +71,10 @@ export default function TenantSettingsPage() {
         fetchSettings();
     }, [prefix]);
 
-    const getWebhookUrl = (phoneNumber?: string) => {
+    const getWebhookUrl = (account: AccountInfo) => {
         const origin = typeof window !== "undefined" ? window.location.origin : "";
-        return `${origin}/api/webhook/${prefix}?mobile=${phoneNumber || "08x..."}`;
+        if (account.webhookSecret) return `${origin}/api/webhook/${prefix}`;
+        return `${origin}/api/webhook/${prefix}?mobile=${account.phoneNumber || "08x..."}`;
     };
 
     const maskSecret = (secret?: string | null) => {
@@ -177,8 +178,8 @@ export default function TenantSettingsPage() {
                             <div>
                                 <div className="webhook-guide-title">ตั้งค่าในแอพ TrueMoney ต่อวอลเล็ท</div>
                                 <div className="webhook-guide-text">
-                                    ใช้ Endpoint URL ของเบอร์นั้น ๆ และใส่ Header name เป็น <code>Authorization</code>
-                                    ส่วน Header key ให้นำค่าจากหน้าแจ้งหักค่าธรรมเนียมมาใส่ในช่อง Webhook Header Key ที่หน้าแก้ไขวอลเล็ท
+                                    ถ้าวอลเล็ทมี Header Key แล้ว ใช้ Endpoint URL หลักได้ทันที และใส่ Header name เป็น <code>Authorization</code>
+                                    ระบบจะใช้ Header key แยกวอลเล็ทให้อัตโนมัติ
                                 </div>
                             </div>
                             <a className="tenant-btn tenant-btn-secondary tenant-btn-sm" href={`/tenant/${prefix}/wallets`}>
@@ -193,7 +194,7 @@ export default function TenantSettingsPage() {
                         ) : (
                             <div className="webhook-account-list">
                                 {accounts.map((account) => {
-                                    const url = getWebhookUrl(account.phoneNumber);
+                                    const url = getWebhookUrl(account);
                                     return (
                                         <div className="webhook-account-card" key={account.id}>
                                             <div className="webhook-account-head">
