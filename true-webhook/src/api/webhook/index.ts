@@ -326,7 +326,16 @@ router.all("/:prefix", async (req: Request, res: Response) => {
             const authHeader = req.headers.authorization || "";
             const token = authHeader.replace(/^Bearer\s+/i, "").trim(); // Remove Bearer if present
 
-            if (token !== (account as any).webhookSecret) {
+            if (!token) {
+                await writeWebhookDebugLog(`Webhook missing Authorization accepted for ${prefix}`, {
+                    prefix,
+                    accountId: account.id,
+                    transactionId,
+                    eventType: payload.event_type || null,
+                    queryMobile: req.query.mobile || null,
+                    reason: "Provider did not send Authorization header; accepted because account was matched by webhook URL/mobile.",
+                }, (account as any).id);
+            } else if (token !== (account as any).webhookSecret) {
                 logEvent("warn", "webhook_unauthorized", {
                     prefix,
                     accountId: account.id,
