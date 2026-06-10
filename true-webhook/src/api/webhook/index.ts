@@ -39,6 +39,49 @@ const webhookSchema = z.object({
         Boolean(data.event_type);
 }, { message: "INVALID_WEBHOOK_PAYLOAD" });
 
+async function writeWebhookDebugLog(message: string, payload: Record<string, unknown>, accountId?: string) {
+    try {
+        await prisma.notificationLog.create({
+            data: {
+                type: "webhook_debug" as any,
+                message,
+                accountId,
+                payload: sanitizeLogPayload(payload) as any,
+            }
+        });
+    } catch (err) {
+        logEvent("warn", "webhook_debug_log_failed", {
+            message,
+            error: err instanceof Error ? err.message : String(err),
+        });
+    }
+}
+
+function getBodyShape(body: unknown) {
+    if (typeof body === "string") {
+        const trimmed = body.trim();
+        return {
+            kind: "string",
+            length: trimmed.length,
+            looksJson: trimmed.startsWith("{"),
+            looksJwt: trimmed.split(".").length === 3,
+        };
+    }
+
+    if (body && typeof body === "object") {
+        const keys = Object.keys(body as Record<string, unknown>).slice(0, 20);
+        return {
+            kind: Array.isArray(body) ? "array" : "object",
+            keys,
+            hasMessage: typeof (body as any).message === "string",
+            messageLooksJwt: typeof (body as any).message === "string" &&
+                (body as any).message.split(".").length === 3,
+        };
+    }
+
+    return { kind: typeof body };
+}
+
 // POST /api/webhook/:prefix
 router.all("/:prefix", async (req: Request, res: Response) => {
     logEvent("info", "webhook_request", { method: req.method, prefix: req.params.prefix });
@@ -76,6 +119,19 @@ router.all("/:prefix", async (req: Request, res: Response) => {
             logEvent("info", "webhook_history_disabled", { prefix });
         }
 
+        await writeWebhookDebugLog(`Webhook POST received for ${prefix}`, {
+            prefix,
+            method: req.method,
+            contentType: req.headers["content-type"] || null,
+            userAgent: req.headers["user-agent"] || null,
+            queryMobile: req.query.mobile || null,
+            hasAuthorization: Boolean(req.headers.authorization),
+            authorizationFormat: req.headers.authorization
+                ? (String(req.headers.authorization).match(/^Bearer\s+/i) ? "bearer" : "raw")
+                : "missing",
+            bodyShape: getBodyShape(req.body),
+        });
+
         // 2. Parse Payload
         let payload: any = req.body;
 
@@ -110,6 +166,13 @@ router.all("/:prefix", async (req: Request, res: Response) => {
                 }
             } catch (err) {
                 logEvent("warn", "webhook_jwt_decode_failed", { prefix, error: err instanceof Error ? err.message : String(err) });
+                await writeWebhookDebugLog(`Webhook JWT decode failed for ${prefix}`, {
+                    prefix,
+                    error: err instanceof Error ? err.message : String(err),
+                    contentType: req.headers["content-type"] || null,
+                    queryMobile: req.query.mobile || null,
+                    bodyShape: getBodyShape(req.body),
+                });
             }
         } else {
             logEvent("debug", "webhook_plain_json_received", { prefix, payload: sanitizeLogPayload(req.body) });
@@ -121,6 +184,17 @@ router.all("/:prefix", async (req: Request, res: Response) => {
                 prefix,
                 issues: parsedPayload.error.issues.map((issue) => issue.message),
                 payload: sanitizeLogPayload(payload),
+            });
+            await writeWebhookDebugLog(`Webhook invalid payload for ${prefix}`, {
+                prefix,
+                issues: parsedPayload.error.issues.map((issue) => ({
+                    path: issue.path.join("."),
+                    message: issue.message,
+                })),
+                contentType: req.headers["content-type"] || null,
+                queryMobile: req.query.mobile || null,
+                bodyShape: getBodyShape(req.body),
+                payload,
             });
             return res.status(400).json({ error: "Invalid webhook payload" });
         }
@@ -250,7 +324,7 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         // Enforce webhook authorization only for accounts that explicitly set a secret.
         if ((account as any).webhookSecret) {
             const authHeader = req.headers.authorization || "";
-            const token = authHeader.replace(/^Bearer\s+/i, ""); // Remove Bearer if present
+            const token = authHeader.replace(/^Bearer\s+/i, "").trim(); // Remove Bearer if present
 
             if (token !== (account as any).webhookSecret) {
                 logEvent("warn", "webhook_unauthorized", {
