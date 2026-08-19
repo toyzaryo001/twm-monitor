@@ -2,15 +2,18 @@ import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { verifyPassword, signToken } from "../../lib/auth";
+import { createRateLimit } from "../../middleware/rateLimit";
+import { getLocalJga88Credentials } from "../../lib/runtimeConfig";
 
 const router = Router({ mergeParams: true });
+const loginRateLimit = createRateLimit({ name: "tenant_login", windowMs: 15 * 60 * 1000, max: 10 });
 
 function isLocalJga88(prefix: string) {
     return process.env.LOCAL_JGA88_MODE === "true" && prefix === "jga88";
 }
 
 // Tenant Login (for network users)
-router.post("/login", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
+router.post("/login", loginRateLimit, async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     try {
         const schema = z.object({
             username: z.string().min(1),
@@ -21,13 +24,17 @@ router.post("/login", async (req: Request<{ prefix: string }>, res: Response, ne
         const prefix = req.params.prefix;
 
         if (isLocalJga88(prefix)) {
-            if (username !== "jga88" || password !== "Jga112233") {
+            const localCredentials = getLocalJga88Credentials();
+            if (!localCredentials) {
+                return res.status(503).json({ ok: false, error: "LOCAL_MODE_NOT_CONFIGURED" });
+            }
+            if (username.trim() !== localCredentials.username || password !== localCredentials.password) {
                 return res.status(401).json({ ok: false, error: "INVALID_CREDENTIALS" });
             }
 
             const token = signToken({
                 userId: "local-jga88-user",
-                email: "jga88",
+                email: localCredentials.username,
                 role: "NETWORK_ADMIN",
                 networkId: "local-jga88-network",
             }, 6 * 60 * 60 * 1000);
@@ -38,7 +45,7 @@ router.post("/login", async (req: Request<{ prefix: string }>, res: Response, ne
                     token,
                     user: {
                         id: "local-jga88-user",
-                        email: "jga88",
+                        email: localCredentials.username,
                         displayName: "JGA88 Admin",
                         role: "NETWORK_ADMIN",
                         network: { id: "local-jga88-network", name: "JGA88", prefix: "jga88" },
@@ -63,7 +70,7 @@ router.post("/login", async (req: Request<{ prefix: string }>, res: Response, ne
         // Find user by username (email field) that belongs to this network OR is MASTER
         const user = await prisma.user.findFirst({
             where: {
-                email: username,
+                email: username.trim(),
                 OR: [
                     { networkId: network.id },
                     { role: "MASTER" }

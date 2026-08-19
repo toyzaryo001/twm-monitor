@@ -39,6 +39,13 @@ export function requireMaster(req: Request, res: Response, next: NextFunction) {
     next();
 }
 
+export function requireNetworkAdmin(req: Request, res: Response, next: NextFunction) {
+    if (req.user?.role !== "MASTER" && req.user?.role !== "NETWORK_ADMIN") {
+        return res.status(403).json({ ok: false, error: "NETWORK_ADMIN_REQUIRED" });
+    }
+    next();
+}
+
 export async function requireNetworkAccess(req: Request, res: Response, next: NextFunction) {
     const { prefix } = req.params;
 

@@ -26,6 +26,13 @@ interface AccountInfo {
     phoneNumber?: string;
     isActive: boolean;
     webhookSecret?: string | null;
+    webhookSecretConfigured?: boolean;
+}
+
+interface VersionInfo {
+    version: string;
+    commit: string | null;
+    buildTime: string | null;
 }
 
 export default function TenantSettingsPage() {
@@ -34,6 +41,7 @@ export default function TenantSettingsPage() {
     const { showToast } = useToast();
     const [network, setNetwork] = useState<NetworkInfo | null>(null);
     const [accounts, setAccounts] = useState<AccountInfo[]>([]);
+    const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
     const [loading, setLoading] = useState(true);
 
     const getToken = () => localStorage.getItem("tenantToken") || "";
@@ -44,13 +52,14 @@ export default function TenantSettingsPage() {
             if (!token) return;
 
             try {
-                const [statsRes, accountsRes] = await Promise.all([
+                const [statsRes, accountsRes, versionRes] = await Promise.all([
                     fetch(`/api/tenant/${prefix}/stats`, {
                         headers: { Authorization: `Bearer ${token}` },
                     }),
                     fetch(`/api/tenant/${prefix}/accounts`, {
                         headers: { Authorization: `Bearer ${token}` },
                     }),
+                    fetch("/api/version"),
                 ]);
 
                 const statsData = await statsRes.json();
@@ -61,6 +70,10 @@ export default function TenantSettingsPage() {
                 const accountsData = await accountsRes.json();
                 if (accountsData.ok) {
                     setAccounts(accountsData.data);
+                }
+
+                if (versionRes.ok) {
+                    setVersionInfo(await versionRes.json());
                 }
             } catch (e) {
                 console.error("Error fetching settings", e);
@@ -73,12 +86,12 @@ export default function TenantSettingsPage() {
 
     const getWebhookUrl = (account: AccountInfo) => {
         const origin = typeof window !== "undefined" ? window.location.origin : "";
-        if (account.webhookSecret) return `${origin}/api/webhook/${prefix}`;
+        if (account.webhookSecret || account.webhookSecretConfigured) return `${origin}/api/webhook/${prefix}`;
         return `${origin}/api/webhook/${prefix}?mobile=${account.phoneNumber || "08x..."}`;
     };
 
-    const maskSecret = (secret?: string | null) => {
-        if (!secret) return "ยังไม่ได้ตั้งค่า";
+    const maskSecret = (secret?: string | null, configured = false) => {
+        if (!secret) return configured ? "ตั้งค่าแล้ว (จำกัดสิทธิ์การดู)" : "ยังไม่ได้ตั้งค่า";
         if (secret.length <= 10) return `${secret.slice(0, 2)}••••${secret.slice(-2)}`;
         return `${secret.slice(0, 6)}••••••••${secret.slice(-6)}`;
     };
@@ -202,8 +215,8 @@ export default function TenantSettingsPage() {
                                                     <div className="webhook-account-name">{account.name}</div>
                                                     <div className="webhook-account-phone">{account.phoneNumber || "ยังไม่ระบุเบอร์"}</div>
                                                 </div>
-                                                <span className={account.webhookSecret ? "webhook-status ready" : "webhook-status missing"}>
-                                                    {account.webhookSecret ? "พร้อมตรวจ Header" : "ยังไม่ใส่ Header Key"}
+                                                <span className={(account.webhookSecret || account.webhookSecretConfigured) ? "webhook-status ready" : "webhook-status missing"}>
+                                                    {(account.webhookSecret || account.webhookSecretConfigured) ? "พร้อมตรวจ Header" : "ยังไม่ใส่ Header Key"}
                                                 </span>
                                             </div>
 
@@ -226,7 +239,7 @@ export default function TenantSettingsPage() {
                                                 <div className="webhook-field">
                                                     <div className="webhook-field-label">Header Key</div>
                                                     <div className="webhook-code-row">
-                                                        <code>{maskSecret(account.webhookSecret)}</code>
+                                                    <code>{maskSecret(account.webhookSecret, account.webhookSecretConfigured)}</code>
                                                         <button
                                                             type="button"
                                                             disabled={!account.webhookSecret}
@@ -316,8 +329,14 @@ export default function TenantSettingsPage() {
                     <div className="settings-section-title">ข้อมูลระบบ</div>
                     <div className="settings-row">
                         <span className="settings-label">Version</span>
-                        <span className="settings-value">1.0.0</span>
+                        <span className="settings-value">{versionInfo?.version || "-"}</span>
                     </div>
+                    {versionInfo?.commit && (
+                        <div className="settings-row">
+                            <span className="settings-label">Build</span>
+                            <span className="settings-value">{versionInfo.commit.slice(0, 8)}</span>
+                        </div>
+                    )}
                     <div className="settings-row">
                         <span className="settings-label">Panel</span>
                         <span className="settings-value">Tenant Panel</span>

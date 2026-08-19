@@ -1,14 +1,14 @@
 {
     "name": "true-webhook",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "private": true,
     "engines": {
         "node": "20.x"
     },
     "scripts": {
         "dev": "cross-env NODE_ENV=development TS_NODE_PROJECT=tsconfig.server.json ts-node-dev --respawn --transpile-only --ignore-watch .next src/server.ts",
-        "dev:local": "cross-env NODE_ENV=development TS_NODE_PROJECT=tsconfig.server.json DATABASE_URL=postgresql://postgres:postgres@localhost:5432/true_webhook JWT_SECRET=local-dev-secret-change-me PORT=3000 BASE_DOMAIN=localhost DISABLE_BALANCE_WORKER=true LOCAL_JGA88_MODE=true ts-node-dev --respawn --transpile-only --ignore-watch .next src/server.ts",
-        "start:local": "cross-env NODE_ENV=production DATABASE_URL=postgresql://postgres:postgres@localhost:5432/true_webhook JWT_SECRET=local-dev-secret-change-me PORT=3000 BASE_DOMAIN=localhost DISABLE_BALANCE_WORKER=true LOCAL_JGA88_MODE=true node dist/server.js",
+        "dev:local": "cross-env NODE_ENV=development TS_NODE_PROJECT=tsconfig.server.json DATABASE_URL=postgresql://postgres:postgres@localhost:5432/true_webhook JWT_SECRET=local-only-secret-not-for-production-32chars PORT=3000 BASE_DOMAIN=localhost DISABLE_BALANCE_WORKER=true ts-node-dev --respawn --transpile-only --ignore-watch .next src/server.ts",
+        "start:local": "cross-env NODE_ENV=production DATABASE_URL=postgresql://postgres:postgres@localhost:5432/true_webhook JWT_SECRET=local-only-secret-not-for-production-32chars CRON_SECRET=local-only-cron-secret PORT=3000 BASE_DOMAIN=localhost DISABLE_BALANCE_WORKER=true node dist/server.js",
         "local:db:push": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/true_webhook prisma db push",
         "local:seed": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/true_webhook node scripts/seed.js",
         "local:seed:jga88": "cross-env DATABASE_URL=postgresql://postgres:postgres@localhost:5432/true_webhook node scripts/seed-local-jga88.js",
@@ -27,12 +27,12 @@
     "dependencies": {
         "@prisma/client": "^5.22.0",
         "@types/multer": "^2.0.0",
-        "cloudinary": "^2.9.0",
+        "cloudinary": "^2.10.0",
         "cors": "^2.8.5",
         "dotenv": "^16.4.5",
         "express": "^4.21.0",
-        "multer": "^2.0.2",
-        "next": "15.1.11",
+        "multer": "^2.2.0",
+        "next": "^15.5.23",
         "node-fetch": "^2.7.0",
         "react": "18.2.0",
         "react-dom": "18.2.0",
@@ -48,10 +48,19 @@
         "@types/react-dom": "^18",
         "cross-env": "^7.0.3",
         "eslint": "^8",
-        "eslint-config-next": "15.1.6",
+        "eslint-config-next": "^15.5.23",
         "prisma": "^5.22.0",
         "ts-node": "^10.9.2",
         "ts-node-dev": "^2.0.0",
         "typescript": "^5"
+    },
+    "overrides": {
+        "body-parser": "1.20.6",
+        "lodash": "4.18.1",
+        "nanoid": "3.3.18",
+        "path-to-regexp": "0.1.13",
+        "postcss": "8.5.24",
+        "qs": "6.15.2",
+        "sharp": "0.35.0"
     }
 }

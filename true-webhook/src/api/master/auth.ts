@@ -3,11 +3,14 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { signToken, hashPassword, verifyPassword } from "../../lib/auth";
 import { requireAuth } from "../../middleware/auth";
+import { createRateLimit } from "../../middleware/rateLimit";
 
 const router = Router();
+const loginRateLimit = createRateLimit({ name: "master_login", windowMs: 15 * 60 * 1000, max: 10 });
+const setupRateLimit = createRateLimit({ name: "master_setup", windowMs: 60 * 60 * 1000, max: 5 });
 
 // Login
-router.post("/login", async (req, res, next) => {
+router.post("/login", loginRateLimit, async (req, res, next) => {
     try {
         const schema = z.object({
             username: z.string().min(1),
@@ -65,7 +68,7 @@ router.post("/login", async (req, res, next) => {
 });
 
 // Initial setup (create first admin)
-router.post("/setup", async (req, res, next) => {
+router.post("/setup", setupRateLimit, async (req, res, next) => {
     try {
         const existingAdmin = await prisma.user.findFirst({
             where: { role: "MASTER" },
@@ -73,6 +76,14 @@ router.post("/setup", async (req, res, next) => {
 
         if (existingAdmin) {
             return res.status(400).json({ ok: false, error: "ADMIN_EXISTS" });
+        }
+
+        if (process.env.NODE_ENV === "production") {
+            const expectedSecret = process.env.MASTER_SETUP_SECRET;
+            const providedSecret = req.headers["x-setup-secret"] || req.body?.setupSecret;
+            if (!expectedSecret || providedSecret !== expectedSecret) {
+                return res.status(403).json({ ok: false, error: "SETUP_SECRET_REQUIRED" });
+            }
         }
 
         const schema = z.object({
@@ -125,7 +136,11 @@ router.get("/setup-status", async (req, res, next) => {
         const existingAdmin = await prisma.user.findFirst({
             where: { role: "MASTER" },
         });
-        return res.json({ ok: true, needsSetup: !existingAdmin });
+        return res.json({
+            ok: true,
+            needsSetup: !existingAdmin,
+            requiresSetupSecret: !existingAdmin && process.env.NODE_ENV === "production",
+        });
     } catch (err) {
         next(err);
     }

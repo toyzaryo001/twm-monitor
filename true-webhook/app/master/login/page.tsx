@@ -11,6 +11,8 @@ export default function LoginPage() {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
     const [showPassword, setShowPassword] = useState(false);
+    const [requiresSetupSecret, setRequiresSetupSecret] = useState(false);
+    const [setupSecret, setSetupSecret] = useState("");
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
 
@@ -20,6 +22,7 @@ export default function LoginPage() {
             .then((data) => {
                 setNeedsSetup(data.needsSetup);
                 setIsSetup(data.needsSetup);
+                setRequiresSetupSecret(Boolean(data.requiresSetupSecret));
                 setLoading(false);
             })
             .catch(() => {
@@ -38,7 +41,11 @@ export default function LoginPage() {
             const response = await fetch(endpoint, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ username: username.trim(), password }),
+                body: JSON.stringify({
+                    username: username.trim(),
+                    password,
+                    ...(isSetup && requiresSetupSecret ? { setupSecret } : {}),
+                }),
             });
 
             const data = await response.json();
@@ -133,6 +140,21 @@ export default function LoginPage() {
                                 </button>
                             </div>
                         </div>
+
+                        {isSetup && requiresSetupSecret && (
+                            <div className="form-group">
+                                <label className="form-label">Setup Secret</label>
+                                <input
+                                    type="password"
+                                    className="form-input"
+                                    value={setupSecret}
+                                    onChange={(event) => setSetupSecret(event.target.value)}
+                                    required
+                                    placeholder="MASTER_SETUP_SECRET"
+                                    autoComplete="off"
+                                />
+                            </div>
+                        )}
 
                         {error && <div className="login-error">{error}</div>}
 

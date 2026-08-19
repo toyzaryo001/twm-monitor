@@ -1,0 +1,33 @@
+name: True Webhook CI
+
+on:
+  pull_request:
+    paths:
+      - "true-webhook/**"
+      - ".github/workflows/true-webhook-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "true-webhook/**"
+      - ".github/workflows/true-webhook-ci.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/true_webhook_ci
+      JWT_SECRET: ci-only-secret-with-at-least-32-characters
+    defaults:
+      run:
+        working-directory: true-webhook
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: true-webhook/package-lock.json
+      - run: npm ci
+      - run: npm audit --omit=dev
+      - run: npm run lint
+      - run: npm run build

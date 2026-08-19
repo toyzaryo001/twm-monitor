@@ -4,6 +4,7 @@ import { z } from "zod";
 import { broadcastBalanceUpdate } from "../sse";
 import fs from "fs";
 import path from "path";
+import { requireNetworkAdmin } from "../../middleware/auth";
 
 const router = Router({ mergeParams: true });
 
@@ -13,6 +14,19 @@ const localJga88Balances = new Map<string, any>();
 const localJga88StatePath = path.join(process.cwd(), ".local-jga88-state.json");
 const TRUE_MONEY_BALANCE_ENDPOINT = "https://apis.truemoneyservices.com/account/v1/balance";
 let localJga88StateLoaded = false;
+
+const feeEventFilters = () => [
+    { recipientName: { equals: "System Fee" } },
+    { recipientName: { equals: "P2P Fee" } },
+    { recipientMobile: { equals: "System Fee" } },
+    { recipientMobile: { equals: "P2P Fee" } },
+    { rawPayload: { path: ["event_type"], equals: "FEE_PAYMENT" } },
+];
+
+const exactFeeFilters = () => [
+    { fee: { gt: 0 } },
+    ...feeEventFilters(),
+];
 
 function isLocalJga88(prefix: string) {
     const enabled = process.env.LOCAL_JGA88_MODE === "true" && prefix === "jga88";
@@ -112,6 +126,86 @@ const getNetwork = async (prefix: string) => {
     return prisma.network.findUnique({ where: { prefix } });
 };
 
+async function requireAccountAccess(
+    req: Request<{ prefix: string; id: string }>,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        if (isLocalJga88(req.params.prefix)) {
+            return localJga88Accounts.has(req.params.id)
+                ? next()
+                : res.status(404).json({ ok: false, error: "ACCOUNT_NOT_FOUND" });
+        }
+
+        const account = await prisma.account.findFirst({
+            where: {
+                id: req.params.id,
+                network: { prefix: req.params.prefix },
+            },
+            select: { id: true },
+        });
+        if (!account) {
+            return res.status(404).json({ ok: false, error: "ACCOUNT_NOT_FOUND" });
+        }
+        next();
+    } catch (err) {
+        next(err);
+    }
+}
+
+async function mapSnapshotsWithAccountChanges(
+    snapshots: any[],
+    accountMap: Record<string, { name?: string }>
+) {
+    const grouped = new Map<string, any[]>();
+    for (const snapshot of snapshots) {
+        const accountSnapshots = grouped.get(snapshot.accountId) || [];
+        accountSnapshots.push(snapshot);
+        grouped.set(snapshot.accountId, accountSnapshots);
+    }
+
+    const predecessorByAccount = new Map<string, any>();
+    await Promise.all(Array.from(grouped.entries()).map(async ([accountId, accountSnapshots]) => {
+        accountSnapshots.sort((a, b) =>
+            new Date(b.checkedAt).getTime() - new Date(a.checkedAt).getTime()
+        );
+        const oldest = accountSnapshots[accountSnapshots.length - 1];
+        const predecessor = await prisma.balanceSnapshot.findFirst({
+            where: { accountId, checkedAt: { lt: oldest.checkedAt } },
+            orderBy: { checkedAt: "desc" },
+        });
+        predecessorByAccount.set(accountId, predecessor);
+    }));
+
+    const mappedById = new Map<string, any>();
+    for (const [accountId, accountSnapshots] of grouped) {
+        accountSnapshots.forEach((snapshot, index) => {
+            const previous = accountSnapshots[index + 1] || predecessorByAccount.get(accountId);
+            const changeSatang = previous
+                ? snapshot.balanceSatang - previous.balanceSatang
+                : null;
+
+            mappedById.set(snapshot.id, {
+                id: snapshot.id,
+                type: "snapshot",
+                balance: snapshot.balanceSatang / 100,
+                balanceSatang: snapshot.balanceSatang,
+                change: changeSatang == null ? 0 : changeSatang / 100,
+                changeSatang: changeSatang || 0,
+                changeAvailable: changeSatang != null,
+                mobileNo: snapshot.mobileNo,
+                source: snapshot.source,
+                checkedAt: snapshot.checkedAt,
+                accountName: accountMap[accountId]?.name || "Unknown",
+                accountId,
+            });
+        });
+    }
+
+    return snapshots.map(snapshot => mappedById.get(snapshot.id));
+}
+
 // List accounts
 router.get("/", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     try {
@@ -147,13 +241,9 @@ router.get("/", async (req: Request<{ prefix: string }>, res: Response, next: Ne
                 accountId: { in: accountIds },
                 type: "outgoing",
                 timestamp: { gte: startOfMonth }, // Only count fees from current month
-                OR: [
-                    { recipientName: { contains: "Fee" } },
-                    { recipientMobile: { contains: "Fee" } },
-                    { rawPayload: { path: ['event_type'], equals: 'FEE_PAYMENT' } }
-                ]
+                OR: exactFeeFilters()
             },
-            select: { accountId: true, amount: true }
+            select: { accountId: true, amount: true, fee: true }
         });
 
         // 2. First Active Time (Oldest Transaction or Snapshot)
@@ -174,7 +264,7 @@ router.get("/", async (req: Request<{ prefix: string }>, res: Response, next: Ne
             // Sum fees
             const fees = feeStats
                 .filter((f: any) => f.accountId === account.id)
-                .reduce((sum: number, f: any) => sum + (f.amount || 0), 0);
+                .reduce((sum: number, f: any) => sum + (f.fee > 0 ? f.fee : f.amount || 0), 0);
 
             // Find oldest date
             const txDate = oldestTxs.find((t: any) => t.accountId === account.id)?._min?.timestamp;
@@ -198,7 +288,15 @@ router.get("/", async (req: Request<{ prefix: string }>, res: Response, next: Ne
             };
         });
 
-        return res.json({ ok: true, data: accountsWithStats });
+        const canManageSecrets = req.user?.role === "MASTER" || req.user?.role === "NETWORK_ADMIN";
+        const responseAccounts = accountsWithStats.map(account => ({
+            ...account,
+            webhookSecretConfigured: Boolean(account.webhookSecret),
+            walletBearerToken: canManageSecrets ? account.walletBearerToken : "",
+            webhookSecret: canManageSecrets ? account.webhookSecret : null,
+        }));
+
+        return res.json({ ok: true, data: responseAccounts });
     } catch (err) {
         next(err);
     }
@@ -230,11 +328,7 @@ router.get("/fee-summary", async (req: Request<{ prefix: string }>, res: Respons
         // 2. Fetch Aggregated Fee Stats
         const typeFilterTx: any = {
             type: "outgoing",
-            OR: [
-                { recipientName: { contains: "Fee" } },
-                { recipientMobile: { contains: "Fee" } },
-                { rawPayload: { path: ['event_type'], equals: 'FEE_PAYMENT' } }
-            ]
+            OR: exactFeeFilters()
         };
 
         // We use findMany because groupBy doesn't support easy 'OR' filtering on relation fields in older prisma versions nicely, 
@@ -251,6 +345,7 @@ router.get("/fee-summary", async (req: Request<{ prefix: string }>, res: Respons
             select: {
                 accountId: true,
                 amount: true,
+                fee: true,
                 timestamp: true
             },
             orderBy: { timestamp: "asc" }
@@ -267,7 +362,7 @@ router.get("/fee-summary", async (req: Request<{ prefix: string }>, res: Respons
         transactions.forEach((tx: any) => {
             const current = statsMap.get(tx.accountId);
             if (current) {
-                current.totalFee += (tx.amount || 0);
+                current.totalFee += (tx.fee > 0 ? tx.fee : tx.amount || 0);
                 if (!current.firstActiveAt) {
                     current.firstActiveAt = tx.timestamp; // Since sorted ASC, first one is oldest
                 }
@@ -361,18 +456,10 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
             const typeFilterTx: any = {};
             if (filterType === "withdraw") {
                 typeFilterTx.type = "outgoing";
-                typeFilterTx.NOT = [
-                    { recipientName: { contains: "Fee" } },
-                    { recipientMobile: { contains: "Fee" } },
-                    { rawPayload: { path: ['event_type'], equals: 'FEE_PAYMENT' } }
-                ];
+                typeFilterTx.NOT = { OR: feeEventFilters() };
             } else if (filterType === "fee") {
                 typeFilterTx.type = "outgoing";
-                typeFilterTx.OR = [
-                    { recipientName: { contains: "Fee" } },
-                    { recipientMobile: { contains: "Fee" } },
-                    { rawPayload: { path: ['event_type'], equals: 'FEE_PAYMENT' } }
-                ];
+                typeFilterTx.OR = exactFeeFilters();
             }
 
             [totalTx, transactions] = await Promise.all([
@@ -415,42 +502,29 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
         const txHistory = transactions.map((tx: any) => ({
             id: tx.id,
             type: "transaction",
-            amount: tx.amount,
+            amount: filterType === "fee" && tx.fee > 0 ? tx.fee : tx.amount,
             fee: tx.fee,
             direction: tx.type,
             sender: tx.senderMobile || tx.senderName || "Unknown",
             recipient: tx.recipientMobile || tx.recipientName || "Unknown",
             status: tx.status,
             checkedAt: tx.timestamp,
-            change: tx.type === 'outgoing' ? -tx.amount : tx.amount,
-            changeSatang: (tx.type === 'outgoing' ? -tx.amount : tx.amount) * 100,
+            change: tx.type === 'outgoing'
+                ? -(filterType === "fee" && tx.fee > 0 ? tx.fee : tx.amount)
+                : (filterType === "fee" && tx.fee > 0 ? tx.fee : tx.amount),
+            changeSatang: (tx.type === 'outgoing'
+                ? -(filterType === "fee" && tx.fee > 0 ? tx.fee : tx.amount)
+                : (filterType === "fee" && tx.fee > 0 ? tx.fee : tx.amount)) * 100,
             accountName: accountMap[tx.accountId]?.name || "Unknown",
             accountId: tx.accountId
         }));
 
-        // Map Snapshots
-        let snapshotHistory = snapshots.map((snapshot: any, index: number) => {
-            const prevSnapshot = snapshots[index + 1];
-            // If prevSnapshot is undefined (end of fetched list), change is 0 (neutral)
-            const change = prevSnapshot ? snapshot.balanceSatang - prevSnapshot.balanceSatang : 0;
-            return {
-                id: snapshot.id,
-                type: "snapshot",
-                balance: snapshot.balanceSatang / 100,
-                balanceSatang: snapshot.balanceSatang,
-                change: change / 100,
-                changeSatang: change,
-                mobileNo: snapshot.mobileNo,
-                source: snapshot.source,
-                checkedAt: snapshot.checkedAt,
-                accountName: accountMap[snapshot.accountId]?.name || "Unknown",
-                accountId: snapshot.accountId
-            };
-        });
+        // Calculate changes only against the previous snapshot of the same account.
+        let snapshotHistory = await mapSnapshotsWithAccountChanges(snapshots, accountMap);
 
         // Filter Negatives for Deposit Tab
         if (filterType === "deposit") {
-            snapshotHistory = snapshotHistory.filter(s => s.change >= 0);
+            snapshotHistory = snapshotHistory.filter(s => s.changeAvailable && s.change > 0);
             // We might return fewer than 'limit' here. That's a tradeoff for correctness.
             // Also slice to original limit just in case we fetched extras
             snapshotHistory = snapshotHistory.slice(0, limit);
@@ -472,7 +546,7 @@ router.get("/all-history", async (req: Request<{ prefix: string }>, res: Respons
 });
 
 // Create account
-router.post("/", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
+router.post("/", requireNetworkAdmin, async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     // ... (unchanged)
     try {
         const schema = z.object({
@@ -491,6 +565,11 @@ router.post("/", async (req: Request<{ prefix: string }>, res: Response, next: N
         };
 
         if (isLocalJga88(req.params.prefix)) {
+            if (data.webhookSecret && Array.from(localJga88Accounts.values()).some(
+                account => account.webhookSecret === data.webhookSecret
+            )) {
+                return res.status(409).json({ ok: false, error: "WEBHOOK_SECRET_ALREADY_IN_USE" });
+            }
             const now = new Date();
             const account = {
                 id: `local-wallet-${Date.now()}`,
@@ -511,6 +590,16 @@ router.post("/", async (req: Request<{ prefix: string }>, res: Response, next: N
             return res.status(404).json({ ok: false, error: "NETWORK_NOT_FOUND" });
         }
 
+        if (data.webhookSecret) {
+            const duplicate = await prisma.account.findFirst({
+                where: { networkId: network.id, webhookSecret: data.webhookSecret },
+                select: { id: true },
+            });
+            if (duplicate) {
+                return res.status(409).json({ ok: false, error: "WEBHOOK_SECRET_ALREADY_IN_USE" });
+            }
+        }
+
         const account = await prisma.account.create({
             data: { ...data, networkId: network.id } as any,
         });
@@ -521,8 +610,10 @@ router.post("/", async (req: Request<{ prefix: string }>, res: Response, next: N
     }
 });
 
+router.use("/:id", requireAccountAccess);
+
 // Update account
-router.put("/:id", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
+router.put("/:id", requireNetworkAdmin, async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
     // ... (unchanged)
     try {
         const schema = z.object({
@@ -548,10 +639,33 @@ router.put("/:id", async (req: Request<{ prefix: string; id: string }>, res: Res
             if (!current) {
                 return res.status(404).json({ ok: false, error: "NOT_FOUND" });
             }
+            if (data.webhookSecret && Array.from(localJga88Accounts.values()).some(
+                account => account.id !== req.params.id && account.webhookSecret === data.webhookSecret
+            )) {
+                return res.status(409).json({ ok: false, error: "WEBHOOK_SECRET_ALREADY_IN_USE" });
+            }
             const account = { ...current, ...data, updatedAt: new Date() };
             localJga88Accounts.set(req.params.id, account);
             saveLocalJga88State();
             return res.json({ ok: true, data: withLocalStats(account) });
+        }
+
+        if (data.webhookSecret) {
+            const current = await prisma.account.findUnique({
+                where: { id: req.params.id },
+                select: { networkId: true },
+            });
+            const duplicate = current && await prisma.account.findFirst({
+                where: {
+                    networkId: current.networkId,
+                    webhookSecret: data.webhookSecret,
+                    id: { not: req.params.id },
+                },
+                select: { id: true },
+            });
+            if (duplicate) {
+                return res.status(409).json({ ok: false, error: "WEBHOOK_SECRET_ALREADY_IN_USE" });
+            }
         }
 
         const account = await prisma.account.update({
@@ -570,7 +684,7 @@ router.put("/:id", async (req: Request<{ prefix: string; id: string }>, res: Res
 });
 
 // Delete account
-router.delete("/:id", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
+router.delete("/:id", requireNetworkAdmin, async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
     try {
         if (isLocalJga88(req.params.prefix)) {
             localJga88Accounts.delete(req.params.id);
@@ -604,7 +718,7 @@ router.get("/:id/auto-withdraw", async (req: Request<{ prefix: string; id: strin
 });
 
 // Update Auto-Withdraw Config
-router.put("/:id/auto-withdraw", async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
+router.put("/:id/auto-withdraw", requireNetworkAdmin, async (req: Request<{ prefix: string; id: string }>, res: Response, next: NextFunction) => {
     try {
         const schema = z.object({
             enabled: z.boolean(),
@@ -861,18 +975,10 @@ router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, 
             const typeFilterTx: any = {};
             if (filterType === "withdraw") {
                 typeFilterTx.type = "outgoing";
-                typeFilterTx.NOT = [
-                    { recipientName: { contains: "Fee" } },
-                    { recipientMobile: { contains: "Fee" } },
-                    { rawPayload: { path: ['event_type'], equals: 'FEE_PAYMENT' } }
-                ];
+                typeFilterTx.NOT = { OR: feeEventFilters() };
             } else if (filterType === "fee") {
                 typeFilterTx.type = "outgoing";
-                typeFilterTx.OR = [
-                    { recipientName: { contains: "Fee" } },
-                    { recipientMobile: { contains: "Fee" } },
-                    { rawPayload: { path: ['event_type'], equals: 'FEE_PAYMENT' } }
-                ];
+                typeFilterTx.OR = exactFeeFilters();
             }
 
             [totalTx, transactions] = await Promise.all([
@@ -915,7 +1021,7 @@ router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, 
         const txHistory = transactions.map((tx: any) => ({
             id: tx.id,
             type: "transaction",
-            amount: tx.amount, // Net change magnitude
+            amount: filterType === "fee" && tx.fee > 0 ? tx.fee : tx.amount,
             fee: tx.fee,
             direction: tx.type, // "incoming" or "outgoing"
             sender: tx.senderMobile || tx.senderName || "Unknown",
@@ -924,31 +1030,22 @@ router.get("/:id/history", async (req: Request<{ prefix: string; id: string }>, 
             checkedAt: tx.timestamp, // Use timestamp as sort key
             // Derived fields for frontend compatibility
             balance: 0, // We don't track running balance in transactions yet
-            change: tx.type === 'outgoing' ? -tx.amount : tx.amount,
-            changeSatang: (tx.type === 'outgoing' ? -tx.amount : tx.amount) * 100,
+            change: tx.type === 'outgoing'
+                ? -(filterType === "fee" && tx.fee > 0 ? tx.fee : tx.amount)
+                : (filterType === "fee" && tx.fee > 0 ? tx.fee : tx.amount),
+            changeSatang: (tx.type === 'outgoing'
+                ? -(filterType === "fee" && tx.fee > 0 ? tx.fee : tx.amount)
+                : (filterType === "fee" && tx.fee > 0 ? tx.fee : tx.amount)) * 100,
         }));
 
-        // Map Snapshots to unified format
-        let snapshotHistory = snapshots.map((snapshot: any, index: number) => {
-            const prevSnapshot = snapshots[index + 1];
-            const change = prevSnapshot ? snapshot.balanceSatang - prevSnapshot.balanceSatang : 0;
-            return {
-                id: snapshot.id,
-                type: "snapshot",
-                balance: snapshot.balanceSatang / 100,
-                balanceSatang: snapshot.balanceSatang,
-                change: change / 100,
-                changeSatang: change,
-                source: snapshot.source,
-                checkedAt: snapshot.checkedAt,
-                accountName: account?.name || "Unknown",
-                accountId: snapshot.accountId
-            };
+        // Calculate changes only against the previous snapshot of this account.
+        let snapshotHistory = await mapSnapshotsWithAccountChanges(snapshots, {
+            [account.id]: { name: account.name },
         });
 
         // Filter Negatives for Deposit Tab
         if (filterType === "deposit") {
-            snapshotHistory = snapshotHistory.filter(s => s.change >= 0);
+            snapshotHistory = snapshotHistory.filter(s => s.changeAvailable && s.change > 0);
             snapshotHistory = snapshotHistory.slice(0, limit);
         }
 

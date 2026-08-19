@@ -3,6 +3,7 @@ import masterRouter from "./master";
 import tenantRouter from "./tenant";
 import cronRouter from "./cron";
 import sseRouter from "./sse";
+import { getAppVersionInfo } from "../lib/version";
 
 const router = Router();
 const APP_ROOT = (process.env.APP_ROOT || "auto").toLowerCase();
@@ -29,7 +30,7 @@ router.use((req, res, next) => {
 
 // Version info
 router.get("/version", (req, res) => {
-    res.json({ version: "1.0.0", name: "True Webhook Monitor" });
+    res.json({ ...getAppVersionInfo(), name: "True Webhook Monitor" });
 });
 
 // Master routes

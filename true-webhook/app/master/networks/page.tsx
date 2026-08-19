@@ -108,11 +108,11 @@ export default function NetworksPage() {
         if (!confirmDelete) return;
         try {
             await masterFetch(`/api/master/networks/${confirmDelete.id}`, { method: "DELETE" });
-            showToast({ type: "success", title: "ลบสำเร็จ", message: `ลบ ${confirmDelete.name} แล้ว` });
+            showToast({ type: "success", title: "เก็บเครือข่ายแล้ว", message: `${confirmDelete.name} ถูกปิดใช้งานโดยข้อมูลเดิมยังอยู่ครบ` });
             setConfirmDelete(null);
             await fetchNetworks();
         } catch (error) {
-            showToast({ type: "error", title: "ลบไม่สำเร็จ", message: error instanceof Error ? error.message : "NETWORK_DELETE_FAILED" });
+            showToast({ type: "error", title: "เก็บเครือข่ายไม่สำเร็จ", message: error instanceof Error ? error.message : "NETWORK_ARCHIVE_FAILED" });
         }
     };
 
@@ -192,7 +192,7 @@ export default function NetworksPage() {
                                                         {network.isActive ? "ปิด" : "เปิด"}
                                                     </button>
                                                     <button className="btn btn-secondary btn-compact" onClick={() => handleEdit(network)}>แก้ไข</button>
-                                                    <button className="btn btn-danger btn-compact" onClick={() => setConfirmDelete(network)}>ลบ</button>
+                                                    <button className="btn btn-danger btn-compact" onClick={() => setConfirmDelete(network)}>เก็บ</button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -252,9 +252,9 @@ export default function NetworksPage() {
 
             {confirmDelete && (
                 <ConfirmModal
-                    title="ลบเครือข่ายนี้?"
-                    message={`การลบ ${confirmDelete.name} จะลบข้อมูล tenant ที่เกี่ยวข้องตาม relation ในฐานข้อมูล`}
-                    confirmText="ลบเครือข่าย"
+                    title="เก็บเครือข่ายนี้?"
+                    message={`ระบบจะปิดใช้งาน ${confirmDelete.name} และหยุดตรวจยอด โดยยังเก็บวอลเล็ตและประวัติทั้งหมดไว้`}
+                    confirmText="เก็บและปิดใช้งาน"
                     onCancel={() => setConfirmDelete(null)}
                     onConfirm={deleteNetwork}
                 />

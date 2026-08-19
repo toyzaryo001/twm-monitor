@@ -1,17 +1,24 @@
 import "dotenv/config";
-import express from "express";
+import express, { ErrorRequestHandler } from "express";
 import cors from "cors";
 import next from "next";
 import path from "path";
 import apiRouter from "./api/router";
-import { isWorkerRunning, startBalanceWorker, stopBalanceWorker } from "./workers/balanceWorker";
+import { getWorkerStatus, startBalanceWorker, stopBalanceWorker } from "./workers/balanceWorker";
 import { prisma } from "./lib/prisma";
 import { logEvent } from "./lib/logging";
+import { validateRuntimeConfig } from "./lib/runtimeConfig";
+import { securityHeaders } from "./middleware/security";
 // Auto-Withdraw feature removed - TrueMoney API not accessible
 // import { startAutoWithdrawWorker } from "./workers/autoWithdrawWorker";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000", 10);
+const appRoot = (process.env.APP_ROOT || "auto").toLowerCase();
+
+function isBalanceWorkerDisabled() {
+    return process.env.DISABLE_BALANCE_WORKER === "true" || appRoot === "master";
+}
 
 // Ensure Next.js finds the correct directory
 const dir = process.cwd();
@@ -49,11 +56,15 @@ function isAllowedOrigin(origin: string | undefined, hostHeader?: string | strin
 }
 
 async function main() {
+    validateRuntimeConfig();
     console.log("[server] Preparing Next.js app...");
     await app.prepare();
     console.log("[server] Next.js app ready!");
 
     const server = express();
+    server.set("trust proxy", 1);
+    server.disable("x-powered-by");
+    server.use(securityHeaders);
 
     server.use((req, res, nextMiddleware) => {
         cors({
@@ -89,12 +100,23 @@ async function main() {
 
         try {
             await prisma.$queryRaw`SELECT 1`;
-            return res.json({
-                ok: true,
+            const worker = getWorkerStatus();
+            const workerDisabled = isBalanceWorkerDisabled();
+            const lastSuccessMs = worker.lastSuccessfulRunAt
+                ? new Date(worker.lastSuccessfulRunAt).getTime()
+                : 0;
+            const workerStale = !workerDisabled && worker.configuredNetworks > 0 &&
+                (!lastSuccessMs || Date.now() - lastSuccessMs > 10 * 60 * 1000);
+            return res.status(workerStale ? 503 : 200).json({
+                ok: !workerStale,
                 timestamp: new Date().toISOString(),
                 checks: {
                     db: "ok",
-                    workerRunning: isWorkerRunning(),
+                    worker: {
+                        ...worker,
+                        disabled: workerDisabled,
+                        stale: workerStale,
+                    },
                 },
             });
         } catch (err) {
@@ -104,7 +126,7 @@ async function main() {
                 timestamp: new Date().toISOString(),
                 checks: {
                     db: "error",
-                    workerRunning: isWorkerRunning(),
+                    worker: getWorkerStatus(),
                 },
             });
         }
@@ -112,6 +134,30 @@ async function main() {
 
     // API routes
     server.use("/api", apiRouter);
+
+    const apiErrorHandler: ErrorRequestHandler = (err, req, res, nextMiddleware) => {
+        if (!req.path.startsWith("/api")) return nextMiddleware(err);
+
+        const errorName = err instanceof Error ? err.name : "UnknownError";
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        const status = errorName === "ZodError" || errorName === "MulterError"
+            ? 400
+            : errorMessage === "CORS_ORIGIN_DENIED"
+                ? 403
+                : 500;
+
+        logEvent(status >= 500 ? "error" : "warn", "api_request_failed", {
+            method: req.method,
+            path: req.path,
+            status,
+            error: errorMessage,
+        });
+        return res.status(status).json({
+            ok: false,
+            error: status === 500 ? "INTERNAL_SERVER_ERROR" : errorMessage,
+        });
+    };
+    server.use(apiErrorHandler);
 
     // Next.js handler for all other routes
     server.all("*", (req, res) => {
@@ -122,8 +168,8 @@ async function main() {
     const httpServer = server.listen(port, () => {
         console.log(`[server] listening on http://localhost:${port} (dev=${dev})`);
 
-        if (process.env.DISABLE_BALANCE_WORKER === "true") {
-            console.log("[server] Balance worker disabled by DISABLE_BALANCE_WORKER=true");
+        if (isBalanceWorkerDisabled()) {
+            console.log(`[server] Balance worker disabled (APP_ROOT=${appRoot})`);
             return;
         }
 
@@ -136,11 +182,22 @@ async function main() {
         // startAutoWithdrawWorker();
     });
 
+    let shuttingDown = false;
     async function shutdown(signal: string) {
+        if (shuttingDown) return;
+        shuttingDown = true;
         logEvent("info", "server_shutdown_started", { signal });
         stopBalanceWorker();
 
+        const forceShutdown = setTimeout(() => {
+            logEvent("error", "server_shutdown_forced", { signal });
+            httpServer.closeAllConnections();
+            void prisma.$disconnect().finally(() => process.exit(1));
+        }, 10_000);
+        forceShutdown.unref();
+
         httpServer.close(async () => {
+            clearTimeout(forceShutdown);
             try {
                 await prisma.$disconnect();
                 logEvent("info", "server_shutdown_complete", { signal });

@@ -16,6 +16,7 @@ interface Account {
         firstActiveAt: string | null;
     };
     webhookSecret?: string | null;
+    webhookSecretConfigured?: boolean;
 }
 
 interface BalanceData {

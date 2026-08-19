@@ -1,18 +1,18 @@
-import { Router, Request, Response } from "express";
+import { NextFunction, Router, Request, Response } from "express";
 import { prisma } from "../../lib/prisma";
 
 const router = Router();
 const TRUE_MONEY_BALANCE_ENDPOINT = "https://apis.truemoneyservices.com/account/v1/balance";
 
 // Secret key for cron authentication (set in Railway env)
-const CRON_SECRET = process.env.CRON_SECRET || "default-cron-secret";
+const CRON_SECRET = process.env.CRON_SECRET;
 
 // Middleware to verify cron secret
-const verifyCronSecret = (req: Request, res: Response, next: Function) => {
+const verifyCronSecret = (req: Request, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
     const secret = authHeader?.replace("Bearer ", "") || req.query.secret;
 
-    if (secret !== CRON_SECRET) {
+    if (!CRON_SECRET || !secret || secret !== CRON_SECRET) {
         return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
     }
     next();

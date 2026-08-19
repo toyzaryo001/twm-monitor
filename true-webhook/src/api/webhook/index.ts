@@ -4,11 +4,35 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { broadcastBalanceUpdate } from "../sse";
 import { logEvent, sanitizeLogPayload } from "../../lib/logging";
+import { createRateLimit } from "../../middleware/rateLimit";
+import crypto from "crypto";
 
 const router = Router({ mergeParams: true });
+const webhookRateLimit = createRateLimit({ name: "webhook", windowMs: 60 * 1000, max: 600 });
+
+function createWebhookFallbackId(payload: Record<string, unknown>) {
+    const identity = {
+        eventType: payload.event_type || null,
+        transactionDate: payload.transaction_date || null,
+        issuedAt: payload.iat || null,
+        amount: payload.amount || payload.amount_net || null,
+        merchant: payload.merchant_name || null,
+        sender: payload.sender_mobile || null,
+        recipient: payload.recipient_mobile || null,
+        reference: payload.ref_id || null,
+    };
+    const digest = crypto.createHash("sha256")
+        .update(JSON.stringify(identity))
+        .digest("hex")
+        .slice(0, 32);
+    return `derived-${digest}`;
+}
 
 // TrueMoney Webhook Payload Schema
-const numberLikeSchema = z.number().or(z.string());
+const numberLikeSchema = z.number().or(z.string()).refine(
+    value => Number.isFinite(Number(value)) && Number(value) >= 0,
+    { message: "INVALID_NUMERIC_VALUE" }
+);
 const optionalNumberLikeSchema = numberLikeSchema.nullish();
 
 const webhookSchema = z.object({
@@ -83,7 +107,7 @@ function getBodyShape(body: unknown) {
 }
 
 // POST /api/webhook/:prefix
-router.all("/:prefix", async (req: Request, res: Response) => {
+router.all("/:prefix", webhookRateLimit, async (req: Request, res: Response) => {
     logEvent("info", "webhook_request", { method: req.method, prefix: req.params.prefix });
 
     // Handle verification requests (HEAD/GET)
@@ -208,9 +232,8 @@ router.all("/:prefix", async (req: Request, res: Response) => {
         // Extract fields from mapped payload
         // TrueMoney sends empty transaction_id for Fee events, so we generate a robust unique fallback
         const transactionId = payload.transaction_id ||
-            (payload.event_type === 'FEE_PAYMENT' ? `fee-${payload.iat}-${payload.amount}` : null) ||
             payload.ref_id ||
-            `unknown-${Date.now()}`;
+            createWebhookFallbackId(payload);
 
         // Amount/Fee is in Satang (Integer), convert to Baht (Float)
         let amountRaw = payload.amount || payload.amount_net || 0;

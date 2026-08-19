@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { requireAuth, requireMaster } from "../../middleware/auth";
 import { hashPassword } from "../../lib/auth";
+import { logEvent } from "../../lib/logging";
 
 const router = Router();
 
@@ -241,11 +242,20 @@ router.post("/:id/test-telegram", async (req, res, next) => {
     }
 });
 
-// Delete network
+// Archive network. Data remains available for recovery and audit.
 router.delete("/:id", async (req, res, next) => {
     try {
-        await prisma.network.delete({ where: { id: req.params.id as string } });
-        return res.status(204).send();
+        const network = await prisma.network.update({
+            where: { id: req.params.id as string },
+            data: { isActive: false, realtimeEnabled: false },
+            select: { id: true, prefix: true, name: true },
+        });
+        logEvent("warn", "network_archived", {
+            actorUserId: req.user?.userId,
+            networkId: network.id,
+            prefix: network.prefix,
+        });
+        return res.json({ ok: true, data: { ...network, archived: true } });
     } catch (err) {
         res.status(404).json({ ok: false, error: "NOT_FOUND" });
     }

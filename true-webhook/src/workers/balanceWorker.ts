@@ -26,6 +26,15 @@ const lastBalances = new Map<string, number>();
 
 // Store network check intervals
 const networkIntervals = new Map<string, NodeJS.Timeout>();
+const activeNetworkChecks = new Set<string>();
+let refreshInterval: NodeJS.Timeout | null = null;
+let refreshInProgress = false;
+let workerStartedAt: Date | null = null;
+let lastRunAt: Date | null = null;
+let lastSuccessfulRunAt: Date | null = null;
+let lastWorkerError: string | null = null;
+let configuredNetworkCount = 0;
+let lastRunSummary: { attempted: number; succeeded: number } | null = null;
 
 // Send Telegram notification
 async function sendTelegramNotification(
@@ -82,7 +91,7 @@ async function sendTelegramNotification(
 }
 
 // Check balance for a single account
-async function checkAccountBalance(account: AccountToCheck, retryCount = 0): Promise<{ changed: boolean; balance: number }> {
+async function checkAccountBalance(account: AccountToCheck, retryCount = 0): Promise<{ changed: boolean; balance: number; success: boolean }> {
     const MAX_RETRIES = 2;
     const TIMEOUT_MS = 10000; // 10 seconds timeout
 
@@ -106,7 +115,7 @@ async function checkAccountBalance(account: AccountToCheck, retryCount = 0): Pro
 
             if (!response.ok) {
                 console.error(`[Worker] API error for ${account.name}: ${response.status}`);
-                return { changed: false, balance: 0 };
+                return { changed: false, balance: 0, success: false };
             }
 
             const data = await response.json();
@@ -161,7 +170,7 @@ async function checkAccountBalance(account: AccountToCheck, retryCount = 0): Pro
                 console.log(`[Worker] ${account.name}: Balance changed ${(lastBalance || 0) / 100} → ${balanceSatang / 100} (${changeAmount >= 0 ? "+" : ""}${changeAmount / 100})`);
             }
 
-            return { changed, balance: balanceSatang };
+            return { changed, balance: balanceSatang, success: true };
         } catch (fetchErr: any) {
             clearTimeout(timeoutId);
 
@@ -172,7 +181,7 @@ async function checkAccountBalance(account: AccountToCheck, retryCount = 0): Pro
                 throw fetchErr; // Re-throw to outer catch for retry logic
             }
 
-            return { changed: false, balance: 0 };
+            return { changed: false, balance: 0, success: false };
         }
     } catch (err: any) {
         // Retry logic for socket errors
@@ -190,7 +199,7 @@ async function checkAccountBalance(account: AccountToCheck, retryCount = 0): Pro
         }
 
         console.error(`[Worker] Error checking ${account.name} (after ${retryCount} retries):`, err.message || err);
-        return { changed: false, balance: 0 };
+        return { changed: false, balance: 0, success: false };
     }
 }
 
@@ -223,12 +232,41 @@ async function checkNetworkBalances(networkId: string) {
 
     // Process accounts in parallel
     const BATCH_SIZE = 5;
+    let succeeded = 0;
     for (let i = 0; i < accounts.length; i += BATCH_SIZE) {
         const batch = accounts.slice(i, i + BATCH_SIZE);
-        await Promise.all(batch.map(account => checkAccountBalance({
+        const results = await Promise.all(batch.map(account => checkAccountBalance({
             ...account,
             lastBalance: lastBalances.get(account.id) || null,
         })));
+        succeeded += results.filter(result => result.success).length;
+    }
+    return { attempted: accounts.length, succeeded };
+}
+
+async function runNetworkBalanceCheck(networkId: string, prefix: string) {
+    if (activeNetworkChecks.has(networkId)) {
+        console.warn(`[Worker] Skipping overlapping check for ${prefix}`);
+        return;
+    }
+
+    activeNetworkChecks.add(networkId);
+    lastRunAt = new Date();
+    try {
+        const summary = await checkNetworkBalances(networkId);
+        lastRunSummary = summary;
+        if (summary.attempted > 0 && summary.succeeded === 0) {
+            throw new Error(`All ${summary.attempted} account checks failed`);
+        }
+        lastSuccessfulRunAt = new Date();
+        lastWorkerError = summary.succeeded < summary.attempted
+            ? `${summary.attempted - summary.succeeded} account checks failed`
+            : null;
+    } catch (err) {
+        lastWorkerError = err instanceof Error ? err.message : String(err);
+        console.error(`[Worker] Error checking network ${prefix}:`, err);
+    } finally {
+        activeNetworkChecks.delete(networkId);
     }
 }
 
@@ -273,6 +311,7 @@ async function startNetworkWorkers() {
             checkIntervalMs: true,
         },
     });
+    configuredNetworkCount = networks.length;
 
     console.log(`[Worker] Starting workers for ${networks.length} networks...`);
 
@@ -281,17 +320,13 @@ async function startNetworkWorkers() {
 
         // Start interval for this network
         const intervalId = setInterval(async () => {
-            try {
-                await checkNetworkBalances(network.id);
-            } catch (err) {
-                console.error(`[Worker] Error checking network ${network.prefix}:`, err);
-            }
+            await runNetworkBalanceCheck(network.id, network.prefix);
         }, intervalMs);
 
         networkIntervals.set(network.id, intervalId);
 
         // Run immediately
-        checkNetworkBalances(network.id);
+        void runNetworkBalanceCheck(network.id, network.prefix);
 
         console.log(`[Worker] Started: ${network.prefix} (every ${intervalMs}ms)`);
     }
@@ -299,38 +334,76 @@ async function startNetworkWorkers() {
 
 // Refresh workers (call when network settings change)
 export async function refreshWorkers() {
+    if (refreshInProgress) return;
+    refreshInProgress = true;
     console.log("[Worker] Refreshing network workers...");
-    await startNetworkWorkers();
+    try {
+        await startNetworkWorkers();
+    } finally {
+        refreshInProgress = false;
+    }
 }
 
 // Start the background worker
 export async function startBalanceWorker() {
+    if (workerStartedAt) {
+        console.log("[Worker] Balance worker already started");
+        return;
+    }
+
     console.log("[Worker] Starting balance worker...");
+    workerStartedAt = new Date();
+    try {
+        // Initialize from database
+        await initializeBalances();
 
-    // Initialize from database
-    await initializeBalances();
+        // Start network workers
+        await startNetworkWorkers();
 
-    // Start network workers
-    await startNetworkWorkers();
-
-    // Refresh workers every 5 minutes to pick up settings changes
-    setInterval(async () => {
-        try {
-            await startNetworkWorkers();
-        } catch (err) {
-            console.error("[Worker] Error refreshing workers:", err);
-        }
-    }, 5 * 60 * 1000);
+        // Refresh workers every 5 minutes to pick up settings changes
+        refreshInterval = setInterval(async () => {
+            try {
+                await refreshWorkers();
+            } catch (err) {
+                lastWorkerError = err instanceof Error ? err.message : String(err);
+                console.error("[Worker] Error refreshing workers:", err);
+            }
+        }, 5 * 60 * 1000);
+    } catch (err) {
+        lastWorkerError = err instanceof Error ? err.message : String(err);
+        workerStartedAt = null;
+        throw err;
+    }
 }
 
 // Stop all workers
 export function stopBalanceWorker() {
     networkIntervals.forEach(interval => clearInterval(interval));
     networkIntervals.clear();
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+    }
+    activeNetworkChecks.clear();
+    workerStartedAt = null;
+    configuredNetworkCount = 0;
     console.log("[Worker] Balance workers stopped");
 }
 
 // Check if worker is running
 export function isWorkerRunning() {
-    return networkIntervals.size > 0;
+    return workerStartedAt !== null && networkIntervals.size > 0;
+}
+
+export function getWorkerStatus() {
+    return {
+        running: isWorkerRunning(),
+        configuredNetworks: configuredNetworkCount,
+        activeChecks: activeNetworkChecks.size,
+        startedAt: workerStartedAt?.toISOString() || null,
+        lastRunAt: lastRunAt?.toISOString() || null,
+        lastSuccessfulRunAt: lastSuccessfulRunAt?.toISOString() || null,
+        lastError: lastWorkerError,
+        lastRunSummary,
+    };
 }
