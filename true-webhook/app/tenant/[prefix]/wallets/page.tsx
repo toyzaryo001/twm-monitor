@@ -577,6 +577,7 @@ export default function WalletsPage() {
             {/* Add Wallet Modal */}
             {showModal && (
                 <div
+                    className="tenant-wallet-modal-overlay"
                     style={{
                         position: "fixed",
                         top: 0,
@@ -593,7 +594,7 @@ export default function WalletsPage() {
                     onClick={() => setShowModal(false)}
                 >
                     <div
-                        className="tenant-card"
+                        className="tenant-card tenant-wallet-modal-card"
                         style={{ maxWidth: 560, width: "100%" }}
                         onClick={(e) => e.stopPropagation()}
                     >
@@ -741,6 +742,7 @@ export default function WalletsPage() {
             {/* Auto Withdraw Modal */}
             {showAutoWithdrawModal && (
                 <div
+                    className="tenant-wallet-modal-overlay"
                     style={{
                         position: "fixed",
                         top: 0,
@@ -757,7 +759,7 @@ export default function WalletsPage() {
                     onClick={() => setShowAutoWithdrawModal(false)}
                 >
                     <div
-                        className="tenant-card"
+                        className="tenant-card tenant-wallet-modal-card"
                         style={{ maxWidth: 480, width: "100%" }}
                         onClick={(e) => e.stopPropagation()}
                     >

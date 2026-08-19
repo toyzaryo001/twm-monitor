@@ -750,6 +750,15 @@
     .webhook-code-row button {
         width: 100%;
     }
+
+    .tenant-wallet-modal-overlay {
+        padding: 12px !important;
+    }
+
+    .tenant-wallet-modal-card {
+        max-height: calc(100dvh - 24px);
+        padding: 18px;
+    }
 }
 
 .tenant-card-header {
@@ -826,6 +835,34 @@
     background:
         linear-gradient(135deg, rgba(32, 199, 216, 0.1), rgba(218, 188, 121, 0.08)),
         rgba(7, 10, 16, 0.34);
+}
+
+.tenant-wallet-modal-overlay {
+    align-items: flex-start !important;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.tenant-wallet-modal-card {
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+}
+
+.tenant-wallet-modal-card::-webkit-scrollbar {
+    width: 10px;
+}
+
+.tenant-wallet-modal-card::-webkit-scrollbar-track {
+    background: rgba(7, 10, 16, 0.45);
+    border-radius: 999px;
+}
+
+.tenant-wallet-modal-card::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(244, 223, 154, 0.55), rgba(32, 199, 216, 0.55));
+    border: 2px solid rgba(7, 10, 16, 0.45);
+    border-radius: 999px;
 }
 
 .wallet-webhook-quickhead {
