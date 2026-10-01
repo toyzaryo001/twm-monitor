@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import { openTenantBalanceStream } from "../../../lib/tenantSse";
+import { useToast } from "../../../components/Toast";
 
 interface Account {
     id: string;
@@ -13,7 +14,9 @@ interface Account {
 interface HistoryEntry {
     id: string;
     balance: number;
+    balanceSatang?: number;
     change: number;
+    changeSatang?: number;
     mobileNo?: string;
     source?: string;
     checkedAt: string;
@@ -25,18 +28,31 @@ interface HistoryEntry {
     recipient?: string;
     status?: string;
     accountName?: string;
+    accountId?: string;
+}
+
+interface FeeSummary {
+    accountId: string;
+    accountName: string;
+    phoneNumber?: string;
+    totalFee: number;
+    firstActiveAt: string | null;
 }
 
 type Tab = "all" | "deposit" | "withdraw" | "fee";
-
 type DateRange = "today" | "yesterday" | "3d" | "7d" | "15d" | "30d" | "all" | "custom";
 
 export default function HistoryPage() {
     const params = useParams();
     const prefix = params.prefix as string;
+    const { showToast } = useToast();
+
     const [accounts, setAccounts] = useState<Account[]>([]);
-    const [selectedAccount, setSelectedAccount] = useState<string>("");
+    const [selectedAccount, setSelectedAccount] = useState<string>("all");
     const [history, setHistory] = useState<HistoryEntry[]>([]);
+    const [feeSummary, setFeeSummary] = useState<FeeSummary[]>([]);
+    const [viewMode, setViewMode] = useState<"summary" | "detail">("summary");
+
     const [loading, setLoading] = useState(true);
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [isConnected, setIsConnected] = useState(false);
@@ -57,7 +73,7 @@ export default function HistoryPage() {
 
     const getToken = () => localStorage.getItem("tenantToken") || "";
 
-    const getDateRangeParams = (filter: DateRange) => {
+    const getDateRangeParams = useCallback((filter: DateRange) => {
         const now = new Date();
         const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
@@ -99,20 +115,8 @@ export default function HistoryPage() {
             end.setHours(23, 59, 59, 999);
             return `&from=${start.toISOString()}&to=${end.toISOString()}`;
         }
-        return ""; // All
-    };
-
-    interface FeeSummary {
-        accountId: string;
-        accountName: string;
-        phoneNumber?: string;
-        totalFee: number;
-        firstActiveAt: string | null;
-    }
-
-    const [feeSummary, setFeeSummary] = useState<FeeSummary[]>([]);
-
-    const [viewMode, setViewMode] = useState<"summary" | "detail">("summary");
+        return "";
+    }, [customStartDate, customEndDate]);
 
     const fetchHistory = useCallback(async (showLoading = false) => {
         if (!selectedAccount) return;
@@ -123,12 +127,11 @@ export default function HistoryPage() {
         try {
             const dateParams = getDateRangeParams(dateFilter);
 
-            // IF FEE TAB & SUMMARY MODE -> Fetch Summary
+            // Fee Tab Summary Mode
             if (activeTab === "fee" && viewMode === "summary") {
-                const url = `/api/tenant/${prefix}/accounts/fee-summary?${dateParams.replace('&', '')}`; // remove leading & if any
+                const url = `/api/tenant/${prefix}/accounts/fee-summary?${dateParams.replace('&', '')}`;
                 const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
 
-                // Check for 401 and redirect to login
                 if (res.status === 401) {
                     localStorage.removeItem("tenantToken");
                     window.location.href = `/tenant/${prefix}/login`;
@@ -138,12 +141,10 @@ export default function HistoryPage() {
                 const data = await res.json();
                 if (data.ok) {
                     setFeeSummary(data.data);
-                    // Reset pagination for consistency (though not used)
                     setTotalPages(1);
                     setTotalItems(data.data.length);
                 }
             } else {
-                // Existing Logic for Deposit/Withdraw OR Fee Detail
                 const filterParam = `&filter=${activeTab}`;
                 let url = "";
                 if (selectedAccount === "all") {
@@ -154,7 +155,6 @@ export default function HistoryPage() {
 
                 const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
 
-                // Check for 401 and redirect to login
                 if (res.status === 401) {
                     localStorage.removeItem("tenantToken");
                     window.location.href = `/tenant/${prefix}/login`;
@@ -174,28 +174,26 @@ export default function HistoryPage() {
             console.error("Error fetching history", e);
         }
         setLoadingHistory(false);
-    }, [selectedAccount, prefix, limit, page, dateFilter, activeTab, viewMode]);
+    }, [selectedAccount, prefix, limit, page, dateFilter, activeTab, viewMode, getDateRangeParams]);
 
-    // Reset page when filters change
+    // Reset pagination when filter criteria change
     useEffect(() => {
         setPage(1);
     }, [selectedAccount, limit, dateFilter, activeTab, viewMode]);
 
-    // Reset viewMode when tab changes
+    // Switch view mode when tab changes
     useEffect(() => {
         if (activeTab !== 'fee') {
             setViewMode('summary');
         } else {
-            // If switching TO fee tab, reset to summary
             setViewMode('summary');
-            setSelectedAccount('all'); // Reset account selection for summary view
+            setSelectedAccount('all');
         }
     }, [activeTab]);
 
-    // Fetch accounts
+    // Fetch account list
     useEffect(() => {
         const fetchAccounts = async () => {
-            // ... existing code ...
             const token = getToken();
             if (!token) return;
 
@@ -204,11 +202,8 @@ export default function HistoryPage() {
                     headers: { Authorization: `Bearer ${token}` },
                 });
                 const data = await res.json();
-                if (data.ok && data.data.length > 0) {
-                    setAccounts(data.data);
-                    if (!selectedAccount) {
-                        setSelectedAccount(data.data[0].id);
-                    }
+                if (data.ok) {
+                    setAccounts(data.data || []);
                 }
             } catch (e) {
                 console.error("Error fetching accounts", e);
@@ -219,14 +214,14 @@ export default function HistoryPage() {
         fetchAccounts();
     }, [prefix]);
 
-    // Fetch history
+    // Trigger history fetch when dependencies change
     useEffect(() => {
         if (selectedAccount) {
             fetchHistory(true);
         }
     }, [selectedAccount, fetchHistory]);
 
-    // SSE
+    // SSE Realtime Updates
     useEffect(() => {
         if (!selectedAccount || selectedAccount === "all") {
             if (eventSourceRef.current) eventSourceRef.current.close();
@@ -252,7 +247,7 @@ export default function HistoryPage() {
                     try {
                         const data = JSON.parse(event.data);
                         if (data.type === "update") fetchHistory(false);
-                    } catch (e) { }
+                    } catch { }
                 };
                 eventSource.onerror = () => setIsConnected(false);
             } catch (error) {
@@ -283,343 +278,546 @@ export default function HistoryPage() {
         return false;
     };
 
-    // Use raw history as it is already filtered by server
-    const filteredHistory = history;
+    const isMoneyIn = (entry: HistoryEntry) => {
+        if (entry.type === 'transaction') {
+            return entry.direction === 'incoming';
+        }
+        return entry.change > 0;
+    };
 
-    // Calculate total amount for display
     const totalAmount = activeTab === 'fee' && viewMode === 'summary'
         ? feeSummary.reduce((sum, item) => sum + item.totalFee, 0)
-        : filteredHistory.reduce((sum, entry) => {
+        : history.reduce((sum, entry) => {
             const val = entry.type === 'transaction' && entry.amount ? entry.amount : Math.abs(entry.change);
             return sum + val;
         }, 0);
 
-    const formatDate = (dateStr: string) => {
-        return new Date(dateStr).toLocaleDateString("th-TH", { day: "2-digit", month: "short", year: "numeric" });
-    };
-
-    const formatTime = (dateStr: string) => {
-        return new Date(dateStr).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    };
-
-    const formatDateTime = (dateStr: string | null) => {
+    const formatDateTime = (dateStr?: string | null) => {
         if (!dateStr) return "-";
         const d = new Date(dateStr);
-        return `${d.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "2-digit" })} ${d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}`;
+        return d.toLocaleString("th-TH", {
+            timeZone: "Asia/Bangkok",
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: false,
+        });
     };
 
-    if (loading) return <div className="flex-center p-60"><div className="spinner" /></div>;
+    const copyText = async (text: string, label: string) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            showToast({ type: "success", title: "คัดลอกแล้ว", message: label });
+        } catch {
+            showToast({ type: "error", title: "ล้มเหลว", message: "ไม่สามารถคัดลอกได้" });
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="flex-center p-60">
+                <div className="spinner" />
+            </div>
+        );
+    }
 
     return (
         <div>
+            {/* Header */}
             <div className="tenant-page-header">
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    {/* Back Button for Detail Mode */}
                     {activeTab === 'fee' && viewMode === 'detail' && (
                         <button
+                            type="button"
                             onClick={() => {
                                 setViewMode('summary');
                                 setSelectedAccount('all');
                             }}
-                            className="tenant-btn-secondary"
-                            style={{ padding: "4px 8px", fontSize: 18, border: "none", background: "transparent", color: "var(--text-primary)", cursor: "pointer" }}
+                            className="tenant-btn tenant-btn-secondary tenant-btn-sm"
+                            style={{ padding: "6px 12px" }}
                         >
-                            ←
+                            ← กลับสู่สรุป
                         </button>
                     )}
-                    <h1 className="tenant-page-title">
-                        {activeTab === 'fee' && viewMode === 'detail'
-                            ? `ประวัติ: ${accounts.find(a => a.id === selectedAccount)?.name || 'รายบัญชี'}`
-                            : "ประวัติยอดเงิน"}
-                    </h1>
+                    <div>
+                        <h1 className="tenant-page-title">
+                            {activeTab === 'fee' && viewMode === 'detail'
+                                ? `ประวัติค่าธรรมเนียม: ${accounts.find(a => a.id === selectedAccount)?.name || 'รายบัญชี'}`
+                                : "ประวัติทำรายการ"}
+                        </h1>
+                        <p style={{ fontSize: 13, color: "var(--theme-text-muted)", marginTop: 2 }}>
+                            ตรวจสอบและติดตามบันทึกธุรกรรมการเงินและยอดเงินในรูปแบบตาราง
+                        </p>
+                    </div>
                 </div>
 
-                <div className="flex-center gap-16">
-                    {/* Live Status - Hide on Fee Tab (All modes) */}
+                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                    {/* Live Indicator */}
                     {activeTab !== 'fee' && selectedAccount !== 'all' && (
-                        <div className="flex-center gap-6">
-                            <div style={{ width: 8, height: 8, borderRadius: "50%", background: isConnected ? "#22c55e" : "#ef4444", animation: isConnected ? "pulse 2s infinite" : "none" }} />
-                            <span style={{ fontSize: 12, color: isConnected ? "#22c55e" : "#ef4444" }}>{isConnected ? "LIVE" : "OFFLINE"}</span>
+                        <div style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            padding: "6px 12px",
+                            borderRadius: 6,
+                            background: "var(--theme-card)",
+                            border: "1px solid var(--theme-border)",
+                            fontSize: 12,
+                            fontWeight: 600,
+                        }}>
+                            <span style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: "50%",
+                                background: isConnected ? "var(--theme-success)" : "var(--theme-error)",
+                                boxShadow: isConnected ? "0 0 8px var(--theme-success)" : "none",
+                            }} />
+                            <span style={{ color: isConnected ? "var(--theme-success)" : "var(--theme-error)" }}>
+                                {isConnected ? "เชื่อมต่อเรียลไทม์" : "ออฟไลน์"}
+                            </span>
                         </div>
                     )}
 
-                    {/* Account Select - Hide on Fee Tab (All modes) */}
-                    {activeTab !== 'fee' && accounts.length > 0 && (
-                        <select className="tenant-form-input w-auto min-w-200" value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)}>
+                    {/* Account Selector */}
+                    {activeTab !== 'fee' && (
+                        <select
+                            className="tenant-form-select"
+                            value={selectedAccount}
+                            onChange={(e) => setSelectedAccount(e.target.value)}
+                            style={{ width: "auto", minWidth: 200 }}
+                        >
                             <option value="all">ทั้งหมด (รวมทุกวอลเล็ท)</option>
                             {accounts.map((acc) => (
-                                <option key={acc.id} value={acc.id}>{acc.name} {acc.phoneNumber ? `(${acc.phoneNumber})` : ""}</option>
+                                <option key={acc.id} value={acc.id}>
+                                    {acc.name} {acc.phoneNumber ? `(${acc.phoneNumber})` : ""}
+                                </option>
                             ))}
                         </select>
                     )}
 
-                    {/* Limit Select (Only for non-fee tabs OR fee detail mode) */}
+                    {/* Limit Selector */}
                     {(activeTab !== 'fee' || viewMode === 'detail') && (
                         <select
-                            className="tenant-form-input w-auto"
+                            className="tenant-form-select"
                             value={limit}
                             onChange={(e) => setLimit(Number(e.target.value))}
-                            style={{ cursor: "pointer" }}
+                            style={{ width: "auto" }}
                         >
-                            <option value={20}>20 รายการ</option>
-                            <option value={50}>50 รายการ</option>
-                            <option value={100}>100 รายการ</option>
-                            <option value={300}>300 รายการ</option>
-                            <option value={500}>500 รายการ</option>
+                            <option value={20}>20 แถว</option>
+                            <option value={50}>50 แถว</option>
+                            <option value={100}>100 แถว</option>
+                            <option value={300}>300 แถว</option>
                         </select>
                     )}
                 </div>
             </div>
 
-            <style jsx>{`
-                @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-                .tab-btn { padding: 8px 16px; border-radius: 6px; font-size: 14px; cursor: pointer; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary); transition: all 0.2s; }
-                .tab-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
-                .date-btn { padding: 4px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-muted); }
-                .date-btn.active { background: var(--text-primary); color: var(--bg-card); border-color: var(--text-primary); }
-                .summary-card { padding: 16px; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-                .history-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-                .history-table th { text-align: left; padding: 12px; color: var(--text-muted); font-weight: 500; border-bottom: 1px solid var(--border); }
-                .history-table td { padding: 12px; border-bottom: 1px solid var(--border); color: var(--text-primary); }
-                .history-table tr:last-child td { border-bottom: none; }
-            `}</style>
-
-            <div className="tenant-card">
-                {/* Tabs */}
-                <div style={{ display: "flex", gap: 8, marginBottom: 16, borderBottom: "1px solid var(--border)", paddingBottom: 16 }}>
-                    <button className={`tab-btn ${activeTab === "deposit" ? "active" : ""}`} onClick={() => setActiveTab("deposit")}>ฝากเงิน</button>
-                    <button className={`tab-btn ${activeTab === "withdraw" ? "active" : ""}`} onClick={() => setActiveTab("withdraw")}>ถอนเงิน</button>
-                    <button className={`tab-btn ${activeTab === "fee" ? "active" : ""}`} onClick={() => setActiveTab("fee")}>ค่าธรรมเนียม</button>
+            {/* Control Bar & Tabs */}
+            <div className="tenant-card" style={{ marginBottom: 20, padding: 18 }}>
+                {/* Category Tabs */}
+                <div style={{
+                    display: "flex",
+                    gap: 8,
+                    marginBottom: 16,
+                    borderBottom: "1px solid var(--theme-border)",
+                    paddingBottom: 14,
+                    flexWrap: "wrap",
+                }}>
+                    <button
+                        type="button"
+                        className={`tenant-btn ${activeTab === "all" ? "tenant-btn-primary" : "tenant-btn-secondary"}`}
+                        onClick={() => setActiveTab("all")}
+                    >
+                        📋 รายการทั้งหมด
+                    </button>
+                    <button
+                        type="button"
+                        className={`tenant-btn ${activeTab === "deposit" ? "tenant-btn-primary" : "tenant-btn-secondary"}`}
+                        onClick={() => setActiveTab("deposit")}
+                    >
+                        🟢 เงินเข้า (Deposit)
+                    </button>
+                    <button
+                        type="button"
+                        className={`tenant-btn ${activeTab === "withdraw" ? "tenant-btn-primary" : "tenant-btn-secondary"}`}
+                        onClick={() => setActiveTab("withdraw")}
+                    >
+                        🔴 เงินออก (Withdraw)
+                    </button>
+                    <button
+                        type="button"
+                        className={`tenant-btn ${activeTab === "fee" ? "tenant-btn-primary" : "tenant-btn-secondary"}`}
+                        onClick={() => setActiveTab("fee")}
+                    >
+                        ⚪ ค่าธรรมเนียมระบบ (Fee)
+                    </button>
                 </div>
 
                 {/* Date Filters */}
-                <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
-                    <span style={{ fontSize: 13, color: "var(--text-muted)", marginRight: 8 }}>ช่วงเวลา:</span>
-                    <button className={`date-btn ${dateFilter === "today" ? "active" : ""}`} onClick={() => setDateFilter("today")}>วันนี้</button>
-                    <button className={`date-btn ${dateFilter === "yesterday" ? "active" : ""}`} onClick={() => setDateFilter("yesterday")}>เมื่อวาน</button>
-                    <button className={`date-btn ${dateFilter === "3d" ? "active" : ""}`} onClick={() => setDateFilter("3d")}>3 วัน</button>
-                    <button className={`date-btn ${dateFilter === "7d" ? "active" : ""}`} onClick={() => setDateFilter("7d")}>7 วัน</button>
-                    <button className={`date-btn ${dateFilter === "15d" ? "active" : ""}`} onClick={() => setDateFilter("15d")}>15 วัน</button>
-                    <button className={`date-btn ${dateFilter === "30d" ? "active" : ""}`} onClick={() => setDateFilter("30d")}>1 เดือน</button>
-                    <button className={`date-btn ${dateFilter === "all" ? "active" : ""}`} onClick={() => setDateFilter("all")}>ทั้งหมด</button>
-                    <button className={`date-btn ${dateFilter === "custom" ? "active" : ""}`} onClick={() => setDateFilter("custom")}>กำหนดเอง</button>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                    <span style={{ fontSize: 13, color: "var(--theme-text-muted)", marginRight: 6 }}>ช่วงเวลา:</span>
+                    {[
+                        { key: "today", label: "วันนี้" },
+                        { key: "yesterday", label: "เมื่อวาน" },
+                        { key: "3d", label: "3 วัน" },
+                        { key: "7d", label: "7 วัน" },
+                        { key: "15d", label: "15 วัน" },
+                        { key: "30d", label: "30 วัน" },
+                        { key: "all", label: "ทั้งหมด" },
+                        { key: "custom", label: "กำหนดเอง..." },
+                    ].map((btn) => (
+                        <button
+                            key={btn.key}
+                            type="button"
+                            className={`tenant-btn tenant-btn-sm ${dateFilter === btn.key ? "tenant-btn-primary" : "tenant-btn-secondary"}`}
+                            onClick={() => setDateFilter(btn.key as DateRange)}
+                        >
+                            {btn.label}
+                        </button>
+                    ))}
                 </div>
 
                 {/* Custom Date Range Picker */}
                 {dateFilter === "custom" && (
-                    <div style={{ display: "flex", gap: 12, marginBottom: 20, alignItems: "center", flexWrap: "wrap" }}>
-                        <label style={{ fontSize: 13, color: "var(--text-muted)" }}>จาก:</label>
-                        <input
-                            type="date"
-                            className="tenant-form-input"
-                            value={customStartDate}
-                            onChange={(e) => setCustomStartDate(e.target.value)}
-                            style={{ width: "auto", padding: "6px 12px" }}
-                        />
-                        <label style={{ fontSize: 13, color: "var(--text-muted)" }}>ถึง:</label>
-                        <input
-                            type="date"
-                            className="tenant-form-input"
-                            value={customEndDate}
-                            onChange={(e) => setCustomEndDate(e.target.value)}
-                            style={{ width: "auto", padding: "6px 12px" }}
-                        />
+                    <div style={{
+                        display: "flex",
+                        gap: 12,
+                        marginTop: 14,
+                        paddingTop: 14,
+                        borderTop: "1px dashed var(--theme-border)",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                    }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 13, color: "var(--theme-text-muted)" }}>ตั้งแต่วันที่:</span>
+                            <input
+                                type="date"
+                                className="tenant-form-input"
+                                value={customStartDate}
+                                onChange={(e) => setCustomStartDate(e.target.value)}
+                                style={{ width: "auto" }}
+                            />
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 13, color: "var(--theme-text-muted)" }}>ถึงวันที่:</span>
+                            <input
+                                type="date"
+                                className="tenant-form-input"
+                                value={customEndDate}
+                                onChange={(e) => setCustomEndDate(e.target.value)}
+                                style={{ width: "auto" }}
+                            />
+                        </div>
                         <button
-                            className="tenant-btn tenant-btn-primary"
-                            style={{ padding: "6px 16px", fontSize: 13 }}
+                            type="button"
+                            className="tenant-btn tenant-btn-primary tenant-btn-sm"
                             onClick={() => fetchHistory(true)}
                             disabled={!customStartDate || !customEndDate}
                         >
-                            🔍 ค้นหา
+                            ค้นหาข้อมูล
                         </button>
                     </div>
                 )}
+            </div>
 
-                {/* Summary Box */}
-                <div className="summary-card">
-                    <div>
-                        <div style={{ fontSize: 13, color: "var(--text-muted)" }}>ยอดรวม ({activeTab === 'fee' ? 'ค่าธรรมเนียม' : activeTab === 'deposit' ? 'เงินเข้า' : activeTab === 'withdraw' ? 'เงินออก' : 'การเคลื่อนไหว'})</div>
-                        <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>
-                            ฿ {totalAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                        </div>
+            {/* KPI Summary Cards */}
+            <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                gap: 16,
+                marginBottom: 20,
+            }}>
+                <div className="tenant-card" style={{ padding: "16px 20px" }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--theme-text-muted)", textTransform: "uppercase" }}>
+                        ยอดรวม ({activeTab === 'fee' ? 'ค่าธรรมเนียม' : activeTab === 'deposit' ? 'เงินเข้า' : activeTab === 'withdraw' ? 'เงินออก' : 'ธุรกรรม'})
                     </div>
-                    <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                        {activeTab === 'fee'
+                    <div style={{ fontSize: 22, fontWeight: 800, color: "var(--theme-text-primary)", marginTop: 4, fontFamily: "ui-monospace, monospace" }}>
+                        ฿ {totalAmount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                </div>
+
+                <div className="tenant-card" style={{ padding: "16px 20px" }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--theme-text-muted)", textTransform: "uppercase" }}>
+                        จำนวนรายการทั้งหมด
+                    </div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: "var(--theme-text-primary)", marginTop: 4 }}>
+                        {activeTab === 'fee' && viewMode === 'summary'
                             ? `${feeSummary.length} บัญชี`
-                            : `${filteredHistory.length} รายการ (จากทั้งหมด ${totalItems})`
+                            : `${totalItems.toLocaleString()} รายการ`
                         }
                     </div>
                 </div>
 
+                <div className="tenant-card" style={{ padding: "16px 20px" }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--theme-text-muted)", textTransform: "uppercase" }}>
+                        วอลเล็ทที่กำลังดู
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: "var(--theme-text-primary)", marginTop: 8, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {selectedAccount === "all" ? "ทุกวอลเล็ทในเครือข่าย" : accounts.find(a => a.id === selectedAccount)?.name || "-"}
+                    </div>
+                </div>
+            </div>
+
+            {/* TABLE SECTION */}
+            <div className="tenant-table-container">
                 {loadingHistory ? (
-                    <div className="flex-center p-40"><div className="spinner" /></div>
-                ) : (activeTab === 'fee' && viewMode === 'summary' ? feeSummary.length === 0 : filteredHistory.length === 0) ? (
-                    <div className="tenant-empty">
-                        <div className="tenant-empty-icon">📅</div>
-                        <div className="tenant-empty-text">ไม่พบรายการในช่วงเวลานี้</div>
+                    <div className="flex-center p-60">
+                        <div className="spinner" />
                     </div>
                 ) : activeTab === 'fee' && viewMode === 'summary' ? (
-                    <div style={{ overflowX: "auto" }}>
-                        <table className="history-table">
-                            <thead>
-                                <tr>
-                                    <th>บัญชี</th>
-                                    <th style={{ textAlign: "right" }}>ยอดค่าธรรมเนียม</th>
-                                    <th style={{ textAlign: "right" }}>เริ่มนับยอด</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {feeSummary.map((acc) => (
-                                    <tr
-                                        key={acc.accountId}
-                                        onClick={() => {
-                                            setSelectedAccount(acc.accountId);
-                                            setViewMode('detail');
-                                        }}
-                                        style={{ cursor: "pointer", transition: "background 0.2s" }}
-                                        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-secondary)")}
-                                        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                                    >
-                                        <td>
-                                            <div style={{ fontWeight: 600 }}>{acc.accountName}</div>
-                                            {acc.phoneNumber && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{acc.phoneNumber}</div>}
-                                        </td>
-                                        <td style={{ textAlign: "right", fontWeight: 600, color: "var(--error)" }}>
-                                            {acc.totalFee.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                                        </td>
-                                        <td style={{ textAlign: "right" }}>
-                                            <div style={{ fontSize: 13 }}>{formatDateTime(acc.firstActiveAt)}</div>
-                                            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>นับจากยอดแรก</div>
-                                        </td>
+                    // Fee Summary Table
+                    feeSummary.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--theme-text-muted)" }}>
+                            <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
+                            <div style={{ fontSize: 15, fontWeight: 600 }}>ไม่พบรายการค่าธรรมเนียมในช่วงเวลานี้</div>
+                        </div>
+                    ) : (
+                        <div className="tenant-table-wrapper">
+                            <table className="tenant-table">
+                                <thead>
+                                    <tr>
+                                        <th style={{ width: 50 }}>#</th>
+                                        <th>บัญชีวอลเล็ท</th>
+                                        <th>เบอร์โทรศัพท์</th>
+                                        <th style={{ textAlign: "right" }}>ยอดค่าธรรมเนียมสะสม</th>
+                                        <th>วันที่เริ่มบันทึกยอด</th>
+                                        <th style={{ textAlign: "center", width: 140 }}>การดำเนินการ</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                                </thead>
+                                <tbody>
+                                    {feeSummary.map((acc, index) => (
+                                        <tr key={acc.accountId}>
+                                            <td style={{ color: "var(--theme-text-muted)" }}>{index + 1}</td>
+                                            <td>
+                                                <div style={{ fontWeight: 700 }}>{acc.accountName}</div>
+                                            </td>
+                                            <td>
+                                                <span className="badge badge-neutral" style={{ fontFamily: "monospace" }}>
+                                                    {acc.phoneNumber || "-"}
+                                                </span>
+                                            </td>
+                                            <td style={{ textAlign: "right" }}>
+                                                <span className="amount-negative">
+                                                    -฿ {acc.totalFee.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </span>
+                                            </td>
+                                            <td style={{ fontSize: 13, color: "var(--theme-text-secondary)" }}>
+                                                {formatDateTime(acc.firstActiveAt)}
+                                            </td>
+                                            <td style={{ textAlign: "center" }}>
+                                                <button
+                                                    type="button"
+                                                    className="tenant-btn tenant-btn-secondary tenant-btn-sm"
+                                                    onClick={() => {
+                                                        setSelectedAccount(acc.accountId);
+                                                        setViewMode('detail');
+                                                    }}
+                                                >
+                                                    ดูรายการย่อย →
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )
                 ) : (
-                    <div style={{ position: "relative" }}>
-                        <div style={{ position: "absolute", left: 20, top: 0, bottom: 0, width: 2, background: "var(--border)" }} />
-                        {filteredHistory.map((entry, index) => (
-                            <div key={entry.id} style={{ display: "flex", gap: 20, padding: "12px 0", borderBottom: "1px solid var(--border)" }}>
-                                <div style={{ width: 42, display: "flex", justifyContent: "center", position: "relative", zIndex: 1 }}>
-                                    <div style={{
-                                        width: 14, height: 14, borderRadius: "50%",
-                                        background: isFee(entry) ? "var(--text-muted)" : (entry.change > 0 ? "var(--success)" : "var(--error)"),
-                                        border: "3px solid var(--bg-card)"
-                                    }} />
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                                        <div>
-                                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                                <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)" }}>
-                                                    {entry.type === 'transaction'
-                                                        ? `฿ ${(entry.amount || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
-                                                        : `฿ ${entry.balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
-                                                    }
-                                                </div>
-                                                {selectedAccount === "all" && entry.accountName && (
-                                                    <div style={{
-                                                        fontSize: 11,
-                                                        background: "var(--bg-secondary)",
-                                                        padding: "2px 8px",
-                                                        borderRadius: 12,
-                                                        color: "var(--text-muted)",
-                                                        border: "1px solid var(--border)"
-                                                    }}>
-                                                        {entry.accountName}
-                                                    </div>
-                                                )}
-                                            </div>
+                    // Transaction Data Table (Formal Table Mode)
+                    history.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--theme-text-muted)" }}>
+                            <div style={{ fontSize: 32, marginBottom: 8 }}>📅</div>
+                            <div style={{ fontSize: 15, fontWeight: 600 }}>ไม่พบรายการธุรกรรมในช่วงเวลาที่เลือก</div>
+                        </div>
+                    ) : (
+                        <div className="tenant-table-wrapper">
+                            <table className="tenant-table">
+                                <thead>
+                                    <tr>
+                                        <th style={{ width: 45 }}>#</th>
+                                        <th>วัน-เวลาทำรายการ</th>
+                                        <th>บัญชีวอลเล็ท</th>
+                                        <th>ประเภท</th>
+                                        <th style={{ textAlign: "right" }}>จำนวนเงิน</th>
+                                        <th style={{ textAlign: "right" }}>ยอดเงินคงเหลือ</th>
+                                        <th>คู่โอน / บันทึกรายละเอียด</th>
+                                        <th style={{ textAlign: "center" }}>สถานะ</th>
+                                        <th style={{ textAlign: "center", width: 120 }}>รหัสอ้างอิง</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {history.map((entry, index) => {
+                                        const isEntryFee = isFee(entry);
+                                        const isIncoming = isMoneyIn(entry);
+                                        const amountDisplay = entry.type === 'transaction' && entry.amount
+                                            ? entry.amount
+                                            : Math.abs(entry.change);
 
-                                            {/* DISPLAY LOGIC UPDATE: Simplified for positive changes */}
-                                            <div style={{ marginTop: 4 }}>
-                                                {isFee(entry) ? (
-                                                    <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-muted)" }}>
-                                                        หักค่าธรรมเนียม
-                                                    </div>
-                                                ) : (
-                                                    <div style={{ fontSize: 14, fontWeight: 600, color: entry.change > 0 ? "var(--success)" : "var(--error)", display: "flex", alignItems: "center", gap: 8 }}>
-                                                        <span>{entry.change > 0 ? "ยอดเงินเพิ่มขึ้น" : (entry.type === 'snapshot' ? "ยอดเงินลดลง" : "โอนเงินไป")}</span>
+                                        return (
+                                            <tr key={entry.id}>
+                                                <td style={{ color: "var(--theme-text-muted)", fontSize: 12 }}>
+                                                    {(page - 1) * limit + index + 1}
+                                                </td>
 
-                                                        {entry.change > 0 ? (
-                                                            <span style={{ color: "var(--text-primary)" }}>
-                                                                +{Math.abs(entry.change).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                                                {/* Date & Time */}
+                                                <td style={{ whiteSpace: "nowrap" }}>
+                                                    <div style={{ fontWeight: 600, fontSize: 13 }}>
+                                                        {formatDateTime(entry.checkedAt)}
+                                                    </div>
+                                                </td>
+
+                                                {/* Account Info */}
+                                                <td>
+                                                    <div style={{ fontWeight: 600 }}>{entry.accountName || "วอลเล็ท"}</div>
+                                                    {entry.mobileNo && (
+                                                        <span className="badge badge-neutral" style={{ fontSize: 10, marginTop: 2, fontFamily: "monospace" }}>
+                                                            {entry.mobileNo}
+                                                        </span>
+                                                    )}
+                                                </td>
+
+                                                {/* Transaction Type */}
+                                                <td>
+                                                    {isEntryFee ? (
+                                                        <span className="badge badge-neutral">ค่าธรรมเนียม</span>
+                                                    ) : isIncoming ? (
+                                                        <span className="badge badge-success">เงินเข้า (IN)</span>
+                                                    ) : (
+                                                        <span className="badge badge-error">เงินออก (OUT)</span>
+                                                    )}
+                                                </td>
+
+                                                {/* Amount */}
+                                                <td style={{ textAlign: "right" }}>
+                                                    {isEntryFee ? (
+                                                        <span className="amount-fee">
+                                                            -฿ {amountDisplay.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                                                        </span>
+                                                    ) : isIncoming ? (
+                                                        <span className="amount-positive">
+                                                            +฿ {amountDisplay.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="amount-negative">
+                                                            -฿ {amountDisplay.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                                                        </span>
+                                                    )}
+                                                </td>
+
+                                                {/* Running Balance */}
+                                                <td style={{ textAlign: "right" }}>
+                                                    {entry.balance > 0 ? (
+                                                        <span className="amount-neutral" style={{ color: "var(--theme-text-secondary)" }}>
+                                                            ฿ {entry.balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                                                        </span>
+                                                    ) : (
+                                                        <span style={{ color: "var(--theme-text-muted)", fontSize: 12 }}>-</span>
+                                                    )}
+                                                </td>
+
+                                                {/* Counterparty / Details */}
+                                                <td style={{ maxWidth: 260 }}>
+                                                    {isEntryFee ? (
+                                                        <div style={{ color: "var(--theme-text-secondary)", fontSize: 12.5 }}>
+                                                            หักค่าธรรมเนียมการโอนเงิน/ระบบ TrueMoney
+                                                        </div>
+                                                    ) : entry.type === 'transaction' ? (
+                                                        <div>
+                                                            {entry.sender && (
+                                                                <div style={{ fontSize: 12 }}>
+                                                                    <span style={{ color: "var(--theme-text-muted)" }}>ผู้โอน: </span>
+                                                                    <span style={{ fontWeight: 600 }}>{entry.sender}</span>
+                                                                </div>
+                                                            )}
+                                                            {entry.recipient && (
+                                                                <div style={{ fontSize: 12 }}>
+                                                                    <span style={{ color: "var(--theme-text-muted)" }}>ผู้รับ: </span>
+                                                                    <span style={{ fontWeight: 600 }}>{entry.recipient}</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ color: "var(--theme-text-secondary)", fontSize: 12.5 }}>
+                                                            {entry.change > 0 ? "ยอดเงินในวอลเล็ทเพิ่มขึ้น" : "ยอดเงินในวอลเล็ทลดลง"}
+                                                            <span style={{ color: "var(--theme-text-muted)", fontSize: 11, marginLeft: 4 }}>
+                                                                ({entry.source || "เช็คยอด"})
                                                             </span>
-                                                        ) : (
-                                                            <span style={{ color: "var(--text-primary)" }}>
-                                                                {entry.type === 'transaction'
-                                                                    ? (entry.recipient || "Unknown")
-                                                                    : `-${Math.abs(entry.change).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
-                                                                }
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
+                                                        </div>
+                                                    )}
+                                                </td>
 
-                                        </div>
-                                        <div style={{ textAlign: "right" }}>
-                                            <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>{formatDate(entry.checkedAt)}</div>
-                                            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{formatTime(entry.checkedAt)}</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                                                {/* Status */}
+                                                <td style={{ textAlign: "center" }}>
+                                                    <span className={`badge ${entry.status === 'FAILED' ? 'badge-error' : 'badge-success'}`}>
+                                                        {entry.status === 'FAILED' ? 'ล้มเหลว' : 'สำเร็จ'}
+                                                    </span>
+                                                </td>
+
+                                                {/* Reference / Action */}
+                                                <td style={{ textAlign: "center" }}>
+                                                    <button
+                                                        type="button"
+                                                        className="tenant-btn tenant-btn-secondary tenant-btn-sm"
+                                                        onClick={() => copyText(entry.id, "รหัสอ้างอิง")}
+                                                        title={entry.id}
+                                                        style={{ fontSize: 11, padding: "4px 8px", fontFamily: "monospace" }}
+                                                    >
+                                                        {entry.id.length > 8 ? `${entry.id.slice(0, 6)}...` : entry.id}
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )
                 )}
 
                 {/* Pagination Controls */}
                 {!loadingHistory && (totalPages > 1 || page > 1) && (
                     <div style={{
-                        marginTop: 20,
                         display: "flex",
-                        justifyContent: "center",
+                        justifyContent: "space-between",
                         alignItems: "center",
-                        gap: 16,
-                        paddingTop: 16,
-                        borderTop: "1px solid var(--border)"
+                        padding: "16px 20px",
+                        borderTop: "1px solid var(--theme-border)",
+                        background: "var(--theme-bg-subtle)",
+                        flexWrap: "wrap",
+                        gap: 12,
                     }}>
-                        <button
-                            disabled={page <= 1}
-                            onClick={() => setPage(p => Math.max(1, p - 1))}
-                            className="tenant-btn-secondary"
-                            style={{
-                                padding: "6px 12px",
-                                fontSize: 13,
-                                opacity: page <= 1 ? 0.5 : 1,
-                                cursor: page <= 1 ? "not-allowed" : "pointer",
-                                border: "1px solid var(--border)",
-                                background: "var(--bg-card)",
-                                color: "var(--text-primary)",
-                                borderRadius: 4
-                            }}
-                        >
-                            &lt; ก่อนหน้า
-                        </button>
-
-                        <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-                            หน้า {page} จาก {totalPages || 1}
+                        <span style={{ fontSize: 13, color: "var(--theme-text-muted)" }}>
+                            แสดง {(page - 1) * limit + 1} - {Math.min(page * limit, totalItems)} จากทั้งหมด {totalItems.toLocaleString()} รายการ
                         </span>
 
-                        <button
-                            disabled={page >= totalPages}
-                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                            className="tenant-btn-secondary"
-                            style={{
-                                padding: "6px 12px",
-                                fontSize: 13,
-                                opacity: page >= totalPages ? 0.5 : 1,
-                                cursor: page >= totalPages ? "not-allowed" : "pointer",
-                                border: "1px solid var(--border)",
-                                background: "var(--bg-card)",
-                                color: "var(--text-primary)",
-                                borderRadius: 4
-                            }}
-                        >
-                            ถัดไป &gt;
-                        </button>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <button
+                                type="button"
+                                disabled={page <= 1}
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                className="tenant-btn tenant-btn-secondary tenant-btn-sm"
+                                style={{ opacity: page <= 1 ? 0.5 : 1, cursor: page <= 1 ? "not-allowed" : "pointer" }}
+                            >
+                                ← หน้าก่อนหน้า
+                            </button>
+
+                            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--theme-text-primary)" }}>
+                                {page} / {totalPages || 1}
+                            </span>
+
+                            <button
+                                type="button"
+                                disabled={page >= totalPages}
+                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                className="tenant-btn tenant-btn-secondary tenant-btn-sm"
+                                style={{ opacity: page >= totalPages ? 0.5 : 1, cursor: page >= totalPages ? "not-allowed" : "pointer" }}
+                            >
+                                หน้าถัดไป →
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>

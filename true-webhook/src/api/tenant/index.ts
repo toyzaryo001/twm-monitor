@@ -1,12 +1,29 @@
 import { Router, Request, Response, NextFunction } from "express";
 import accountsRouter from "./accounts";
 import authRouter from "./auth";
-import { requireAuth, requireNetworkAccess } from "../../middleware/auth";
+import { requireAuth, requireNetworkAccess, requireNetworkAdmin } from "../../middleware/auth";
 import { prisma } from "../../lib/prisma";
 import { signSseTicket } from "../../lib/auth";
 import { logEvent } from "../../lib/logging";
+import { z } from "zod";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import { uploadToCloudinary } from "../../lib/cloudinary";
 
 const router = Router({ mergeParams: true });
+
+const logoUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+    fileFilter: (_req, file, cb) => {
+        const allowedTypes = /jpeg|jpg|png|webp|svg\+xml/;
+        if (allowedTypes.test(file.mimetype) || file.originalname.match(/\.(jpg|jpeg|png|webp|svg)$/i)) {
+            return cb(null, true);
+        }
+        cb(new Error("รองรับเฉพาะไฟล์รูปภาพ (JPG, PNG, WEBP, SVG)"));
+    },
+});
 
 function isLocalJga88(prefix: string) {
     return process.env.LOCAL_JGA88_MODE === "true" && prefix === "jga88";
@@ -97,6 +114,81 @@ router.get("/sse-ticket", async (req: Request<{ prefix: string }>, res: Response
         });
 
         return res.json({ ok: true, data: { ticket, expiresInSeconds: 120 } });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// Update network profile (name)
+router.put("/profile", requireNetworkAdmin, async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
+    try {
+        const schema = z.object({
+            name: z.string().trim().min(1, "กรุณากรอกชื่อเครือข่าย"),
+        });
+        const { name } = schema.parse(req.body);
+
+        const network = await prisma.network.update({
+            where: { prefix: req.params.prefix },
+            data: { name },
+            select: { id: true, prefix: true, name: true, logoUrl: true },
+        });
+
+        logEvent("info", "tenant_name_updated", { prefix: req.params.prefix, name });
+        return res.json({ ok: true, data: network });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// Upload and set network logo
+router.post("/upload-logo", requireNetworkAdmin, logoUpload.single("logo"), async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ ok: false, error: "NO_FILE_UPLOADED" });
+        }
+
+        const prefix = req.params.prefix;
+        let logoUrl = "";
+
+        if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY) {
+            const uploadResult = await uploadToCloudinary(req.file.buffer, `logos/${prefix}`);
+            logoUrl = uploadResult.url;
+        } else {
+            const logosDir = path.join(process.cwd(), "uploads", "logos");
+            if (!fs.existsSync(logosDir)) {
+                fs.mkdirSync(logosDir, { recursive: true });
+            }
+            const ext = path.extname(req.file.originalname) || ".png";
+            const filename = `${prefix}-logo-${Date.now()}${ext}`;
+            const filepath = path.join(logosDir, filename);
+            fs.writeFileSync(filepath, req.file.buffer);
+            logoUrl = `/uploads/logos/${filename}`;
+        }
+
+        const network = await prisma.network.update({
+            where: { prefix },
+            data: { logoUrl },
+            select: { id: true, prefix: true, name: true, logoUrl: true },
+        });
+
+        logEvent("info", "tenant_logo_updated", { prefix, logoUrl });
+        return res.json({ ok: true, data: network });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// Delete network logo
+router.delete("/logo", requireNetworkAdmin, async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
+    try {
+        const network = await prisma.network.update({
+            where: { prefix: req.params.prefix },
+            data: { logoUrl: null },
+            select: { id: true, prefix: true, name: true, logoUrl: true },
+        });
+
+        logEvent("info", "tenant_logo_deleted", { prefix: req.params.prefix });
+        return res.json({ ok: true, data: network });
     } catch (err) {
         next(err);
     }
