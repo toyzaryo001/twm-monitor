@@ -186,7 +186,7 @@ export default function TenantDashboard() {
 
     if (loading) {
         return (
-            <div style={{ display: "flex", justifyContent: "center", padding: 60 }}>
+            <div className="flex-center" style={{ padding: 60 }}>
                 <div className="spinner" />
             </div>
         );
@@ -203,114 +203,114 @@ export default function TenantDashboard() {
         .slice(0, 3);
 
     return (
-        <div className="tenant-dashboard">
-            <section className="tenant-hero">
-                <div>
-                    <div className="tenant-hero-kicker">Private Wallet Operations</div>
-                    <h1 className="tenant-hero-title">แดชบอร์ด</h1>
-                    <p className="tenant-hero-subtitle">
-                        ภาพรวมเงินคงเหลือและสถานะวอลเล็ตทั้งหมดในเครือข่าย
-                    </p>
-                    <div className="tenant-hero-meta" style={{ marginTop: 20 }}>
-                        <span className="tenant-pill">{stats?.total || 0} wallets</span>
-                        <span className="tenant-pill">{stats?.active || 0} active</span>
-                        <span className="tenant-pill">Realtime monitor</span>
-                    </div>
-                </div>
-                <div className="tenant-hero-panel">
-                    <div className="balance-card-label">ยอดรวมทั้งหมด</div>
-                    <div className="tenant-hero-balance">
-                        ฿ {totalBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                    </div>
-                    <div className="balance-card-name">จากทุกวอลเล็ตในระบบ</div>
-                </div>
-            </section>
+        <div>
+            <div className="tenant-page-header">
+                <h1 className="tenant-page-title">ภาพรวม</h1>
+            </div>
 
-            <div className="balance-grid">
-                <div className="balance-card">
-                    <div className="balance-card-label">ยอดรวมทั้งหมด</div>
-                    <div className="balance-card-value" style={{ color: "var(--tenant-success)" }}>
+            <div 
+                className="dashboard-stats-grid" 
+                style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', 
+                    gap: '16px',
+                    marginBottom: '24px'
+                }}
+            >
+                <div className="tenant-card">
+                    <div style={{ color: 'var(--theme-text-secondary)', fontSize: '14px', marginBottom: '8px' }}>ยอดรวมทั้งหมด</div>
+                    <div style={{ color: 'var(--theme-success)', fontSize: '24px', fontWeight: 'bold', fontFamily: 'monospace' }}>
                         ฿ {totalBalance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                     </div>
-                    <div className="balance-card-name">จากทุกวอลเล็ต</div>
+                    <div style={{ color: 'var(--theme-text-muted)', fontSize: '12px', marginTop: '8px' }}>จากทุกวอลเล็ตในระบบ</div>
                 </div>
-                <div className="balance-card">
-                    <div className="balance-card-label">วอลเล็ตทั้งหมด</div>
-                    <div className="balance-card-value" style={{ color: "var(--tenant-primary)" }}>{stats?.total || 0}</div>
-                    <div className="balance-card-name">บัญชีที่ผูกไว้</div>
+                <div className="tenant-card">
+                    <div style={{ color: 'var(--theme-text-secondary)', fontSize: '14px', marginBottom: '8px' }}>วอลเล็ตทั้งหมด</div>
+                    <div style={{ color: 'var(--theme-text-primary)', fontSize: '24px', fontWeight: 'bold', fontFamily: 'monospace' }}>
+                        {stats?.total || 0}
+                    </div>
+                    <div style={{ color: 'var(--theme-text-muted)', fontSize: '12px', marginTop: '8px' }}>บัญชีที่ผูกไว้</div>
                 </div>
-                <div className="balance-card">
-                    <div className="balance-card-label">ใช้งานอยู่</div>
-                    <div className="balance-card-value">{stats?.active || 0}</div>
-                    <div className="balance-card-name">วอลเล็ตที่เปิดใช้งาน</div>
+                <div className="tenant-card">
+                    <div style={{ color: 'var(--theme-text-secondary)', fontSize: '14px', marginBottom: '8px' }}>ใช้งานอยู่</div>
+                    <div style={{ color: 'var(--theme-text-primary)', fontSize: '24px', fontWeight: 'bold', fontFamily: 'monospace' }}>
+                        {stats?.active || 0}
+                    </div>
+                    <div style={{ color: 'var(--theme-text-muted)', fontSize: '12px', marginTop: '8px' }}>วอลเล็ตที่เปิดใช้งาน</div>
                 </div>
             </div>
 
             <div className="tenant-card">
-                <div className="tenant-section-head">
-                    <h2 className="tenant-section-title">Top 3 ยอดเงินสูงสุด</h2>
-                    <Link href={`/tenant/${prefix}/wallets`} className="tenant-section-link">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h2 style={{ margin: 0, fontSize: '18px', color: 'var(--theme-text-primary)' }}>Top 3 ยอดเงินสูงสุด</h2>
+                    <Link href={`/tenant/${prefix}/wallets`} style={{ color: 'var(--theme-accent)', textDecoration: 'none', fontSize: '14px' }}>
                         ดูทั้งหมด →
                     </Link>
                 </div>
 
                 {accounts.length === 0 ? (
-                    <div className="tenant-empty">
-                        <div className="tenant-empty-icon">💳</div>
-                        <div className="tenant-empty-text">ยังไม่มีวอลเล็ต คลิก "เพิ่มวอลเล็ต" เพื่อเริ่มต้น</div>
+                    <div style={{ padding: '40px', textAlign: 'center', color: 'var(--theme-text-muted)' }}>
+                        <div style={{ fontSize: '32px', marginBottom: '16px' }}>💳</div>
+                        <div>ยังไม่มีวอลเล็ต คลิก "เพิ่มวอลเล็ต" เพื่อเริ่มต้น</div>
                     </div>
                 ) : (
-                    <div className="dashboard-wallet-grid">
-                        {top3Wallets.map((account, index) => (
-                            <div
-                                key={account.id}
-                                className="dashboard-wallet-card"
-                                style={{ borderColor: index === 0 ? "rgba(244, 223, 154, 0.62)" : undefined }}
-                            >
-                                <div className="rank-badge">#{index + 1}</div>
-
-                                <div className="wallet-card-header">
-                                    <div className="wallet-icon">◆</div>
-                                    <div className="wallet-info">
-                                        <div className="wallet-name">{account.name}</div>
-                                        <div className="wallet-phone">{account.phoneNumber || "ไม่ระบุเบอร์"}</div>
-                                    </div>
-                                    <span className={`wallet-status ${account.isActive ? "active" : "inactive"}`}>
-                                        {account.isActive ? "ใช้งาน" : "ปิด"}
-                                    </span>
-                                </div>
-
-                                <div className="wallet-balance">
-                                    <div className="wallet-balance-label">ยอดเงินคงเหลือ</div>
-                                    <div className="wallet-balance-value">
-                                        ฿ {account.balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                                    </div>
-                                    {account.checkedAt && (
-                                        <div style={{ fontSize: 11, color: "var(--tenant-text-muted)", marginTop: 4 }}>
-                                            อัปเดต: {new Date(account.checkedAt).toLocaleString("th-TH")}
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="wallet-actions">
-                                    <button
-                                        className="tenant-btn tenant-btn-primary"
-                                        style={{ flex: 1 }}
-                                        onClick={() => handleCheckBalance(account.id)}
-                                        disabled={checkingId === account.id}
-                                    >
-                                        {checkingId === account.id ? "กำลังเช็ค..." : "เช็คยอด"}
-                                    </button>
-                                    <Link href={`/tenant/${prefix}/history?wallet=${account.id}`} className="tenant-btn tenant-btn-secondary">
-                                        ประวัติ
-                                    </Link>
-                                </div>
-                            </div>
-                        ))}
+                    <div className="tenant-table-container">
+                        <div className="tenant-table-wrapper">
+                            <table className="tenant-table">
+                                <thead>
+                                    <tr>
+                                        <th style={{ width: '60px' }}>อันดับ</th>
+                                        <th>วอลเล็ต</th>
+                                        <th>สถานะ</th>
+                                        <th style={{ textAlign: 'right' }}>ยอดเงินคงเหลือ</th>
+                                        <th>อัปเดตล่าสุด</th>
+                                        <th style={{ width: '120px', textAlign: 'right' }}>จัดการ</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {top3Wallets.map((account, index) => (
+                                        <tr key={account.id}>
+                                            <td>
+                                                <span className="badge badge-neutral">#{index + 1}</span>
+                                            </td>
+                                            <td>
+                                                <div style={{ fontWeight: '500', color: 'var(--theme-text-primary)' }}>{account.name}</div>
+                                                <div style={{ fontSize: '12px', color: 'var(--theme-text-secondary)' }}>{account.phoneNumber || "ไม่ระบุเบอร์"}</div>
+                                            </td>
+                                            <td>
+                                                <span className={`badge ${account.isActive ? 'badge-success' : 'badge-error'}`}>
+                                                    {account.isActive ? "ใช้งาน" : "ปิด"}
+                                                </span>
+                                            </td>
+                                            <td style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 'bold' }} className="amount-positive">
+                                                ฿ {account.balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td style={{ color: 'var(--theme-text-secondary)', fontSize: '13px' }}>
+                                                {account.checkedAt ? new Date(account.checkedAt).toLocaleString("th-TH") : '-'}
+                                            </td>
+                                            <td style={{ textAlign: 'right' }}>
+                                                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                                    <button
+                                                        className="tenant-btn tenant-btn-primary tenant-btn-sm"
+                                                        onClick={() => handleCheckBalance(account.id)}
+                                                        disabled={checkingId === account.id}
+                                                    >
+                                                        {checkingId === account.id ? (
+                                                            <span className="flex-center" style={{ gap: '8px' }}>
+                                                                <div className="spinner" style={{ width: '12px', height: '12px', borderWidth: '2px' }} /> เช็ค...
+                                                            </span>
+                                                        ) : "เช็คยอด"}
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 )}
             </div>
-
         </div>
     );
 }

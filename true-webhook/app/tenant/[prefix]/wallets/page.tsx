@@ -415,7 +415,7 @@ export default function WalletsPage() {
 
     if (loading) {
         return (
-            <div style={{ display: "flex", justifyContent: "center", padding: 60 }}>
+            <div className="flex-center" style={{ padding: 60 }}>
                 <div className="spinner" />
             </div>
         );
@@ -430,121 +430,108 @@ export default function WalletsPage() {
                     setEditingId(null);
                     setShowModal(true);
                 }}>
-                    ➕ เพิ่มวอลเล็ท
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 8 }}><path d="M12 5v14m-7-7h14"/></svg>
+                    เพิ่มวอลเล็ท
                 </button>
             </div>
 
             {accounts.length === 0 ? (
-                <div className="tenant-card">
-                    <div className="tenant-empty">
-                        <div className="tenant-empty-icon">💳</div>
-                        <div className="tenant-empty-text">ยังไม่มีวอลเล็ท</div>
-                        <button
-                            className="tenant-btn tenant-btn-primary"
-                            style={{ marginTop: 16 }}
-                            onClick={() => {
-                                setForm(createEmptyWalletForm());
-                                setEditingId(null);
-                                setShowModal(true);
-                            }}
-                        >
-                            ➕ เพิ่มวอลเล็ทแรก
-                        </button>
-                    </div>
+                <div className="tenant-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', textAlign: 'center' }}>
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--theme-text-muted)" strokeWidth="1.5" style={{ marginBottom: 16 }}>
+                        <rect x="2" y="5" width="20" height="14" rx="2" ry="2"/><line x1="2" y1="10" x2="22" y2="10"/>
+                    </svg>
+                    <div style={{ color: 'var(--theme-text-primary)', fontSize: '1.1rem', fontWeight: 500, marginBottom: 8 }}>ยังไม่มีวอลเล็ท</div>
+                    <div style={{ color: 'var(--theme-text-muted)', marginBottom: 24 }}>เพิ่มวอลเล็ทแรกเพื่อเริ่มต้นใช้งานระบบ</div>
+                    <button
+                        className="tenant-btn tenant-btn-primary"
+                        onClick={() => {
+                            setForm(createEmptyWalletForm());
+                            setEditingId(null);
+                            setShowModal(true);
+                        }}
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 8 }}><path d="M12 5v14m-7-7h14"/></svg>
+                        เพิ่มวอลเล็ทแรก
+                    </button>
                 </div>
             ) : (
-                <div className="wallet-grid">
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: "20px" }}>
                     {accounts.map((account) => (
-                        <div key={account.id} className="wallet-card">
-                            <div className="wallet-card-header">
-                                <div className="wallet-icon">🔶</div>
-                                <div className="wallet-info">
-                                    <div className="wallet-name">{account.name}</div>
-                                    <div className="wallet-phone">{account.phoneNumber || "ไม่ระบุเบอร์"}</div>
+                        <div key={account.id} className="tenant-card" style={{ display: "flex", flexDirection: "column" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                                <div>
+                                    <div style={{ fontWeight: 600, color: "var(--theme-text-primary)", fontSize: "1.1rem" }}>{account.name}</div>
+                                    <div style={{ color: "var(--theme-text-muted)", fontSize: "0.9rem", marginTop: 4 }}>{account.phoneNumber || "ไม่ระบุเบอร์"}</div>
                                 </div>
-                                <span className={`wallet-status ${account.isActive ? "active" : "inactive"}`}>
-                                    {account.isActive ? "ใช้งาน" : "ปิด"}
+                                <span className={`badge ${account.isActive ? "badge-success" : "badge-neutral"}`}>
+                                    {account.isActive ? "ใช้งาน" : "ปิดใช้งาน"}
                                 </span>
                             </div>
 
-                            <div className="wallet-balance">
-                                <div className="wallet-balance-topline">
-                                    <div className="wallet-balance-label">ยอดเงินคงเหลือ</div>
+                            <div style={{ padding: "16px 0", borderTop: "1px solid var(--theme-border-subtle)", borderBottom: "1px solid var(--theme-border-subtle)", marginBottom: 16 }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                                    <div style={{ color: "var(--theme-text-secondary)", fontSize: "0.9rem" }}>ยอดเงินคงเหลือ</div>
                                     <button
                                         type="button"
-                                        className="wallet-copy-btn"
+                                        className="tenant-btn tenant-btn-secondary tenant-btn-sm"
                                         onClick={() => handleCopyRoundedBalance(account)}
                                         disabled={!balances[account.id]}
-                                        title={
-                                            balances[account.id]
-                                                ? `คัดลอก ${Math.round(balances[account.id]!.balance).toLocaleString("en-US")}`
-                                                : "รอโหลดข้อมูลยอดเงิน"
-                                        }
+                                        title={balances[account.id] ? `คัดลอก ${Math.round(balances[account.id]!.balance).toLocaleString("en-US")}` : "รอโหลดข้อมูลยอดเงิน"}
+                                        style={{ padding: "4px 8px", fontSize: "0.8rem" }}
                                     >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 4 }}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                                         คัดลอก
                                     </button>
                                 </div>
-                                <div className="wallet-balance-value">
-                                    {balances[account.id]
-                                        ? `฿ ${balances[account.id]!.balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
-                                        : "฿ ---.--"}
+                                <div className="amount-positive" style={{ fontFamily: "monospace", fontSize: "2rem", fontWeight: 700, lineHeight: 1 }}>
+                                    {balances[account.id] ? `฿ ${balances[account.id]!.balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}` : "฿ ---.--"}
                                 </div>
                                 {balances[account.id] && (
-                                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
-                                        อัพเดท: {new Date(balances[account.id]!.checkedAt).toLocaleString("th-TH")}
+                                    <div style={{ fontSize: "0.8rem", color: "var(--theme-text-muted)", marginTop: 8 }}>
+                                        อัพเดทเมื่อ: {new Date(balances[account.id]!.checkedAt).toLocaleString("th-TH")}
                                     </div>
                                 )}
                             </div>
 
-                            {/* Wallet Stats Footer */}
-                            <div style={{
-                                marginTop: 16,
-                                marginBottom: 16,
-                                padding: "12px",
-                                background: "rgba(0,0,0,0.2)",
-                                borderRadius: "8px",
-                                border: "1px dashed var(--tenant-border)"
-                            }}>
-                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                        <span style={{ fontSize: 13 }}>📖</span>
-                                        <span style={{ fontSize: 11, color: "var(--tenant-text-muted)" }}>ค่าธรรมเนียม:</span>
-                                    </div>
-                                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--tenant-error)" }}>
+                            <div style={{ marginBottom: 20 }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                                    <span style={{ color: "var(--theme-text-secondary)", fontSize: "0.9rem" }}>ค่าธรรมเนียมสะสม</span>
+                                    <span className="amount-negative" style={{ fontFamily: "monospace", fontWeight: 600 }}>
                                         ฿ {(account.stats?.totalFee || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                                     </span>
                                 </div>
-                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                        <span style={{ fontSize: 13 }}>⏱️</span>
-                                        <span style={{ fontSize: 11, color: "var(--tenant-text-muted)" }}>เริ่มนับ:</span>
-                                    </div>
-                                    <span style={{ fontSize: 11, color: "var(--tenant-text-muted)" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                    <span style={{ color: "var(--theme-text-secondary)", fontSize: "0.9rem" }}>เริ่มนับเมื่อ</span>
+                                    <span style={{ color: "var(--theme-text-muted)", fontSize: "0.9rem" }}>
                                         {(account.stats?.totalFee || 0) > 0 && account.stats?.firstActiveAt
-                                            ? new Date(account.stats.firstActiveAt).toLocaleDateString("th-TH", { day: 'numeric', month: 'short', year: '2-digit' })
-                                            : "-- -- --"
+                                            ? new Date(account.stats.firstActiveAt).toLocaleDateString("th-TH", { day: 'numeric', month: 'short', year: 'numeric' })
+                                            : "ไม่มีข้อมูล"
                                         }
                                     </span>
                                 </div>
                             </div>
 
-                            <div className="wallet-actions">
+                            <div style={{ display: "flex", gap: "8px", marginTop: "auto", flexWrap: "wrap" }}>
                                 <button
-                                    className="tenant-btn tenant-btn-success tenant-btn-sm"
-                                    style={{ flex: 1, padding: "6px 2px", fontSize: "0.7rem", whiteSpace: "nowrap" }}
+                                    className="tenant-btn tenant-btn-primary tenant-btn-sm"
+                                    style={{ flex: 1, minWidth: "100px", justifyContent: "center" }}
                                     onClick={() => handleCheckBalance(account.id)}
                                     disabled={checkingId === account.id}
                                 >
-                                    {checkingId === account.id ? "⏳" : "🔄 เช็คยอด"}
+                                    {checkingId === account.id ? (
+                                        <span className="spinner" style={{ width: 14, height: 14, marginRight: 6 }}></span>
+                                    ) : (
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                                    )}
+                                    เช็คยอด
                                 </button>
                                 {featureAutoWithdrawEnabled && (
                                     <button
                                         className="tenant-btn tenant-btn-secondary tenant-btn-sm"
                                         onClick={() => handleOpenAutoWithdraw(account)}
                                         title="ตั้งค่าโอนอัตโนมัติ"
-                                        style={{ padding: "6px 2px", fontSize: "0.7rem" }}
                                     >
-                                        ⚙️ Auto
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                                     </button>
                                 )}
                                 <button
@@ -552,22 +539,25 @@ export default function WalletsPage() {
                                     onClick={() => handleToggle(account)}
                                     title={account.isActive ? "ปิดใช้งาน" : "เปิดใช้งาน"}
                                 >
-                                    {account.isActive ? "⏸️" : "▶️"}
+                                    {account.isActive ? (
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                                    ) : (
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                    )}
                                 </button>
                                 <button
                                     className="tenant-btn tenant-btn-secondary tenant-btn-sm"
                                     onClick={() => handleEdit(account)}
                                     title="แก้ไข"
                                 >
-                                    ✏️
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                                 </button>
                                 <button
-                                    className="tenant-btn tenant-btn-secondary tenant-btn-sm"
-                                    style={{ background: "rgba(239, 68, 68, 0.2)", color: "var(--error)" }}
+                                    className="tenant-btn tenant-btn-danger tenant-btn-sm"
                                     onClick={() => handleDelete(account.id)}
                                     title="ลบ"
                                 >
-                                    🗑️
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
                                 </button>
                             </div>
                         </div>
@@ -578,14 +568,14 @@ export default function WalletsPage() {
             {/* Add Wallet Modal */}
             {showModal && (
                 <div
-                    className="tenant-wallet-modal-overlay"
                     style={{
                         position: "fixed",
                         top: 0,
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        background: "rgba(0,0,0,0.7)",
+                        background: "rgba(0,0,0,0.6)",
+                        backdropFilter: "blur(4px)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -595,12 +585,12 @@ export default function WalletsPage() {
                     onClick={() => setShowModal(false)}
                 >
                     <div
-                        className="tenant-card tenant-wallet-modal-card"
-                        style={{ maxWidth: 560, width: "100%" }}
+                        className="tenant-card"
+                        style={{ maxWidth: 560, width: "100%", maxHeight: "90vh", overflowY: "auto" }}
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <div className="tenant-card-title" style={{ marginBottom: 24 }}>
-                            {editingId ? "✏️ แก้ไขวอลเล็ท" : "➕ เพิ่มวอลเล็ท TrueWallet"}
+                        <div style={{ fontSize: "1.25rem", fontWeight: 600, color: "var(--theme-text-primary)", marginBottom: 24 }}>
+                            {editingId ? "แก้ไขวอลเล็ท" : "เพิ่มวอลเล็ท TrueWallet"}
                         </div>
 
                         <form onSubmit={handleSubmit}>
@@ -629,11 +619,10 @@ export default function WalletsPage() {
 
                             <div className="tenant-form-group">
                                 <label className="tenant-form-label">Wallet API Endpoint (เช็คยอดเงิน)</label>
-                                <div className="locked-endpoint-box">
+                                <div className="webhook-code-row">
                                     <code>{TRUE_MONEY_BALANCE_ENDPOINT}</code>
-                                    <span>ล็อกค่าไว้แล้ว</span>
                                 </div>
-                                <div className="tenant-form-hint">
+                                <div style={{ fontSize: "0.85rem", color: "var(--theme-text-muted)", marginTop: 6 }}>
                                     ระบบใช้ URL นี้เช็คยอดเงินอัตโนมัติทุกวอลเล็ท ไม่ต้องกรอกหรือแก้ไขเอง
                                 </div>
                             </div>
@@ -648,7 +637,7 @@ export default function WalletsPage() {
                                     placeholder="API Token"
                                     required={!editingId}
                                 />
-                                <div className="tenant-form-hint">
+                                <div style={{ fontSize: "0.85rem", color: "var(--theme-text-muted)", marginTop: 6 }}>
                                     Token สำหรับเช็คยอดเงินเท่านั้น ไม่ใช่ Header Key จากหน้าแจ้งหักค่าธรรมเนียม
                                     {editingId ? " เว้นว่างไว้ถ้าไม่ต้องการเปลี่ยน token เช็คยอด" : ""}
                                 </div>
@@ -663,31 +652,32 @@ export default function WalletsPage() {
                                     onChange={(e) => setForm({ ...form, webhookSecret: e.target.value })}
                                     placeholder="วาง Key จากหน้าแจ้งหักค่าธรรมเนียม"
                                 />
-                                <div className="tenant-form-hint">
+                                <div style={{ fontSize: "0.85rem", color: "var(--theme-text-muted)", marginTop: 6 }}>
                                     Key นี้ใช้ตรวจ header <code>Authorization</code> และใช้แยกวอลเล็ทได้โดยไม่ต้องใส่เบอร์ใน Endpoint URL
                                     หากเว้นว่าง ระบบจะใช้เบอร์ใน URL เพื่อแยกวอลเล็ทแทน
                                 </div>
                             </div>
 
-                            <div className="wallet-webhook-quickbox">
-                                <div className="wallet-webhook-quickhead">
-                                    <div>
-                                        <div className="wallet-webhook-title">ลิงก์รับแจ้งถอน / ค่าธรรมเนียม</div>
-                                        <div className="wallet-webhook-subtitle">
-                                            ใช้ข้อมูลชุดนี้ในหน้าแจ้งหักค่าธรรมเนียมของแอพ
-                                        </div>
+                            <div style={{ background: "var(--theme-surface-hover)", padding: 16, borderRadius: 8, border: "1px solid var(--theme-border-subtle)", marginTop: 24 }}>
+                                <div style={{ marginBottom: 16 }}>
+                                    <div style={{ fontWeight: 600, color: "var(--theme-text-primary)", marginBottom: 4 }}>ลิงก์รับแจ้งถอน / ค่าธรรมเนียม</div>
+                                    <div style={{ fontSize: "0.85rem", color: "var(--theme-text-muted)" }}>
+                                        ใช้ข้อมูลชุดนี้ในหน้าแจ้งหักค่าธรรมเนียมของแอพ
                                     </div>
-                                    <span className={(form.webhookSecret.trim() || form.phoneNumber.trim()) ? "webhook-status ready" : "webhook-status missing"}>
-                                        {form.webhookSecret.trim() ? "ใช้ Header Key แยกวอลเล็ท" : form.phoneNumber.trim() ? "ใช้เบอร์ใน URL" : "ใส่ Key หรือเบอร์ก่อน"}
-                                    </span>
+                                    <div style={{ marginTop: 8 }}>
+                                        <span className={`badge ${(form.webhookSecret.trim() || form.phoneNumber.trim()) ? "badge-success" : "badge-neutral"}`}>
+                                            {form.webhookSecret.trim() ? "ใช้ Header Key แยกวอลเล็ท" : form.phoneNumber.trim() ? "ใช้เบอร์ใน URL" : "ใส่ Key หรือเบอร์ก่อน"}
+                                        </span>
+                                    </div>
                                 </div>
 
-                                <div className="webhook-field">
-                                    <div className="webhook-field-label">Endpoint URL</div>
+                                <div className="tenant-form-group">
+                                    <label className="tenant-form-label">Endpoint URL</label>
                                     <div className="webhook-code-row">
                                         <code>{getWebhookUrl(form.phoneNumber, form.webhookSecret)}</code>
                                         <button
                                             type="button"
+                                            className="tenant-btn tenant-btn-secondary tenant-btn-sm"
                                             disabled={!form.webhookSecret.trim() && !form.phoneNumber.trim()}
                                             onClick={() => copyText(getWebhookUrl(form.phoneNumber, form.webhookSecret), "Endpoint URL")}
                                         >
@@ -696,22 +686,27 @@ export default function WalletsPage() {
                                     </div>
                                 </div>
 
-                                <div className="webhook-field-grid">
-                                    <div className="webhook-field">
-                                        <div className="webhook-field-label">Header Name</div>
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                                    <div className="tenant-form-group" style={{ marginBottom: 0 }}>
+                                        <label className="tenant-form-label">Header Name</label>
                                         <div className="webhook-code-row">
                                             <code>Authorization</code>
-                                            <button type="button" onClick={() => copyText("Authorization", "Header Name")}>
+                                            <button 
+                                                type="button" 
+                                                className="tenant-btn tenant-btn-secondary tenant-btn-sm"
+                                                onClick={() => copyText("Authorization", "Header Name")}
+                                            >
                                                 คัดลอก
                                             </button>
                                         </div>
                                     </div>
-                                    <div className="webhook-field">
-                                        <div className="webhook-field-label">Header Key</div>
+                                    <div className="tenant-form-group" style={{ marginBottom: 0 }}>
+                                        <label className="tenant-form-label">Header Key</label>
                                         <div className="webhook-code-row">
                                             <code>{form.webhookSecret.trim() || "วาง Key ด้านบนก่อน"}</code>
                                             <button
                                                 type="button"
+                                                className="tenant-btn tenant-btn-secondary tenant-btn-sm"
                                                 disabled={!form.webhookSecret.trim()}
                                                 onClick={() => copyText(form.webhookSecret.trim(), "Header Key")}
                                             >
@@ -732,7 +727,7 @@ export default function WalletsPage() {
                                     ยกเลิก
                                 </button>
                                 <button type="submit" className="tenant-btn tenant-btn-primary" style={{ flex: 1 }}>
-                                    {editingId ? "บันทึก" : "➕ เพิ่มวอลเล็ท"}
+                                    {editingId ? "บันทึก" : "เพิ่มวอลเล็ท"}
                                 </button>
                             </div>
                         </form>
@@ -743,14 +738,14 @@ export default function WalletsPage() {
             {/* Auto Withdraw Modal */}
             {showAutoWithdrawModal && (
                 <div
-                    className="tenant-wallet-modal-overlay"
                     style={{
                         position: "fixed",
                         top: 0,
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        background: "rgba(0,0,0,0.7)",
+                        background: "rgba(0,0,0,0.6)",
+                        backdropFilter: "blur(4px)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -760,25 +755,25 @@ export default function WalletsPage() {
                     onClick={() => setShowAutoWithdrawModal(false)}
                 >
                     <div
-                        className="tenant-card tenant-wallet-modal-card"
-                        style={{ maxWidth: 480, width: "100%" }}
+                        className="tenant-card"
+                        style={{ maxWidth: 480, width: "100%", maxHeight: "90vh", overflowY: "auto" }}
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <div className="tenant-card-title" style={{ marginBottom: 24 }}>
-                            ⚙️ ตั้งค่าโอนเงินอัตโนมัติ (Auto Withdraw)
+                        <div style={{ fontSize: "1.25rem", fontWeight: 600, color: "var(--theme-text-primary)", marginBottom: 24 }}>
+                            ตั้งค่าโอนเงินอัตโนมัติ
                         </div>
 
                         <div className="tenant-form-group">
                             <label className="tenant-form-label">สถานะการทำงาน</label>
-                            <label className="switch" style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
                                 <input
                                     type="checkbox"
                                     checked={autoWithdrawForm.enabled}
                                     onChange={(e) => setAutoWithdrawForm({ ...autoWithdrawForm, enabled: e.target.checked })}
-                                    style={{ width: 20, height: 20 }}
+                                    style={{ width: 20, height: 20, accentColor: "var(--theme-accent)" }}
                                 />
-                                <span style={{ color: autoWithdrawForm.enabled ? "var(--success)" : "var(--text-muted)" }}>
-                                    {autoWithdrawForm.enabled ? "เปิดใช้งาน" : "ปิด"}
+                                <span style={{ color: autoWithdrawForm.enabled ? "var(--theme-success)" : "var(--theme-text-muted)" }}>
+                                    {autoWithdrawForm.enabled ? "เปิดใช้งาน" : "ปิดใช้งาน"}
                                 </span>
                             </label>
                         </div>
@@ -786,7 +781,7 @@ export default function WalletsPage() {
                         <div className="tenant-form-group">
                             <label className="tenant-form-label">เงื่อนไข (ยอดเงินขั้นต่ำ)</label>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <span style={{ color: "var(--text-muted)" }}>เมื่อยอดเงินมากกว่า</span>
+                                <span style={{ color: "var(--theme-text-muted)" }}>เมื่อยอดเงินมากกว่า</span>
                                 <input
                                     type="number"
                                     className="tenant-form-input"
@@ -794,10 +789,10 @@ export default function WalletsPage() {
                                     value={autoWithdrawForm.triggerMinBalance}
                                     onChange={(e) => setAutoWithdrawForm({ ...autoWithdrawForm, triggerMinBalance: Number(e.target.value) })}
                                 />
-                                <span style={{ color: "var(--text-muted)" }}>บาท</span>
+                                <span style={{ color: "var(--theme-text-muted)" }}>บาท</span>
                             </div>
-                            <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
-                                * จะทำการโอนออกจนเหลือ 0 (หรือตามที่กำหนด) เมื่อยอดถึงกำหนด
+                            <div style={{ fontSize: "0.85rem", color: "var(--theme-text-muted)", marginTop: 6 }}>
+                                * จะทำการโอนออกตามเงื่อนไขด้านล่าง เมื่อยอดถึงกำหนด
                             </div>
                         </div>
 
@@ -815,7 +810,7 @@ export default function WalletsPage() {
                         <div className="tenant-form-group">
                             <label className="tenant-form-label">รูปแบบการถอน</label>
                             <select
-                                className="tenant-form-input"
+                                className="tenant-form-select"
                                 value={autoWithdrawForm.withdrawType}
                                 onChange={(e) => setAutoWithdrawForm({ ...autoWithdrawForm, withdrawType: e.target.value })}
                             >
