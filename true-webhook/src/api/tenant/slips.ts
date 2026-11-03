@@ -64,7 +64,7 @@ router.post("/upload", slipUpload.single("slip"), async (req: Request<{ prefix: 
     }
 });
 
-// Verify slip endpoint
+// Verify slip endpoint (Real vs Fake Focus)
 router.post("/verify", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     try {
         const network = await prisma.network.findUnique({
@@ -78,7 +78,7 @@ router.post("/verify", async (req: Request<{ prefix: string }>, res: Response, n
 
         const body = verifySlipSchema.parse(req.body);
 
-        // Normalize receiver mobile
+        // Normalize inputs
         const cleanReceiver = body.receiverMobile.replace(/\D/g, "");
         const amountSatang = Math.round(body.amount * 100);
         const cleanTxId = body.transactionId ? body.transactionId.trim() : null;
@@ -95,7 +95,6 @@ router.post("/verify", async (req: Request<{ prefix: string }>, res: Response, n
         }
 
         if (!targetAccount) {
-            // Find by matching mobile number
             const accounts = await prisma.account.findMany({
                 where: { networkId: network.id },
             });
@@ -117,67 +116,18 @@ router.post("/verify", async (req: Request<{ prefix: string }>, res: Response, n
             });
         }
 
-        if (!targetAccount.walletBearerToken) {
+        const slipToken = targetAccount.slipVerifyToken || targetAccount.walletBearerToken;
+
+        if (!slipToken) {
             return res.status(400).json({
                 ok: false,
                 status: "NO_TOKEN",
-                message: `วอลเล็ท "${targetAccount.name}" ยังไม่ได้ผูก Balance Bearer Token สำหรับเช็คยอด/ตรวจสลิป กรุณาใส่ Token ในหน้าจัดการวอลเล็ท`,
+                message: `วอลเล็ท "${targetAccount.name}" ยังไม่ได้ผูก Key ตรวจสอบสลิป (กรุณากรอก Key ในหน้าจัดการวอลเล็ท ในหัวข้อ "ตรวจสอบสลิป")`,
             });
         }
 
-        // 2. LAYER 1: Anti-Fraud Duplicate Check
-        // Check if there is already a successfully VALIDATED slip with identical fingerprint
-        const duplicateConditions: any[] = [];
-        if (cleanTxId) {
-            duplicateConditions.push({ transactionId: cleanTxId });
-        }
-        duplicateConditions.push({
-            receiverMobile: cleanReceiver,
-            amountSatang,
-            transactionDate: normalizedDate,
-        });
-
-        const existingSlip = await (prisma as any).slipVerification.findFirst({
-            where: {
-                networkId: network.id,
-                status: "VALID",
-                OR: duplicateConditions,
-            },
-            include: { account: { select: { name: true, phoneNumber: true } } },
-        });
-
-        if (existingSlip) {
-            const dupMessage = `🚨 สลิปนี้ถูกใช้งานไปแล้วเมื่อ ${new Date(existingSlip.verifiedAt).toLocaleString("th-TH")} (รายการ: ${existingSlip.transactionId || "ยอด " + existingSlip.amount + " บ."}) โดย ${existingSlip.account?.name || "วอลเล็ทในระบบ"}`;
-            
-            // Record duplicate attempt in DB
-            const logEntry = await (prisma as any).slipVerification.create({
-                data: {
-                    transactionId: cleanTxId,
-                    accountId: targetAccount.id,
-                    networkId: network.id,
-                    amount: body.amount,
-                    amountSatang,
-                    receiverMobile: cleanReceiver,
-                    senderMobile: cleanSender,
-                    transactionDate: normalizedDate,
-                    status: "DUPLICATE",
-                    resultMessage: dupMessage,
-                    slipImageUrl: body.slipImageUrl || null,
-                    qrPayload: body.qrPayload || null,
-                    verifiedBy: req.user?.email || "ADMIN",
-                },
-            });
-
-            return res.status(200).json({
-                ok: false,
-                status: "DUPLICATE",
-                message: dupMessage,
-                data: logEntry,
-            });
-        }
-
-        // 3. LAYER 2: Call TrueMoney Validate P2P API v1.6
-        const apiResult = await validateP2PTransaction(targetAccount.walletBearerToken, {
+        // 2. Call TrueMoney Validate P2P API v1.6 Directly to check REAL vs FAKE
+        const apiResult = await validateP2PTransaction(slipToken, {
             receiver_mobile: cleanReceiver,
             amount: amountSatang,
             transaction_date: normalizedDate,
@@ -186,7 +136,8 @@ router.post("/verify", async (req: Request<{ prefix: string }>, res: Response, n
         });
 
         if (!apiResult.ok) {
-            const failMessage = apiResult.error?.thaiExplanation || "ข้อมูลในสลิปไม่ตรงกับฐานข้อมูล TrueMoney";
+            // Explain specifically which part is fake or mismatched
+            const failMessage = apiResult.error?.thaiExplanation || "ข้อมูลในสลิปไม่ตรงกับฐานข้อมูล TrueMoney (สลิปปลอม)";
 
             const logEntry = await (prisma as any).slipVerification.create({
                 data: {
@@ -216,7 +167,7 @@ router.post("/verify", async (req: Request<{ prefix: string }>, res: Response, n
             });
         }
 
-        // 4. LAYER 3: Cross-Check Live Webhook Stream
+        // 3. Cross-Check Live Webhook Stream (Optional confirmation)
         let matchedTx: any = null;
         if (cleanTxId) {
             matchedTx = await (prisma as any).financialTransaction.findFirst({
@@ -228,10 +179,10 @@ router.post("/verify", async (req: Request<{ prefix: string }>, res: Response, n
         }
 
         const successMessage = matchedTx
-            ? "✅ สลิปถูกต้อง 100% (ยืนยันคู่รายการ Webhook เงินเข้าจริงในบัญชี)"
-            : "✅ สลิปถูกต้อง 100% (ผ่านการตรวจสอบจาก TrueMoney Server P2P API)";
+            ? "✅ สลิปจริง 100% (ผ่านการตรวจสอบจาก TrueMoney และพบยอดเงินเข้าจริงในบัญชี)"
+            : "✅ สลิปจริง 100% (ผ่านการตรวจสอบความถูกต้องจาก TrueMoney)";
 
-        // 5. Save Valid Slip to Database
+        // 4. Save Valid Slip to Database
         const savedSlip = await (prisma as any).slipVerification.create({
             data: {
                 transactionId: cleanTxId,
@@ -365,11 +316,10 @@ router.get("/stats", async (req: Request<{ prefix: string }>, res: Response, nex
         const startOfToday = new Date();
         startOfToday.setHours(0, 0, 0, 0);
 
-        const [totalCount, validCount, invalidCount, duplicateCount, todayValidAmount] = await Promise.all([
+        const [totalCount, validCount, invalidCount, todayValidAmount] = await Promise.all([
             (prisma as any).slipVerification.count({ where: { networkId: network.id } }),
             (prisma as any).slipVerification.count({ where: { networkId: network.id, status: "VALID" } }),
             (prisma as any).slipVerification.count({ where: { networkId: network.id, status: "INVALID" } }),
-            (prisma as any).slipVerification.count({ where: { networkId: network.id, status: "DUPLICATE" } }),
             (prisma as any).slipVerification.aggregate({
                 where: {
                     networkId: network.id,
@@ -386,7 +336,6 @@ router.get("/stats", async (req: Request<{ prefix: string }>, res: Response, nex
                 totalCount,
                 validCount,
                 invalidCount,
-                duplicateCount,
                 todayValidAmount: todayValidAmount._sum?.amount || 0,
             },
         });

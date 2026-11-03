@@ -96,6 +96,7 @@ model Account {
   walletEndpointUrl          String
   walletBearerToken          String
   webhookSecret              String?          // For verifying incoming webhook requests
+  slipVerifyToken            String?          // For verifying P2P slips via TrueMoney Validate API
   
   autoRefreshEnabled         Boolean          @default(true)
   autoRefreshIntervalSeconds Int              @default(60)

@@ -75,6 +75,7 @@ function withLocalStats(account: any) {
         ...account,
         walletBearerTokenConfigured: Boolean(account.walletBearerToken),
         webhookSecretConfigured: Boolean(account.webhookSecret),
+        slipVerifyTokenConfigured: Boolean(account.slipVerifyToken),
         stats: account.stats || {
             totalFee: 0,
             firstActiveAt: null,
@@ -295,8 +296,10 @@ router.get("/", async (req: Request<{ prefix: string }>, res: Response, next: Ne
             ...account,
             walletBearerTokenConfigured: Boolean(account.walletBearerToken),
             webhookSecretConfigured: Boolean(account.webhookSecret),
+            slipVerifyTokenConfigured: Boolean(account.slipVerifyToken),
             walletBearerToken: canManageSecrets ? account.walletBearerToken : "",
             webhookSecret: canManageSecrets ? account.webhookSecret : null,
+            slipVerifyToken: canManageSecrets ? (account.slipVerifyToken || "") : null,
         }));
 
         return res.json({ ok: true, data: responseAccounts });
@@ -556,15 +559,18 @@ router.post("/", requireNetworkAdmin, async (req: Request<{ prefix: string }>, r
             name: z.string().min(1),
             phoneNumber: z.string().optional(),
             walletEndpointUrl: z.string().url().optional(),
-            walletBearerToken: z.string().min(1),
+            walletBearerToken: z.string().optional().or(z.literal("")),
             webhookSecret: z.string().optional().or(z.literal("")),
+            slipVerifyToken: z.string().optional().or(z.literal("")),
         });
 
         const parsed = schema.parse(req.body);
         const data = {
             ...parsed,
             walletEndpointUrl: TRUE_MONEY_BALANCE_ENDPOINT,
+            walletBearerToken: parsed.walletBearerToken?.trim() || "",
             webhookSecret: parsed.webhookSecret?.trim() || null,
+            slipVerifyToken: parsed.slipVerifyToken?.trim() || null,
         };
 
         if (isLocalJga88(req.params.prefix)) {
@@ -623,8 +629,9 @@ router.put("/:id", requireNetworkAdmin, async (req: Request<{ prefix: string; id
             name: z.string().optional(),
             phoneNumber: z.string().optional(),
             walletEndpointUrl: z.string().url().optional(),
-            walletBearerToken: z.string().min(1).optional(),
+            walletBearerToken: z.string().optional().or(z.literal("")),
             webhookSecret: z.string().optional().or(z.literal("")),
+            slipVerifyToken: z.string().optional().or(z.literal("")),
             isActive: z.boolean().optional(),
         });
 
@@ -633,8 +640,14 @@ router.put("/:id", requireNetworkAdmin, async (req: Request<{ prefix: string; id
         if ("walletEndpointUrl" in data) {
             data.walletEndpointUrl = TRUE_MONEY_BALANCE_ENDPOINT;
         }
+        if ("walletBearerToken" in data) {
+            data.walletBearerToken = data.walletBearerToken?.trim() || "";
+        }
         if ("webhookSecret" in data) {
             data.webhookSecret = data.webhookSecret?.trim() || null;
+        }
+        if ("slipVerifyToken" in data) {
+            data.slipVerifyToken = data.slipVerifyToken?.trim() || null;
         }
 
         if (isLocalJga88(req.params.prefix)) {
