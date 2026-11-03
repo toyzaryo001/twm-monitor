@@ -148,7 +148,7 @@ router.get("/", requireNetworkAdmin, async (req: Request<{ prefix: string }>, re
 
             // Effective fee count: if tuned, calculate targetFeeCount + any new fee txs after tunedAt
             let effectiveFeeCount = accFeeTxs.length;
-            if (tuningConfig && tuningConfig.targetFeeCount != null && tuningConfig.targetFeeCount > 0) {
+            if (tuningConfig && tuningConfig.targetFeeCount != null && tuningConfig.targetFeeCount >= 0) {
                 const tunedAtDate = tuningConfig.tunedAt ? new Date(tuningConfig.tunedAt) : null;
                 if (tunedAtDate) {
                     const newFeeCount = accFeeTxs.filter((t: any) =>
@@ -305,7 +305,7 @@ router.post("/", requireNetworkAdmin, async (req: Request<{ prefix: string }>, r
             accountId: account.id,
             targetFeeAmount,
             targetFeeCount: targetFeeCount ?? 0,
-            targetReceiveCount: targetReceiveCount ?? 0,
+            targetReceiveCount: targetReceiveCount ?? targetFeeCount ?? 0,
             lastDiffFee: diffFee,
             note: note || "",
             tunedAt: new Date().toISOString(),
