@@ -344,17 +344,6 @@ export default function WalletsPage() {
         setShowModal(true);
     };
 
-    const generateRandomSecret = () => {
-        const chars = "0123456789abcdef";
-        let result = "";
-        for (let i = 0; i < 32; i++) {
-            result += chars[Math.floor(Math.random() * chars.length)];
-        }
-        setForm(prev => ({ ...prev, webhookSecret: result }));
-        setEditingSecretField(true);
-        showToast({ type: "success", title: "สร้าง Key สุ่มแล้ว", message: "วาง Key นี้ในหน้าแจ้งเตือนของ TrueMoney" });
-    };
-
     const handleToggle = async (account: Account) => {
         const token = getToken();
         await fetch(`/api/tenant/${prefix}/accounts/${account.id}`, {
@@ -384,11 +373,9 @@ export default function WalletsPage() {
         }
     };
 
-    const getWebhookUrl = (phoneNumber?: string, webhookSecret?: string) => {
+    const getWebhookUrl = () => {
         const origin = typeof window !== "undefined" ? window.location.origin : "";
-        if (webhookSecret?.trim()) return `${origin}/api/webhook/${prefix}`;
-        const mobile = phoneNumber?.trim() || "08x...";
-        return `${origin}/api/webhook/${prefix}?mobile=${mobile}`;
+        return `${origin}/api/webhook/${prefix}`;
     };
 
     const copyText = async (value: string, label: string) => {
@@ -684,12 +671,12 @@ export default function WalletsPage() {
                         </div>
 
                         <form onSubmit={handleSubmit}>
-                            {/* Section 1: ข้อมูลพื้นฐาน */}
+                            {/* Section 1: ข้อมูลบัญชีวอลเล็ท */}
                             <div style={{ marginBottom: 20 }}>
                                 <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--theme-text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
                                     <span>📱</span> ข้อมูลบัญชีวอลเล็ท
                                 </div>
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
                                     <div className="tenant-form-group" style={{ marginBottom: 0 }}>
                                         <label className="tenant-form-label">ชื่อวอลเล็ท <span style={{ color: "var(--theme-danger, #ef4444)" }}>*</span></label>
                                         <input
@@ -712,16 +699,9 @@ export default function WalletsPage() {
                                         />
                                     </div>
                                 </div>
-                            </div>
-
-                            {/* Section 2: คีย์เชื่อมต่อ (Masked 4 ตัวหน้า-หลัง) */}
-                            <div style={{ marginBottom: 20, borderTop: "1px solid var(--theme-border-subtle)", paddingTop: 18 }}>
-                                <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--theme-text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
-                                    <span>🔐</span> คีย์เชื่อมต่อระบบ (API Credentials)
-                                </div>
 
                                 {/* Balance Bearer Token */}
-                                <div className="tenant-form-group" style={{ marginBottom: 16 }}>
+                                <div className="tenant-form-group" style={{ marginBottom: 0 }}>
                                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                                         <label className="tenant-form-label" style={{ marginBottom: 0 }}>
                                             Balance Bearer Token <span style={{ fontSize: "0.75rem", color: "var(--theme-text-muted)", fontWeight: 400 }}>(สำหรับเช็คยอดเงิน)</span>
@@ -813,12 +793,54 @@ export default function WalletsPage() {
                                         * คีย์นี้ใช้เช็คยอดคงเหลืออัตโนมัติ (แสดง 4 ตัวหน้า-หลัง ปลอดภัยในการใช้งาน)
                                     </div>
                                 </div>
+                            </div>
 
-                                {/* Webhook Header Key (Authorization) */}
+                            {/* Section 2: ขั้นตอนการผูก Webhook กับแอป TrueMoney */}
+                            <div style={{
+                                background: "rgba(255, 255, 255, 0.025)",
+                                padding: 18,
+                                borderRadius: 12,
+                                border: "1px solid var(--theme-border-subtle)",
+                                marginBottom: 24
+                            }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                                    <div>
+                                        <div style={{ fontWeight: 600, color: "var(--theme-text-primary)", fontSize: "0.95rem", display: "flex", alignItems: "center", gap: 6 }}>
+                                            <span>🚀</span> ขั้นตอนการผูก Webhook ในแอป TrueMoney
+                                        </div>
+                                        <div style={{ fontSize: "0.8rem", color: "var(--theme-text-muted)", marginTop: 2 }}>
+                                            ทำตาม 2 ขั้นตอนด้านล่างเพื่อเชื่อมต่อรับแจ้งเตือนเงินเข้าและหักค่าธรรมเนียม
+                                        </div>
+                                    </div>
+                                    <span className={`badge ${form.webhookSecret.trim() ? "badge-success" : "badge-neutral"}`} style={{ fontSize: "11px" }}>
+                                        {form.webhookSecret.trim() ? "พร้อมใช้งาน" : "รอนำ Key มาวาง"}
+                                    </span>
+                                </div>
+
+                                {/* Step 1: คัดลอกลิงก์ไปวาง */}
+                                <div className="tenant-form-group" style={{ marginBottom: 16 }}>
+                                    <label className="tenant-form-label" style={{ fontSize: "0.84rem", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                                        <span>1.</span> คัดลอกลิงก์ Endpoint URL ไปวางในแอป TrueMoney
+                                    </label>
+                                    <div className="webhook-code-row">
+                                        <code style={{ fontSize: "0.88rem", overflowX: "auto" }}>
+                                            {getWebhookUrl()}
+                                        </code>
+                                        <button
+                                            type="button"
+                                            className="tenant-btn tenant-btn-secondary tenant-btn-sm"
+                                            onClick={() => copyText(getWebhookUrl(), "Endpoint URL")}
+                                        >
+                                            📋 คัดลอกลิงก์
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Step 2: นำ Webhook Header Key จากหน้าแอปกลับมาวาง */}
                                 <div className="tenant-form-group" style={{ marginBottom: 0 }}>
                                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                                        <label className="tenant-form-label" style={{ marginBottom: 0 }}>
-                                            Webhook Header Key <span style={{ fontSize: "0.75rem", color: "var(--theme-text-muted)", fontWeight: 400 }}>(Authorization Secret)</span>
+                                        <label className="tenant-form-label" style={{ fontSize: "0.84rem", fontWeight: 600, marginBottom: 0, display: "flex", alignItems: "center", gap: 6 }}>
+                                            <span>2.</span> นำ Webhook Header Key (Authorization Secret) จากหน้าแอปกลับมาวาง
                                         </label>
                                         {originalWebhookSecret && !editingSecretField && (
                                             <span className="badge badge-success" style={{ fontSize: "10px", padding: "2px 6px" }}>
@@ -884,18 +906,9 @@ export default function WalletsPage() {
                                                 className="tenant-form-input"
                                                 value={form.webhookSecret}
                                                 onChange={(e) => setForm({ ...form, webhookSecret: e.target.value })}
-                                                placeholder="วาง Webhook Header Key จากหน้าแจ้งเตือน"
+                                                placeholder="วาง Webhook Header Key ที่ได้จากหน้าแอป TrueMoney"
                                                 style={{ fontFamily: "monospace", fontSize: "0.95rem" }}
                                             />
-                                            <button
-                                                type="button"
-                                                className="tenant-btn tenant-btn-secondary tenant-btn-sm"
-                                                onClick={generateRandomSecret}
-                                                title="สร้าง Key สุ่ม 32 ตัวอักษร"
-                                                style={{ whiteSpace: "nowrap" }}
-                                            >
-                                                ⚡ สร้างสุ่ม
-                                            </button>
                                             {editingId && originalWebhookSecret && (
                                                 <button
                                                     type="button"
@@ -912,82 +925,7 @@ export default function WalletsPage() {
                                         </div>
                                     )}
                                     <div style={{ fontSize: "0.78rem", color: "var(--theme-text-muted)", marginTop: 4 }}>
-                                        * คีย์นี้ใช้ตรวจ Authorization ใน Webhook และแยกวอลเล็ทอัตโนมัติ
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Section 3: ข้อมูลสำหรับนำไปผูกในหน้าแจ้งเตือนของแอป TrueMoney */}
-                            <div style={{
-                                background: "rgba(255, 255, 255, 0.025)",
-                                padding: 16,
-                                borderRadius: 10,
-                                border: "1px solid var(--theme-border-subtle)",
-                                marginBottom: 24
-                            }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                                    <div>
-                                        <div style={{ fontWeight: 600, color: "var(--theme-text-primary)", fontSize: "0.92rem", display: "flex", alignItems: "center", gap: 6 }}>
-                                            <span>🚀</span> ลิงก์สำหรับผูก Webhook ในแอป TrueMoney
-                                        </div>
-                                        <div style={{ fontSize: "0.8rem", color: "var(--theme-text-muted)", marginTop: 2 }}>
-                                            นำข้อมูล 3 ช่องนี้ไปกรอกในหน้าตั้งค่าแจ้งเตือน / หักค่าธรรมเนียมของแอป
-                                        </div>
-                                    </div>
-                                    <span className={`badge ${(form.webhookSecret.trim() || form.phoneNumber.trim()) ? "badge-success" : "badge-neutral"}`} style={{ fontSize: "11px" }}>
-                                        {form.webhookSecret.trim() ? "พร้อมใช้งาน (ใช้ Key)" : form.phoneNumber.trim() ? "พร้อมใช้งาน (ใช้เบอร์)" : "ใส่ Key หรือเบอร์ก่อน"}
-                                    </span>
-                                </div>
-
-                                {/* Endpoint URL */}
-                                <div className="tenant-form-group" style={{ marginBottom: 12 }}>
-                                    <label className="tenant-form-label" style={{ fontSize: "0.8rem" }}>1. Endpoint URL</label>
-                                    <div className="webhook-code-row">
-                                        <code style={{ fontSize: "0.85rem", overflowX: "auto" }}>
-                                            {getWebhookUrl(form.phoneNumber, form.webhookSecret)}
-                                        </code>
-                                        <button
-                                            type="button"
-                                            className="tenant-btn tenant-btn-secondary tenant-btn-sm"
-                                            disabled={!form.webhookSecret.trim() && !form.phoneNumber.trim()}
-                                            onClick={() => copyText(getWebhookUrl(form.phoneNumber, form.webhookSecret), "Endpoint URL")}
-                                        >
-                                            คัดลอก
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Header Name & Header Key */}
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: 12 }}>
-                                    <div className="tenant-form-group" style={{ marginBottom: 0 }}>
-                                        <label className="tenant-form-label" style={{ fontSize: "0.8rem" }}>2. Header Name</label>
-                                        <div className="webhook-code-row">
-                                            <code>Authorization</code>
-                                            <button
-                                                type="button"
-                                                className="tenant-btn tenant-btn-secondary tenant-btn-sm"
-                                                onClick={() => copyText("Authorization", "Header Name")}
-                                            >
-                                                คัดลอก
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div className="tenant-form-group" style={{ marginBottom: 0 }}>
-                                        <label className="tenant-form-label" style={{ fontSize: "0.8rem" }}>3. Header Key</label>
-                                        <div className="webhook-code-row">
-                                            <code style={{ fontFamily: "monospace", fontSize: "0.85rem" }}>
-                                                {form.webhookSecret.trim() ? maskSecretKey(form.webhookSecret) : "วาง Key ด้านบนก่อน"}
-                                            </code>
-                                            <button
-                                                type="button"
-                                                className="tenant-btn tenant-btn-secondary tenant-btn-sm"
-                                                disabled={!form.webhookSecret.trim()}
-                                                onClick={() => copyText(form.webhookSecret.trim(), "Header Key (Full)")}
-                                                title="คัดลอกคีย์เต็มเพื่อนำไปวางในแอป"
-                                            >
-                                                คัดลอก Key
-                                            </button>
-                                        </div>
+                                        * ระบบตรวจจับ Header Name เป็น <code>Authorization</code> โดยอัตโนมัติ ไม่จำเป็นต้องระบุชื่อ Header เพิ่มเติม
                                     </div>
                                 </div>
                             </div>
