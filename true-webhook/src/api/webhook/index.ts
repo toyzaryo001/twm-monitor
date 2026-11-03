@@ -12,6 +12,7 @@ const webhookRateLimit = createRateLimit({ name: "webhook", windowMs: 60 * 1000,
 
 function createWebhookFallbackId(payload: Record<string, unknown>) {
     const identity = {
+        uniqueTransid: payload.unique_transid != null ? String(payload.unique_transid) : null,
         eventType: payload.event_type || null,
         transactionDate: payload.transaction_date || null,
         issuedAt: payload.iat || null,
@@ -37,6 +38,7 @@ const optionalNumberLikeSchema = numberLikeSchema.nullish();
 
 const webhookSchema = z.object({
     transaction_id: z.string().optional(),
+    unique_transid: z.union([z.string(), z.number()]).optional(),
     amount: optionalNumberLikeSchema,
     amount_net: optionalNumberLikeSchema,
     mobile_no: z.string().optional(), // Sender or Recipient mobile (depends on direction)
@@ -59,6 +61,7 @@ const webhookSchema = z.object({
         data.amount != null ||
         data.amount_net != null ||
         Boolean(data.transaction_id) ||
+        Boolean(data.unique_transid) ||
         Boolean(data.ref_id) ||
         Boolean(data.event_type);
 }, { message: "INVALID_WEBHOOK_PAYLOAD" });
@@ -230,9 +233,14 @@ router.all("/:prefix", webhookRateLimit, async (req: Request, res: Response) => 
         }
 
         // Extract fields from mapped payload
-        // TrueMoney sends empty transaction_id for Fee events, so we generate a robust unique fallback
-        const transactionId = payload.transaction_id ||
-            payload.ref_id ||
+        // TrueMoney Money-Out V1.2 sends unique_transid for idempotency and empty transaction_id for Fee events
+        const rawUniqueTransId = payload.unique_transid != null ? String(payload.unique_transid).trim() : "";
+        const rawTransactionId = payload.transaction_id ? String(payload.transaction_id).trim() : "";
+        const rawRefId = payload.ref_id ? String(payload.ref_id).trim() : "";
+
+        const transactionId = rawUniqueTransId ||
+            rawTransactionId ||
+            rawRefId ||
             createWebhookFallbackId(payload);
 
         // Amount/Fee is in Satang (Integer), convert to Baht (Float)
@@ -437,8 +445,12 @@ router.all("/:prefix", webhookRateLimit, async (req: Request, res: Response) => 
         });
 
         // Check if transaction already exists (idempotency)
-        const existingTx = await prisma.financialTransaction.findUnique({
-            where: { transactionId: String(transactionId) }
+        const checkIds = [String(transactionId)];
+        if (rawUniqueTransId && rawUniqueTransId !== transactionId) checkIds.push(rawUniqueTransId);
+        if (rawTransactionId && rawTransactionId !== transactionId) checkIds.push(rawTransactionId);
+
+        const existingTx = await prisma.financialTransaction.findFirst({
+            where: { transactionId: { in: checkIds } }
         });
 
         if (existingTx) {

@@ -206,6 +206,9 @@ router.use("/packages", packagesRouter);
 import paymentsRouter from "./payments";
 router.use("/payments", paymentsRouter);
 
+import tuningRouter from "./tuning";
+router.use("/tuning", tuningRouter);
+
 // Dashboard stats
 router.get("/stats", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     try {

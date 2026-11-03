@@ -722,7 +722,7 @@ export default function HistoryPage() {
                                                 <td style={{ maxWidth: 260 }}>
                                                     {isEntryFee ? (
                                                         <div style={{ color: "var(--theme-text-secondary)", fontSize: 12.5 }}>
-                                                            หักค่าธรรมเนียมการโอนเงิน/ระบบ TrueMoney
+                                                            {entry.sender?.includes("ปรับจูน") ? "หักค่าธรรมเนียมการโอนเงิน/ระบบ TrueMoney (ปรับจูนยอดยกมา)" : "หักค่าธรรมเนียมการโอนเงิน/ระบบ TrueMoney"}
                                                         </div>
                                                     ) : entry.type === 'transaction' ? (
                                                         <div>

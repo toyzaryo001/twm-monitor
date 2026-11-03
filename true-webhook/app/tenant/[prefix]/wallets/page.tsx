@@ -11,12 +11,22 @@ interface Account {
     phoneNumber?: string;
     isActive: boolean;
     walletEndpointUrl: string;
+    walletBearerToken?: string;
     stats?: {
         totalFee: number;
         firstActiveAt: string | null;
     };
     webhookSecret?: string | null;
     webhookSecretConfigured?: boolean;
+}
+
+function maskSecretKey(value?: string | null): string {
+    if (!value) return "";
+    const clean = value.trim();
+    if (clean.length <= 8) {
+        return clean.length >= 4 ? `${clean.slice(0, 2)}****${clean.slice(-2)}` : "********";
+    }
+    return `${clean.slice(0, 4)}**********${clean.slice(-4)}`;
 }
 
 interface BalanceData {
@@ -64,6 +74,12 @@ export default function WalletsPage() {
     const [showModal, setShowModal] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [form, setForm] = useState(createEmptyWalletForm);
+    const [showFullBearer, setShowFullBearer] = useState(false);
+    const [showFullSecret, setShowFullSecret] = useState(false);
+    const [editingBearerField, setEditingBearerField] = useState(false);
+    const [editingSecretField, setEditingSecretField] = useState(false);
+    const [originalBearerToken, setOriginalBearerToken] = useState("");
+    const [originalWebhookSecret, setOriginalWebhookSecret] = useState("");
 
     const getToken = () => localStorage.getItem("tenantToken") || "";
 
@@ -247,10 +263,29 @@ export default function WalletsPage() {
         const url = editingId ? `/api/tenant/${prefix}/accounts/${editingId}` : `/api/tenant/${prefix}/accounts`;
         const method = editingId ? "PUT" : "POST";
 
-        // Prepare payload, remove empty token if editing
-        const payload: any = { ...form, walletEndpointUrl: TRUE_MONEY_BALANCE_ENDPOINT };
-        if (editingId && !payload.walletBearerToken) {
-            delete payload.walletBearerToken;
+        // Prepare payload
+        const payload: any = {
+            name: form.name.trim(),
+            phoneNumber: form.phoneNumber.trim(),
+            walletEndpointUrl: TRUE_MONEY_BALANCE_ENDPOINT
+        };
+
+        if (!editingId) {
+            payload.walletBearerToken = form.walletBearerToken.trim();
+            if (form.webhookSecret.trim()) {
+                payload.webhookSecret = form.webhookSecret.trim();
+            }
+        } else {
+            // Only send new token if explicitly changed and not containing mask asterisks
+            if (editingBearerField && form.walletBearerToken.trim() && !form.walletBearerToken.includes("**********")) {
+                payload.walletBearerToken = form.walletBearerToken.trim();
+            }
+            if (editingSecretField) {
+                const cleanSecret = form.webhookSecret.trim();
+                if (!cleanSecret.includes("**********")) {
+                    payload.webhookSecret = cleanSecret || null;
+                }
+            }
         }
 
         try {
@@ -278,15 +313,46 @@ export default function WalletsPage() {
     };
 
     const handleEdit = (account: Account) => {
+        const bearer = account.walletBearerToken || "";
+        const secret = account.webhookSecret || "";
         setForm({
             name: account.name,
             phoneNumber: account.phoneNumber || "",
             walletEndpointUrl: TRUE_MONEY_BALANCE_ENDPOINT,
-            walletBearerToken: "", // Leave blank to keep existing
-            webhookSecret: account.webhookSecret || "",
+            walletBearerToken: bearer,
+            webhookSecret: secret,
         });
+        setOriginalBearerToken(bearer);
+        setOriginalWebhookSecret(secret);
+        setShowFullBearer(false);
+        setShowFullSecret(false);
+        setEditingBearerField(!bearer);
+        setEditingSecretField(!secret);
         setEditingId(account.id);
         setShowModal(true);
+    };
+
+    const handleOpenAddModal = () => {
+        setForm(createEmptyWalletForm());
+        setOriginalBearerToken("");
+        setOriginalWebhookSecret("");
+        setShowFullBearer(false);
+        setShowFullSecret(false);
+        setEditingBearerField(true);
+        setEditingSecretField(true);
+        setEditingId(null);
+        setShowModal(true);
+    };
+
+    const generateRandomSecret = () => {
+        const chars = "0123456789abcdef";
+        let result = "";
+        for (let i = 0; i < 32; i++) {
+            result += chars[Math.floor(Math.random() * chars.length)];
+        }
+        setForm(prev => ({ ...prev, webhookSecret: result }));
+        setEditingSecretField(true);
+        showToast({ type: "success", title: "สร้าง Key สุ่มแล้ว", message: "วาง Key นี้ในหน้าแจ้งเตือนของ TrueMoney" });
     };
 
     const handleToggle = async (account: Account) => {
@@ -425,11 +491,7 @@ export default function WalletsPage() {
         <div>
             <div className="tenant-page-header">
                 <h1 className="tenant-page-title">จัดการวอลเล็ท</h1>
-                <button className="tenant-btn tenant-btn-primary" onClick={() => {
-                    setForm(createEmptyWalletForm());
-                    setEditingId(null);
-                    setShowModal(true);
-                }}>
+                <button className="tenant-btn tenant-btn-primary" onClick={handleOpenAddModal}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 8 }}><path d="M12 5v14m-7-7h14"/></svg>
                     เพิ่มวอลเล็ท
                 </button>
@@ -444,11 +506,7 @@ export default function WalletsPage() {
                     <div style={{ color: 'var(--theme-text-muted)', marginBottom: 24 }}>เพิ่มวอลเล็ทแรกเพื่อเริ่มต้นใช้งานระบบ</div>
                     <button
                         className="tenant-btn tenant-btn-primary"
-                        onClick={() => {
-                            setForm(createEmptyWalletForm());
-                            setEditingId(null);
-                            setShowModal(true);
-                        }}
+                        onClick={handleOpenAddModal}
                     >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 8 }}><path d="M12 5v14m-7-7h14"/></svg>
                         เพิ่มวอลเล็ทแรก
@@ -565,116 +623,329 @@ export default function WalletsPage() {
                 </div>
             )}
 
-            {/* Add Wallet Modal */}
+            {/* Add / Edit Wallet Modal (Modern & User Friendly) */}
             {showModal && (
                 <div
                     style={{
                         position: "fixed",
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: "rgba(0,0,0,0.6)",
-                        backdropFilter: "blur(4px)",
+                        inset: 0,
+                        background: "rgba(0, 0, 0, 0.75)",
+                        backdropFilter: "blur(8px)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         zIndex: 1000,
-                        padding: 20
+                        padding: 16
                     }}
                     onClick={() => setShowModal(false)}
                 >
                     <div
                         className="tenant-card"
-                        style={{ maxWidth: 560, width: "100%", maxHeight: "90vh", overflowY: "auto" }}
+                        style={{
+                            maxWidth: 620,
+                            width: "100%",
+                            maxHeight: "92vh",
+                            overflowY: "auto",
+                            borderRadius: 16,
+                            border: "1px solid rgba(255, 255, 255, 0.12)",
+                            boxShadow: "0 20px 40px rgba(0, 0, 0, 0.5)",
+                            padding: 28,
+                            position: "relative"
+                        }}
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <div style={{ fontSize: "1.25rem", fontWeight: 600, color: "var(--theme-text-primary)", marginBottom: 24 }}>
-                            {editingId ? "แก้ไขวอลเล็ท" : "เพิ่มวอลเล็ท TrueWallet"}
+                        {/* Modal Header */}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+                            <div>
+                                <div style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--theme-text-primary)", display: "flex", alignItems: "center", gap: 10 }}>
+                                    <span style={{ fontSize: "1.3rem" }}>{editingId ? "⚙️" : "✨"}</span>
+                                    {editingId ? "แก้ไขข้อมูลวอลเล็ท" : "เพิ่มวอลเล็ท TrueMoney"}
+                                </div>
+                                <div style={{ fontSize: "0.85rem", color: "var(--theme-text-muted)", marginTop: 4 }}>
+                                    {editingId ? "แก้ไขและตรวจสอบคีย์เชื่อมต่อของวอลเล็ทนี้" : "เชื่อมต่อบัญชี TrueMoney เพื่อรับ Webhook และเช็คยอดคงเหลือ"}
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowModal(false)}
+                                style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    color: "var(--theme-text-muted)",
+                                    fontSize: "1.2rem",
+                                    cursor: "pointer",
+                                    padding: "4px 8px",
+                                    borderRadius: 6
+                                }}
+                                title="ปิดหน้าต่าง"
+                            >
+                                ✕
+                            </button>
                         </div>
 
                         <form onSubmit={handleSubmit}>
-                            <div className="tenant-form-group">
-                                <label className="tenant-form-label">ชื่อวอลเล็ท</label>
-                                <input
-                                    type="text"
-                                    className="tenant-form-input"
-                                    value={form.name}
-                                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                                    placeholder="เช่น บัญชีหลัก"
-                                    required
-                                />
-                            </div>
-
-                            <div className="tenant-form-group">
-                                <label className="tenant-form-label">เบอร์โทรศัพท์</label>
-                                <input
-                                    type="text"
-                                    className="tenant-form-input"
-                                    value={form.phoneNumber}
-                                    onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
-                                    placeholder="08x-xxx-xxxx"
-                                />
-                            </div>
-
-                            <div className="tenant-form-group">
-                                <label className="tenant-form-label">Wallet API Endpoint (เช็คยอดเงิน)</label>
-                                <div className="webhook-code-row">
-                                    <code>{TRUE_MONEY_BALANCE_ENDPOINT}</code>
+                            {/* Section 1: ข้อมูลพื้นฐาน */}
+                            <div style={{ marginBottom: 20 }}>
+                                <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--theme-text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+                                    <span>📱</span> ข้อมูลบัญชีวอลเล็ท
                                 </div>
-                                <div style={{ fontSize: "0.85rem", color: "var(--theme-text-muted)", marginTop: 6 }}>
-                                    ระบบใช้ URL นี้เช็คยอดเงินอัตโนมัติทุกวอลเล็ท ไม่ต้องกรอกหรือแก้ไขเอง
-                                </div>
-                            </div>
-
-                            <div className="tenant-form-group">
-                                <label className="tenant-form-label">Balance Bearer Token</label>
-                                <input
-                                    type="text"
-                                    className="tenant-form-input"
-                                    value={form.walletBearerToken}
-                                    onChange={(e) => setForm({ ...form, walletBearerToken: e.target.value })}
-                                    placeholder="API Token"
-                                    required={!editingId}
-                                />
-                                <div style={{ fontSize: "0.85rem", color: "var(--theme-text-muted)", marginTop: 6 }}>
-                                    Token สำหรับเช็คยอดเงินเท่านั้น ไม่ใช่ Header Key จากหน้าแจ้งหักค่าธรรมเนียม
-                                    {editingId ? " เว้นว่างไว้ถ้าไม่ต้องการเปลี่ยน token เช็คยอด" : ""}
-                                </div>
-                            </div>
-
-                            <div className="tenant-form-group">
-                                <label className="tenant-form-label">Webhook Header Key (Authorization)</label>
-                                <input
-                                    type="text"
-                                    className="tenant-form-input"
-                                    value={form.webhookSecret}
-                                    onChange={(e) => setForm({ ...form, webhookSecret: e.target.value })}
-                                    placeholder="วาง Key จากหน้าแจ้งหักค่าธรรมเนียม"
-                                />
-                                <div style={{ fontSize: "0.85rem", color: "var(--theme-text-muted)", marginTop: 6 }}>
-                                    Key นี้ใช้ตรวจ header <code>Authorization</code> และใช้แยกวอลเล็ทได้โดยไม่ต้องใส่เบอร์ใน Endpoint URL
-                                    หากเว้นว่าง ระบบจะใช้เบอร์ใน URL เพื่อแยกวอลเล็ทแทน
-                                </div>
-                            </div>
-
-                            <div style={{ background: "var(--theme-surface-hover)", padding: 16, borderRadius: 8, border: "1px solid var(--theme-border-subtle)", marginTop: 24 }}>
-                                <div style={{ marginBottom: 16 }}>
-                                    <div style={{ fontWeight: 600, color: "var(--theme-text-primary)", marginBottom: 4 }}>ลิงก์รับแจ้งถอน / ค่าธรรมเนียม</div>
-                                    <div style={{ fontSize: "0.85rem", color: "var(--theme-text-muted)" }}>
-                                        ใช้ข้อมูลชุดนี้ในหน้าแจ้งหักค่าธรรมเนียมของแอพ
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                                    <div className="tenant-form-group" style={{ marginBottom: 0 }}>
+                                        <label className="tenant-form-label">ชื่อวอลเล็ท <span style={{ color: "var(--theme-danger, #ef4444)" }}>*</span></label>
+                                        <input
+                                            type="text"
+                                            className="tenant-form-input"
+                                            value={form.name}
+                                            onChange={(e) => setForm({ ...form, name: e.target.value })}
+                                            placeholder="เช่น บัญชีรับโอน 1"
+                                            required
+                                        />
                                     </div>
-                                    <div style={{ marginTop: 8 }}>
-                                        <span className={`badge ${(form.webhookSecret.trim() || form.phoneNumber.trim()) ? "badge-success" : "badge-neutral"}`}>
-                                            {form.webhookSecret.trim() ? "ใช้ Header Key แยกวอลเล็ท" : form.phoneNumber.trim() ? "ใช้เบอร์ใน URL" : "ใส่ Key หรือเบอร์ก่อน"}
-                                        </span>
+                                    <div className="tenant-form-group" style={{ marginBottom: 0 }}>
+                                        <label className="tenant-form-label">เบอร์โทรศัพท์ TrueMoney</label>
+                                        <input
+                                            type="text"
+                                            className="tenant-form-input"
+                                            value={form.phoneNumber}
+                                            onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
+                                            placeholder="08x-xxx-xxxx"
+                                        />
                                     </div>
                                 </div>
+                            </div>
 
-                                <div className="tenant-form-group">
-                                    <label className="tenant-form-label">Endpoint URL</label>
+                            {/* Section 2: คีย์เชื่อมต่อ (Masked 4 ตัวหน้า-หลัง) */}
+                            <div style={{ marginBottom: 20, borderTop: "1px solid var(--theme-border-subtle)", paddingTop: 18 }}>
+                                <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--theme-text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+                                    <span>🔐</span> คีย์เชื่อมต่อระบบ (API Credentials)
+                                </div>
+
+                                {/* Balance Bearer Token */}
+                                <div className="tenant-form-group" style={{ marginBottom: 16 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                                        <label className="tenant-form-label" style={{ marginBottom: 0 }}>
+                                            Balance Bearer Token <span style={{ fontSize: "0.75rem", color: "var(--theme-text-muted)", fontWeight: 400 }}>(สำหรับเช็คยอดเงิน)</span>
+                                        </label>
+                                        {originalBearerToken && !editingBearerField && (
+                                            <span className="badge badge-success" style={{ fontSize: "10px", padding: "2px 6px" }}>
+                                                ผูกคีย์ไว้แล้ว
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {originalBearerToken && !editingBearerField ? (
+                                        <div style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            background: "rgba(255, 255, 255, 0.04)",
+                                            border: "1px solid var(--theme-border-subtle)",
+                                            borderRadius: 8,
+                                            padding: "6px 10px",
+                                            gap: 8
+                                        }}>
+                                            <code style={{
+                                                flex: 1,
+                                                fontFamily: "ui-monospace, monospace",
+                                                fontSize: "0.95rem",
+                                                color: "var(--theme-text-primary)",
+                                                letterSpacing: "0.5px"
+                                            }}>
+                                                {showFullBearer ? form.walletBearerToken : maskSecretKey(form.walletBearerToken)}
+                                            </code>
+                                            <button
+                                                type="button"
+                                                className="tenant-btn tenant-btn-secondary tenant-btn-sm"
+                                                onClick={() => setShowFullBearer(!showFullBearer)}
+                                                title={showFullBearer ? "ซ่อนคีย์" : "แสดงคีย์เต็ม"}
+                                                style={{ padding: "4px 8px", fontSize: "11px" }}
+                                            >
+                                                {showFullBearer ? "ซ่อน" : "👁️ แสดง"}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="tenant-btn tenant-btn-secondary tenant-btn-sm"
+                                                onClick={() => copyText(form.walletBearerToken, "Bearer Token")}
+                                                title="คัดลอก Token เต็ม"
+                                                style={{ padding: "4px 8px", fontSize: "11px" }}
+                                            >
+                                                📋 คัดลอก
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="tenant-btn tenant-btn-secondary tenant-btn-sm"
+                                                onClick={() => {
+                                                    setEditingBearerField(true);
+                                                    setForm(prev => ({ ...prev, walletBearerToken: "" }));
+                                                }}
+                                                title="ใส่ Token ใหม่"
+                                                style={{ padding: "4px 8px", fontSize: "11px" }}
+                                            >
+                                                ✏️ เปลี่ยน
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div style={{ display: "flex", gap: 8 }}>
+                                            <input
+                                                type="text"
+                                                className="tenant-form-input"
+                                                value={form.walletBearerToken}
+                                                onChange={(e) => setForm({ ...form, walletBearerToken: e.target.value })}
+                                                placeholder={editingId ? "วาง Token ใหม่ที่นี่" : "วาง Bearer Token สำหรับเช็คยอดเงิน"}
+                                                required={!editingId}
+                                                style={{ fontFamily: "monospace", fontSize: "0.95rem" }}
+                                            />
+                                            {editingId && originalBearerToken && (
+                                                <button
+                                                    type="button"
+                                                    className="tenant-btn tenant-btn-secondary tenant-btn-sm"
+                                                    onClick={() => {
+                                                        setEditingBearerField(false);
+                                                        setForm(prev => ({ ...prev, walletBearerToken: originalBearerToken }));
+                                                    }}
+                                                    title="ยกเลิกการเปลี่ยน ใช้คีย์เดิม"
+                                                >
+                                                    ยกเลิก
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                    <div style={{ fontSize: "0.78rem", color: "var(--theme-text-muted)", marginTop: 4 }}>
+                                        * คีย์นี้ใช้เช็คยอดคงเหลืออัตโนมัติ (แสดง 4 ตัวหน้า-หลัง ปลอดภัยในการใช้งาน)
+                                    </div>
+                                </div>
+
+                                {/* Webhook Header Key (Authorization) */}
+                                <div className="tenant-form-group" style={{ marginBottom: 0 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                                        <label className="tenant-form-label" style={{ marginBottom: 0 }}>
+                                            Webhook Header Key <span style={{ fontSize: "0.75rem", color: "var(--theme-text-muted)", fontWeight: 400 }}>(Authorization Secret)</span>
+                                        </label>
+                                        {originalWebhookSecret && !editingSecretField && (
+                                            <span className="badge badge-success" style={{ fontSize: "10px", padding: "2px 6px" }}>
+                                                ผูกคีย์ไว้แล้ว
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {originalWebhookSecret && !editingSecretField ? (
+                                        <div style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            background: "rgba(255, 255, 255, 0.04)",
+                                            border: "1px solid var(--theme-border-subtle)",
+                                            borderRadius: 8,
+                                            padding: "6px 10px",
+                                            gap: 8
+                                        }}>
+                                            <code style={{
+                                                flex: 1,
+                                                fontFamily: "ui-monospace, monospace",
+                                                fontSize: "0.95rem",
+                                                color: "var(--theme-text-primary)",
+                                                letterSpacing: "0.5px"
+                                            }}>
+                                                {showFullSecret ? form.webhookSecret : maskSecretKey(form.webhookSecret)}
+                                            </code>
+                                            <button
+                                                type="button"
+                                                className="tenant-btn tenant-btn-secondary tenant-btn-sm"
+                                                onClick={() => setShowFullSecret(!showFullSecret)}
+                                                title={showFullSecret ? "ซ่อนคีย์" : "แสดงคีย์เต็ม"}
+                                                style={{ padding: "4px 8px", fontSize: "11px" }}
+                                            >
+                                                {showFullSecret ? "ซ่อน" : "👁️ แสดง"}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="tenant-btn tenant-btn-secondary tenant-btn-sm"
+                                                onClick={() => copyText(form.webhookSecret, "Webhook Header Key")}
+                                                title="คัดลอก Key เต็ม"
+                                                style={{ padding: "4px 8px", fontSize: "11px" }}
+                                            >
+                                                📋 คัดลอก
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="tenant-btn tenant-btn-secondary tenant-btn-sm"
+                                                onClick={() => {
+                                                    setEditingSecretField(true);
+                                                    setForm(prev => ({ ...prev, webhookSecret: "" }));
+                                                }}
+                                                title="ใส่ Key ใหม่"
+                                                style={{ padding: "4px 8px", fontSize: "11px" }}
+                                            >
+                                                ✏️ เปลี่ยน
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div style={{ display: "flex", gap: 8 }}>
+                                            <input
+                                                type="text"
+                                                className="tenant-form-input"
+                                                value={form.webhookSecret}
+                                                onChange={(e) => setForm({ ...form, webhookSecret: e.target.value })}
+                                                placeholder="วาง Webhook Header Key จากหน้าแจ้งเตือน"
+                                                style={{ fontFamily: "monospace", fontSize: "0.95rem" }}
+                                            />
+                                            <button
+                                                type="button"
+                                                className="tenant-btn tenant-btn-secondary tenant-btn-sm"
+                                                onClick={generateRandomSecret}
+                                                title="สร้าง Key สุ่ม 32 ตัวอักษร"
+                                                style={{ whiteSpace: "nowrap" }}
+                                            >
+                                                ⚡ สร้างสุ่ม
+                                            </button>
+                                            {editingId && originalWebhookSecret && (
+                                                <button
+                                                    type="button"
+                                                    className="tenant-btn tenant-btn-secondary tenant-btn-sm"
+                                                    onClick={() => {
+                                                        setEditingSecretField(false);
+                                                        setForm(prev => ({ ...prev, webhookSecret: originalWebhookSecret }));
+                                                    }}
+                                                    title="ใช้คีย์เดิม"
+                                                >
+                                                    ยกเลิก
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                    <div style={{ fontSize: "0.78rem", color: "var(--theme-text-muted)", marginTop: 4 }}>
+                                        * คีย์นี้ใช้ตรวจ Authorization ใน Webhook และแยกวอลเล็ทอัตโนมัติ
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Section 3: ข้อมูลสำหรับนำไปผูกในหน้าแจ้งเตือนของแอป TrueMoney */}
+                            <div style={{
+                                background: "rgba(255, 255, 255, 0.025)",
+                                padding: 16,
+                                borderRadius: 10,
+                                border: "1px solid var(--theme-border-subtle)",
+                                marginBottom: 24
+                            }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                                    <div>
+                                        <div style={{ fontWeight: 600, color: "var(--theme-text-primary)", fontSize: "0.92rem", display: "flex", alignItems: "center", gap: 6 }}>
+                                            <span>🚀</span> ลิงก์สำหรับผูก Webhook ในแอป TrueMoney
+                                        </div>
+                                        <div style={{ fontSize: "0.8rem", color: "var(--theme-text-muted)", marginTop: 2 }}>
+                                            นำข้อมูล 3 ช่องนี้ไปกรอกในหน้าตั้งค่าแจ้งเตือน / หักค่าธรรมเนียมของแอป
+                                        </div>
+                                    </div>
+                                    <span className={`badge ${(form.webhookSecret.trim() || form.phoneNumber.trim()) ? "badge-success" : "badge-neutral"}`} style={{ fontSize: "11px" }}>
+                                        {form.webhookSecret.trim() ? "พร้อมใช้งาน (ใช้ Key)" : form.phoneNumber.trim() ? "พร้อมใช้งาน (ใช้เบอร์)" : "ใส่ Key หรือเบอร์ก่อน"}
+                                    </span>
+                                </div>
+
+                                {/* Endpoint URL */}
+                                <div className="tenant-form-group" style={{ marginBottom: 12 }}>
+                                    <label className="tenant-form-label" style={{ fontSize: "0.8rem" }}>1. Endpoint URL</label>
                                     <div className="webhook-code-row">
-                                        <code>{getWebhookUrl(form.phoneNumber, form.webhookSecret)}</code>
+                                        <code style={{ fontSize: "0.85rem", overflowX: "auto" }}>
+                                            {getWebhookUrl(form.phoneNumber, form.webhookSecret)}
+                                        </code>
                                         <button
                                             type="button"
                                             className="tenant-btn tenant-btn-secondary tenant-btn-sm"
@@ -686,13 +957,14 @@ export default function WalletsPage() {
                                     </div>
                                 </div>
 
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                                {/* Header Name & Header Key */}
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: 12 }}>
                                     <div className="tenant-form-group" style={{ marginBottom: 0 }}>
-                                        <label className="tenant-form-label">Header Name</label>
+                                        <label className="tenant-form-label" style={{ fontSize: "0.8rem" }}>2. Header Name</label>
                                         <div className="webhook-code-row">
                                             <code>Authorization</code>
-                                            <button 
-                                                type="button" 
+                                            <button
+                                                type="button"
                                                 className="tenant-btn tenant-btn-secondary tenant-btn-sm"
                                                 onClick={() => copyText("Authorization", "Header Name")}
                                             >
@@ -701,23 +973,27 @@ export default function WalletsPage() {
                                         </div>
                                     </div>
                                     <div className="tenant-form-group" style={{ marginBottom: 0 }}>
-                                        <label className="tenant-form-label">Header Key</label>
+                                        <label className="tenant-form-label" style={{ fontSize: "0.8rem" }}>3. Header Key</label>
                                         <div className="webhook-code-row">
-                                            <code>{form.webhookSecret.trim() || "วาง Key ด้านบนก่อน"}</code>
+                                            <code style={{ fontFamily: "monospace", fontSize: "0.85rem" }}>
+                                                {form.webhookSecret.trim() ? maskSecretKey(form.webhookSecret) : "วาง Key ด้านบนก่อน"}
+                                            </code>
                                             <button
                                                 type="button"
                                                 className="tenant-btn tenant-btn-secondary tenant-btn-sm"
                                                 disabled={!form.webhookSecret.trim()}
-                                                onClick={() => copyText(form.webhookSecret.trim(), "Header Key")}
+                                                onClick={() => copyText(form.webhookSecret.trim(), "Header Key (Full)")}
+                                                title="คัดลอกคีย์เต็มเพื่อนำไปวางในแอป"
                                             >
-                                                คัดลอก
+                                                คัดลอก Key
                                             </button>
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
+                            {/* Modal Action Buttons */}
+                            <div style={{ display: "flex", gap: 12 }}>
                                 <button
                                     type="button"
                                     className="tenant-btn tenant-btn-secondary"
@@ -727,7 +1003,7 @@ export default function WalletsPage() {
                                     ยกเลิก
                                 </button>
                                 <button type="submit" className="tenant-btn tenant-btn-primary" style={{ flex: 1 }}>
-                                    {editingId ? "บันทึก" : "เพิ่มวอลเล็ท"}
+                                    {editingId ? "บันทึกการเปลี่ยนแปลง" : "เพิ่มวอลเล็ท"}
                                 </button>
                             </div>
                         </form>
