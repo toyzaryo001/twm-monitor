@@ -58,6 +58,8 @@ model Network {
   accounts    Account[]
   announcementNetworks AnnouncementNetwork[]
   paymentRequests      PaymentRequest[]
+  slipVerifications    SlipVerification[]
+  apiKeys              NetworkApiKey[]
   
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -106,6 +108,7 @@ model Account {
   balanceSnapshots           BalanceSnapshot[]
   notificationLogs           NotificationLog[]
   transactions               FinancialTransaction[]
+  slipVerifications          SlipVerification[]
   
   createdAt                  DateTime         @default(now())
   updatedAt                  DateTime         @updatedAt
@@ -301,3 +304,54 @@ model PaymentRequest {
   @@index([status])
 }
 
+
+
+// ========== SLIP VERIFICATION & ANTI-FRAUD ==========
+
+model SlipVerification {
+  id              String   @id @default(cuid())
+  transactionId   String?  // TrueMoney 14-digit Transaction ID
+  accountId       String   // Account receiving payment
+  networkId       String   // Network ID
+  
+  amount          Float    // Amount in THB (e.g. 150.00)
+  amountSatang    Int      // Amount in Satang (e.g. 15000)
+  receiverMobile  String   // Receiver mobile (10 digits or 000000+4 digits)
+  senderMobile    String?  // Sender mobile (optional)
+  transactionDate String   // Transaction date yyyy-mm-dd HH:mm
+  
+  status          String   // 'VALID', 'INVALID', 'DUPLICATE', 'EXPIRED'
+  resultMessage   String?  // Diagnostic message
+  rawResponse     Json?    // Raw TrueMoney API response
+  
+  slipImageUrl    String?  // URL of slip image if uploaded
+  qrPayload       String?  // Decoded QR data
+  
+  isRedeemed      Boolean  @default(false)
+  redeemedAt      DateTime?
+  
+  linkedTxId      String?  // Link to FinancialTransaction if matched
+  verifiedBy      String?  // Admin or 'API_CLIENT'
+  verifiedAt      DateTime @default(now())
+  
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  network         Network  @relation(fields: [networkId], references: [id], onDelete: Cascade)
+
+  @@index([networkId, accountId])
+  @@index([transactionId])
+  @@index([receiverMobile, amountSatang, transactionDate])
+}
+
+model NetworkApiKey {
+  id          String   @id @default(cuid())
+  networkId   String
+  name        String   // e.g. 'Merchant Auto-Topup API'
+  key         String   @unique // 'twm_live_...'
+  isActive    Boolean  @default(true)
+  webhookUrl  String?  // Outgoing webhook URL
+  webhookKey  String?  // HMAC-SHA256 signature key
+  createdAt   DateTime @default(now())
+  
+  network     Network  @relation(fields: [networkId], references: [id], onDelete: Cascade)
+  @@index([networkId])
+}

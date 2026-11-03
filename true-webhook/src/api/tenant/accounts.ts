@@ -73,6 +73,8 @@ function saveLocalJga88State() {
 function withLocalStats(account: any) {
     return {
         ...account,
+        walletBearerTokenConfigured: Boolean(account.walletBearerToken),
+        webhookSecretConfigured: Boolean(account.webhookSecret),
         stats: account.stats || {
             totalFee: 0,
             firstActiveAt: null,
@@ -291,6 +293,7 @@ router.get("/", async (req: Request<{ prefix: string }>, res: Response, next: Ne
         const canManageSecrets = req.user?.role === "MASTER" || req.user?.role === "NETWORK_ADMIN";
         const responseAccounts = accountsWithStats.map(account => ({
             ...account,
+            walletBearerTokenConfigured: Boolean(account.walletBearerToken),
             webhookSecretConfigured: Boolean(account.webhookSecret),
             walletBearerToken: canManageSecrets ? account.walletBearerToken : "",
             webhookSecret: canManageSecrets ? account.webhookSecret : null,

@@ -209,6 +209,9 @@ router.use("/payments", paymentsRouter);
 import tuningRouter from "./tuning";
 router.use("/tuning", tuningRouter);
 
+import slipsRouter from "./slips";
+router.use("/slips", slipsRouter);
+
 // Dashboard stats
 router.get("/stats", async (req: Request<{ prefix: string }>, res: Response, next: NextFunction) => {
     try {

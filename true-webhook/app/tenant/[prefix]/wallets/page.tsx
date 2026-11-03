@@ -12,6 +12,7 @@ interface Account {
     isActive: boolean;
     walletEndpointUrl: string;
     walletBearerToken?: string;
+    walletBearerTokenConfigured?: boolean;
     stats?: {
         totalFee: number;
         firstActiveAt: string | null;
@@ -500,113 +501,194 @@ export default function WalletsPage() {
                     </button>
                 </div>
             ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: "20px" }}>
-                    {accounts.map((account) => (
-                        <div key={account.id} className="tenant-card" style={{ display: "flex", flexDirection: "column" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-                                <div>
-                                    <div style={{ fontWeight: 600, color: "var(--theme-text-primary)", fontSize: "1.1rem" }}>{account.name}</div>
-                                    <div style={{ color: "var(--theme-text-muted)", fontSize: "0.9rem", marginTop: 4 }}>{account.phoneNumber || "ไม่ระบุเบอร์"}</div>
-                                </div>
-                                <span className={`badge ${account.isActive ? "badge-success" : "badge-neutral"}`}>
-                                    {account.isActive ? "ใช้งาน" : "ปิดใช้งาน"}
-                                </span>
-                            </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: "16px" }}>
+                    {accounts.map((account) => {
+                        const hasBalance = Boolean(account.walletBearerToken || account.walletBearerTokenConfigured);
+                        const hasWebhook = Boolean(account.webhookSecretConfigured || account.webhookSecret);
+                        const hasSlip = Boolean(account.walletBearerToken || account.walletBearerTokenConfigured);
 
-                            <div style={{ padding: "16px 0", borderTop: "1px solid var(--theme-border-subtle)", borderBottom: "1px solid var(--theme-border-subtle)", marginBottom: 16 }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                                    <div style={{ color: "var(--theme-text-secondary)", fontSize: "0.9rem" }}>ยอดเงินคงเหลือ</div>
-                                    <button
-                                        type="button"
-                                        className="tenant-btn tenant-btn-secondary tenant-btn-sm"
-                                        onClick={() => handleCopyRoundedBalance(account)}
-                                        disabled={!balances[account.id]}
-                                        title={balances[account.id] ? `คัดลอก ${Math.round(balances[account.id]!.balance).toLocaleString("en-US")}` : "รอโหลดข้อมูลยอดเงิน"}
-                                        style={{ padding: "4px 8px", fontSize: "0.8rem" }}
-                                    >
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 4 }}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                                        คัดลอก
-                                    </button>
-                                </div>
-                                <div className="amount-positive" style={{ fontFamily: "monospace", fontSize: "2rem", fontWeight: 700, lineHeight: 1 }}>
-                                    {balances[account.id] ? `฿ ${balances[account.id]!.balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}` : "฿ ---.--"}
-                                </div>
-                                {balances[account.id] && (
-                                    <div style={{ fontSize: "0.8rem", color: "var(--theme-text-muted)", marginTop: 8 }}>
-                                        อัพเดทเมื่อ: {new Date(balances[account.id]!.checkedAt).toLocaleString("th-TH")}
+                        return (
+                            <div key={account.id} className="tenant-card" style={{ display: "flex", flexDirection: "column", padding: "16px 18px" }}>
+                                {/* Header: Name, Mobile, Status Badge */}
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                                    <div>
+                                        <div style={{ fontWeight: 600, color: "var(--theme-text-primary)", fontSize: "1.05rem", letterSpacing: "-0.01em" }}>{account.name}</div>
+                                        <div style={{ color: "var(--theme-text-muted)", fontSize: "0.85rem", marginTop: 2, fontFamily: "monospace" }}>{account.phoneNumber || "ไม่ระบุเบอร์"}</div>
                                     </div>
-                                )}
-                            </div>
-
-                            <div style={{ marginBottom: 20 }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                                    <span style={{ color: "var(--theme-text-secondary)", fontSize: "0.9rem" }}>ค่าธรรมเนียมสะสม</span>
-                                    <span className="amount-negative" style={{ fontFamily: "monospace", fontWeight: 600 }}>
-                                        ฿ {(account.stats?.totalFee || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                                    <span className={`badge ${account.isActive ? "badge-success" : "badge-neutral"}`} style={{ fontSize: "0.75rem", padding: "2px 8px" }}>
+                                        {account.isActive ? "ใช้งาน" : "ปิดใช้งาน"}
                                     </span>
                                 </div>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                    <span style={{ color: "var(--theme-text-secondary)", fontSize: "0.9rem" }}>เริ่มนับเมื่อ</span>
-                                    <span style={{ color: "var(--theme-text-muted)", fontSize: "0.9rem" }}>
-                                        {(account.stats?.totalFee || 0) > 0 && account.stats?.firstActiveAt
-                                            ? new Date(account.stats.firstActiveAt).toLocaleDateString("th-TH", { day: 'numeric', month: 'short', year: 'numeric' })
-                                            : "ไม่มีข้อมูล"
-                                        }
-                                    </span>
-                                </div>
-                            </div>
 
-                            <div style={{ display: "flex", gap: "8px", marginTop: "auto", flexWrap: "wrap" }}>
-                                <button
-                                    className="tenant-btn tenant-btn-primary tenant-btn-sm"
-                                    style={{ flex: 1, minWidth: "100px", justifyContent: "center" }}
-                                    onClick={() => handleCheckBalance(account.id)}
-                                    disabled={checkingId === account.id}
-                                >
-                                    {checkingId === account.id ? (
-                                        <span className="spinner" style={{ width: 14, height: 14, marginRight: 6 }}></span>
-                                    ) : (
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                                {/* Balance Box: Modern, Compact, 1.35rem, No Overflow */}
+                                <div style={{
+                                    padding: "12px 14px",
+                                    borderRadius: 10,
+                                    background: "rgba(255, 255, 255, 0.02)",
+                                    border: "1px solid var(--theme-border-subtle)",
+                                    marginBottom: 12
+                                }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                                        <div style={{ color: "var(--theme-text-secondary)", fontSize: "0.8rem", fontWeight: 500 }}>ยอดเงินคงเหลือ</div>
+                                        <button
+                                            type="button"
+                                            className="tenant-btn tenant-btn-secondary tenant-btn-sm"
+                                            onClick={() => handleCopyRoundedBalance(account)}
+                                            disabled={!balances[account.id]}
+                                            title={balances[account.id] ? `คัดลอก ${Math.round(balances[account.id]!.balance).toLocaleString("en-US")}` : "รอโหลดข้อมูลยอดเงิน"}
+                                            style={{ padding: "2px 8px", fontSize: "0.75rem", height: 26, gap: 4 }}
+                                        >
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                            คัดลอก
+                                        </button>
+                                    </div>
+                                    <div className="amount-positive" style={{ fontFamily: "monospace", fontSize: "1.35rem", fontWeight: 700, lineHeight: 1.2 }}>
+                                        {balances[account.id] ? `฿ ${balances[account.id]!.balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}` : "฿ ---.--"}
+                                    </div>
+                                    {balances[account.id] && (
+                                        <div style={{ fontSize: "0.72rem", color: "var(--theme-text-muted)", marginTop: 6 }}>
+                                            อัพเดทเมื่อ: {new Date(balances[account.id]!.checkedAt).toLocaleString("th-TH")}
+                                        </div>
                                     )}
-                                    เช็คยอด
-                                </button>
-                                {featureAutoWithdrawEnabled && (
+                                </div>
+
+                                {/* Enabled Capabilities Matrix (ฟังก์ชั่นที่เปิดใช้งาน) */}
+                                <div style={{ marginBottom: 12 }}>
+                                    <div style={{ fontSize: "0.72rem", fontWeight: 600, color: "var(--theme-text-muted)", marginBottom: 6, display: "flex", alignItems: "center", gap: 5 }}>
+                                        <span style={{ color: "#38bdf8", fontSize: "0.75rem" }}>⚡</span> ฟังก์ชั่นที่เปิดใช้งาน:
+                                    </div>
+                                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                                        <span style={{
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: 5,
+                                            fontSize: "0.72rem",
+                                            fontWeight: 500,
+                                            padding: "3px 8px",
+                                            borderRadius: 6,
+                                            background: hasBalance ? "rgba(16, 185, 129, 0.12)" : "rgba(255, 255, 255, 0.04)",
+                                            color: hasBalance ? "#34d399" : "var(--theme-text-muted)",
+                                            border: `1px solid ${hasBalance ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.06)"}`
+                                        }}>
+                                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: hasBalance ? "#10b981" : "#71717a" }} />
+                                            เช็คยอดเงิน
+                                        </span>
+                                        <span style={{
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: 5,
+                                            fontSize: "0.72rem",
+                                            fontWeight: 500,
+                                            padding: "3px 8px",
+                                            borderRadius: 6,
+                                            background: hasWebhook ? "rgba(16, 185, 129, 0.12)" : "rgba(255, 255, 255, 0.04)",
+                                            color: hasWebhook ? "#34d399" : "var(--theme-text-muted)",
+                                            border: `1px solid ${hasWebhook ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.06)"}`
+                                        }}>
+                                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: hasWebhook ? "#10b981" : "#71717a" }} />
+                                            บันทึกรายการถอน/ค่าธรรมเนียม
+                                        </span>
+                                        <span style={{
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: 5,
+                                            fontSize: "0.72rem",
+                                            fontWeight: 500,
+                                            padding: "3px 8px",
+                                            borderRadius: 6,
+                                            background: hasSlip ? "rgba(16, 185, 129, 0.12)" : "rgba(255, 255, 255, 0.04)",
+                                            color: hasSlip ? "#34d399" : "var(--theme-text-muted)",
+                                            border: `1px solid ${hasSlip ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.06)"}`
+                                        }}>
+                                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: hasSlip ? "#10b981" : "#71717a" }} />
+                                            เช็คสลิป
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Fee & Start Date Details */}
+                                <div style={{
+                                    marginBottom: 14,
+                                    padding: "8px 12px",
+                                    borderRadius: 8,
+                                    background: "rgba(255, 255, 255, 0.02)",
+                                    border: "1px solid var(--theme-border-subtle)",
+                                    fontSize: "0.8rem"
+                                }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                                        <span style={{ color: "var(--theme-text-secondary)", fontSize: "0.78rem" }}>ค่าธรรมเนียมสะสม</span>
+                                        <span className="amount-negative" style={{ fontFamily: "monospace", fontWeight: 600, fontSize: "0.85rem" }}>
+                                            ฿ {(account.stats?.totalFee || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                                        </span>
+                                    </div>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                        <span style={{ color: "var(--theme-text-muted)", fontSize: "0.75rem" }}>เริ่มนับเมื่อ</span>
+                                        <span style={{ color: "var(--theme-text-secondary)", fontSize: "0.75rem" }}>
+                                            {(account.stats?.totalFee || 0) > 0 && account.stats?.firstActiveAt
+                                                ? new Date(account.stats.firstActiveAt).toLocaleDateString("th-TH", { day: 'numeric', month: 'short', year: 'numeric' })
+                                                : "ไม่มีข้อมูล"
+                                            }
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Actions Toolbar */}
+                                <div style={{ display: "flex", gap: "6px", marginTop: "auto", flexWrap: "wrap" }}>
+                                    <button
+                                        className="tenant-btn tenant-btn-primary tenant-btn-sm"
+                                        style={{ flex: 1, minWidth: "90px", justifyContent: "center", height: 32, fontSize: "0.8rem" }}
+                                        onClick={() => handleCheckBalance(account.id)}
+                                        disabled={checkingId === account.id}
+                                    >
+                                        {checkingId === account.id ? (
+                                            <span className="spinner" style={{ width: 13, height: 13, marginRight: 6 }}></span>
+                                        ) : (
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                                        )}
+                                        เช็คยอด
+                                    </button>
+                                    {featureAutoWithdrawEnabled && (
+                                        <button
+                                            className="tenant-btn tenant-btn-secondary tenant-btn-sm"
+                                            onClick={() => handleOpenAutoWithdraw(account)}
+                                            title="ตั้งค่าโอนอัตโนมัติ"
+                                            style={{ height: 32, padding: "0 9px" }}
+                                        >
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                                        </button>
+                                    )}
                                     <button
                                         className="tenant-btn tenant-btn-secondary tenant-btn-sm"
-                                        onClick={() => handleOpenAutoWithdraw(account)}
-                                        title="ตั้งค่าโอนอัตโนมัติ"
+                                        onClick={() => handleToggle(account)}
+                                        title={account.isActive ? "ปิดใช้งาน" : "เปิดใช้งาน"}
+                                        style={{ height: 32, padding: "0 9px" }}
                                     >
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                                        {account.isActive ? (
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                                        ) : (
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                        )}
                                     </button>
-                                )}
-                                <button
-                                    className="tenant-btn tenant-btn-secondary tenant-btn-sm"
-                                    onClick={() => handleToggle(account)}
-                                    title={account.isActive ? "ปิดใช้งาน" : "เปิดใช้งาน"}
-                                >
-                                    {account.isActive ? (
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                                    ) : (
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                                    )}
-                                </button>
-                                <button
-                                    className="tenant-btn tenant-btn-secondary tenant-btn-sm"
-                                    onClick={() => handleEdit(account)}
-                                    title="แก้ไข"
-                                >
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                </button>
-                                <button
-                                    className="tenant-btn tenant-btn-danger tenant-btn-sm"
-                                    onClick={() => handleDelete(account.id)}
-                                    title="ลบ"
-                                >
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
-                                </button>
+                                    <button
+                                        className="tenant-btn tenant-btn-secondary tenant-btn-sm"
+                                        onClick={() => handleEdit(account)}
+                                        title="แก้ไข"
+                                        style={{ height: 32, padding: "0 9px" }}
+                                    >
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                    </button>
+                                    <button
+                                        className="tenant-btn tenant-btn-danger tenant-btn-sm"
+                                        onClick={() => handleDelete(account.id)}
+                                        title="ลบ"
+                                        style={{ height: 32, padding: "0 9px" }}
+                                    >
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 
