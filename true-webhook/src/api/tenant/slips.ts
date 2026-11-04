@@ -135,9 +135,47 @@ router.post("/verify", async (req: Request<{ prefix: string }>, res: Response, n
             sender_mobile: cleanSender || undefined,
         });
 
+        const rawErrMsg = (apiResult.error?.message || "").toLowerCase();
+        const isTxNotFound = rawErrMsg.includes("invalid 'transaction_id'") || rawErrMsg.includes("transaction_id invalid");
+        const isAmountMismatch = rawErrMsg.includes("invalid 'amount'") || rawErrMsg.includes("amount mismatch");
+        const isReceiverMismatch = rawErrMsg.includes("invalid 'receiver_mobile'") || rawErrMsg.includes("receiver mismatch") || rawErrMsg.includes("receiver_mobile_number");
+        const isDateMismatch = rawErrMsg.includes("invalid 'transaction_date'") || rawErrMsg.includes("date mismatch");
+
         if (!apiResult.ok) {
             // Explain specifically which part is fake or mismatched
             const failMessage = apiResult.error?.thaiExplanation || "ข้อมูลในสลิปไม่ตรงกับฐานข้อมูล TrueMoney (สลิปปลอม)";
+
+            const comparison = {
+                transactionId: {
+                    label: "เลขที่รายการ (Transaction ID)",
+                    slipValue: cleanTxId || "(ไม่ระบุ)",
+                    realValue: isTxNotFound ? "ไม่พบในระบบ TrueMoney" : (cleanTxId ? cleanTxId : "ตรวจตามยอดและเวลา"),
+                    status: isTxNotFound ? "MISMATCH" : "MATCH",
+                    detail: isTxNotFound ? "ไม่พบเลขนี้ในระบบ (สลิปปลอม)" : "พบข้อมูลในระบบ TrueMoney"
+                },
+                amount: {
+                    label: "ยอดเงินโอน (บาท)",
+                    slipValue: `฿ ${body.amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
+                    realValue: isAmountMismatch ? "ยอดเงินไม่ตรงกับสลิป" : `฿ ${body.amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
+                    status: isAmountMismatch ? "MISMATCH" : "MATCH",
+                    detail: isAmountMismatch ? "สลิปถูกตัดต่อหรือดัดแปลงตัวเลขยอดเงิน!" : "ยอดเงินตรงกับรายการโอนจริง"
+                },
+                receiver: {
+                    label: "บัญชีผู้รับเงิน",
+                    slipValue: `${targetAccount.name} (${cleanReceiver})`,
+                    realValue: isReceiverMismatch ? "โอนเข้าบัญชีอื่น ไม่ใช่บัญชีนี้" : `${targetAccount.name} (${cleanReceiver})`,
+                    status: isReceiverMismatch ? "MISMATCH" : "MATCH",
+                    detail: isReceiverMismatch ? "ไม่ได้โอนเข้าบัญชีนี้ (โอนเข้าเบอร์อื่น)" : "โอนเข้าบัญชีนี้ถูกต้อง"
+                },
+                date: {
+                    label: "วันเวลาทำรายการ",
+                    slipValue: normalizedDate,
+                    realValue: isDateMismatch ? "วันเวลาไม่ตรงกับรายการโอนจริง" : normalizedDate,
+                    status: isDateMismatch ? "MISMATCH" : "MATCH",
+                    detail: isDateMismatch ? "วันเวลาในสลิปถูกแก้ไขหรือดัดแปลง" : "ตรงกับเวลาที่ทำรายการจริง"
+                },
+                moneyInConfirmed: false,
+            };
 
             const logEntry = await (prisma as any).slipVerification.create({
                 data: {
@@ -163,6 +201,7 @@ router.post("/verify", async (req: Request<{ prefix: string }>, res: Response, n
                 status: "INVALID",
                 message: failMessage,
                 errorDetail: apiResult.error,
+                comparison,
                 data: logEntry,
             });
         }
@@ -181,6 +220,38 @@ router.post("/verify", async (req: Request<{ prefix: string }>, res: Response, n
         const successMessage = matchedTx
             ? "✅ สลิปจริง 100% (ผ่านการตรวจสอบจาก TrueMoney และพบยอดเงินเข้าจริงในบัญชี)"
             : "✅ สลิปจริง 100% (ผ่านการตรวจสอบความถูกต้องจาก TrueMoney)";
+
+        const comparison = {
+            transactionId: {
+                label: "เลขที่รายการ (Transaction ID)",
+                slipValue: cleanTxId || "(ไม่ระบุ)",
+                realValue: cleanTxId || "พบรายการในระบบ",
+                status: "MATCH",
+                detail: "เลขที่รายการมีอยู่จริงใน TrueMoney",
+            },
+            amount: {
+                label: "ยอดเงินโอน (บาท)",
+                slipValue: `฿ ${body.amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
+                realValue: `฿ ${body.amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
+                status: "MATCH",
+                detail: "ยอดเงินตรงกับรายการโอนจริง 100%",
+            },
+            receiver: {
+                label: "บัญชีผู้รับเงิน",
+                slipValue: `${targetAccount.name} (${cleanReceiver})`,
+                realValue: `${targetAccount.name} (${cleanReceiver})`,
+                status: "MATCH",
+                detail: "โอนเข้าบัญชีวอลเล็ทนี้ถูกต้อง",
+            },
+            date: {
+                label: "วันเวลาทำรายการ",
+                slipValue: normalizedDate,
+                realValue: normalizedDate,
+                status: "MATCH",
+                detail: "วันเวลาตรงกับรายการทำธุรกรรมจริง",
+            },
+            moneyInConfirmed: Boolean(matchedTx),
+        };
 
         // 4. Save Valid Slip to Database
         const savedSlip = await (prisma as any).slipVerification.create({
@@ -219,6 +290,7 @@ router.post("/verify", async (req: Request<{ prefix: string }>, res: Response, n
             ok: true,
             status: "VALID",
             message: successMessage,
+            comparison,
             data: savedSlip,
         });
     } catch (err: any) {

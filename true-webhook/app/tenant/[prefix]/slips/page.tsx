@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import jsQR from "jsqr";
 import { useToast } from "../../../components/Toast";
 
 interface AccountOption {
@@ -14,6 +15,22 @@ interface AccountOption {
     slipVerifyTokenConfigured?: boolean;
     walletBearerToken?: string;
     slipVerifyToken?: string;
+}
+
+interface ComparisonItem {
+    label: string;
+    slipValue: string;
+    realValue: string;
+    status: "MATCH" | "MISMATCH";
+    detail: string;
+}
+
+interface SlipComparison {
+    transactionId: ComparisonItem;
+    amount: ComparisonItem;
+    receiver: ComparisonItem;
+    date: ComparisonItem;
+    moneyInConfirmed?: boolean;
 }
 
 interface SlipRecord {
@@ -53,6 +70,66 @@ function getTodayDateTimeLocal(): string {
     return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
 
+// Smart Slip QR Parser (TrueMoney P2P & PromptPay EMVCo Standard)
+function parseSlipQrPayload(raw: string): {
+    transactionId?: string;
+    receiverMobile?: string;
+    amount?: number;
+} {
+    const result: {
+        transactionId?: string;
+        receiverMobile?: string;
+        amount?: number;
+    } = {};
+
+    if (!raw) return result;
+
+    // 1. Check for 14-digit TrueMoney Transaction ID (starting with 500)
+    const txMatch = raw.match(/500\d{11}/);
+    if (txMatch) {
+        result.transactionId = txMatch[0];
+    }
+
+    // 2. Check for Thai Mobile Number (06, 08, 09 followed by 8 digits)
+    const phoneMatch = raw.match(/0[689]\d{8}/);
+    if (phoneMatch) {
+        result.receiverMobile = phoneMatch[0];
+    }
+
+    // 3. Check for EMVCo TLV Tag 54 (Amount: 54LLAmount)
+    const emvAmount = raw.match(/54(\d{2})(\d+(\.\d{2})?)/);
+    if (emvAmount) {
+        const len = parseInt(emvAmount[1], 10);
+        const amtStr = emvAmount[2].slice(0, len);
+        const parsed = parseFloat(amtStr);
+        if (!isNaN(parsed) && parsed > 0) {
+            result.amount = parsed;
+        }
+    }
+
+    // 4. Check URL Query Parameters if payload is a URL
+    try {
+        if (raw.startsWith("http://") || raw.startsWith("https://")) {
+            const url = new URL(raw);
+            const id = url.searchParams.get("transaction_id") || url.searchParams.get("transId") || url.searchParams.get("t") || url.searchParams.get("id");
+            if (id && /^\d+$/.test(id)) result.transactionId = id;
+
+            const amt = url.searchParams.get("amount") || url.searchParams.get("amt");
+            if (amt) {
+                const parsedAmt = parseFloat(amt);
+                if (!isNaN(parsedAmt) && parsedAmt > 0) result.amount = parsedAmt;
+            }
+
+            const mobile = url.searchParams.get("receiver") || url.searchParams.get("mobile") || url.searchParams.get("to");
+            if (mobile && /^0[689]\d{8}$/.test(mobile)) result.receiverMobile = mobile;
+        }
+    } catch {
+        // Not a standard URL, continue
+    }
+
+    return result;
+}
+
 export default function TenantSlipsPage() {
     const params = useParams();
     const prefix = params.prefix as string;
@@ -75,6 +152,12 @@ export default function TenantSlipsPage() {
     const [transactionDate, setTransactionDate] = useState<string>(getTodayDateTimeLocal());
     const [senderMobile, setSenderMobile] = useState<string>("");
     const [slipImageUrl, setSlipImageUrl] = useState<string>("");
+    const [qrPayload, setQrPayload] = useState<string>("");
+
+    // Smart Scanning State
+    const [scanningQr, setScanningQr] = useState(false);
+    const [qrDetected, setQrDetected] = useState<boolean>(false);
+    const [showManualFields, setShowManualFields] = useState(false);
     const [uploadingImage, setUploadingImage] = useState(false);
     const [isDragOver, setIsDragOver] = useState(false);
 
@@ -83,6 +166,7 @@ export default function TenantSlipsPage() {
     const [latestResult, setLatestResult] = useState<{
         status: "VALID" | "INVALID";
         message: string;
+        comparison?: SlipComparison;
         data?: any;
     } | null>(null);
 
@@ -195,10 +279,100 @@ export default function TenantSlipsPage() {
         }
     };
 
-    // Upload image helper
-    const handleUploadFile = async (file: File) => {
+    // Client-side QR Scanner using jsQR and HTML5 Canvas
+    const scanQrFromImage = async (file: File): Promise<string | null> => {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement("canvas");
+                    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+                    if (!ctx) return resolve(null);
+
+                    let width = img.width;
+                    let height = img.height;
+                    const maxDim = 1200;
+                    if (width > maxDim || height > maxDim) {
+                        if (width > height) {
+                            height = Math.round((height * maxDim) / width);
+                            width = maxDim;
+                        } else {
+                            width = Math.round((width * maxDim) / height);
+                            height = maxDim;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    const imageData = ctx.getImageData(0, 0, width, height);
+                    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                        inversionAttempts: "attemptBoth",
+                    });
+
+                    if (code && code.data) {
+                        resolve(code.data);
+                    } else {
+                        resolve(null);
+                    }
+                };
+                img.onerror = () => resolve(null);
+                img.src = e.target?.result as string;
+            };
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(file);
+        });
+    };
+
+    // Process file: Upload image + Auto QR Scan & Auto-Fill
+    const handleProcessSlipFile = async (file: File) => {
         setUploadingImage(true);
+        setScanningQr(true);
+
         try {
+            // 1. Scan QR Code on client-side in parallel
+            const scannedQr = await scanQrFromImage(file);
+
+            if (scannedQr) {
+                setQrPayload(scannedQr);
+                setQrDetected(true);
+                const parsed = parseSlipQrPayload(scannedQr);
+
+                if (parsed.transactionId) {
+                    setTransactionId(parsed.transactionId);
+                }
+                if (parsed.amount) {
+                    setAmount(parsed.amount.toString());
+                }
+
+                // Auto-match receiver wallet from parsed phone number
+                if (parsed.receiverMobile && accounts.length > 0) {
+                    const cleanPhone = parsed.receiverMobile.replace(/\D/g, "");
+                    const matchedAcc = accounts.find((a) => {
+                        const accPhone = (a.phoneNumber || "").replace(/\D/g, "");
+                        return accPhone === cleanPhone || (cleanPhone.length >= 4 && accPhone.endsWith(cleanPhone));
+                    });
+
+                    if (matchedAcc) {
+                        setSelectedAccountId(matchedAcc.id);
+                        setReceiverMobile(matchedAcc.phoneNumber || cleanPhone);
+                    } else {
+                        setReceiverMobile(parsed.receiverMobile);
+                    }
+                }
+
+                showToast({
+                    type: "success",
+                    title: "✨ สแกน QR สำเร็จ!",
+                    message: `ดึงเลขที่รายการ ${parsed.transactionId || ""} ${parsed.amount ? `และยอดเงิน ฿${parsed.amount}` : ""} อัตโนมัติแล้ว`,
+                });
+            } else {
+                setQrDetected(false);
+            }
+
+            // 2. Upload file to server for archival
             const token = localStorage.getItem("tenantToken");
             const formData = new FormData();
             formData.append("slip", file);
@@ -212,14 +386,19 @@ export default function TenantSlipsPage() {
             const data = await res.json();
             if (data.ok && data.data?.imageUrl) {
                 setSlipImageUrl(data.data.imageUrl);
-                showToast({ type: "success", title: "อัปโหลดสำเร็จ", message: "อัปโหลดรูปภาพสลิปเรียบร้อยแล้ว" });
-            } else {
-                showToast({ type: "error", title: "อัปโหลดไม่สำเร็จ", message: data.error || "อัปโหลดรูปภาพไม่สำเร็จ" });
+                if (!scannedQr) {
+                    showToast({
+                        type: "info",
+                        title: "อัปโหลดรูปสำเร็จ",
+                        message: "ไม่พบ QR Code อัตโนมัติ กรุณาระบุยอดเงินหรือเลขที่รายการเพื่อตรวจสอบ",
+                    });
+                }
             }
         } catch (err: any) {
-            showToast({ type: "error", title: "ข้อผิดพลาด", message: "เกิดข้อผิดพลาดในการอัปโหลดรูป" });
+            showToast({ type: "error", title: "ข้อผิดพลาด", message: "เกิดข้อผิดพลาดในการประมวลผลรูปภาพ" });
         } finally {
             setUploadingImage(false);
+            setScanningQr(false);
         }
     };
 
@@ -233,7 +412,7 @@ export default function TenantSlipsPage() {
                 if (items[i].type.indexOf("image") !== -1) {
                     const file = items[i].getAsFile();
                     if (file) {
-                        handleUploadFile(file);
+                        handleProcessSlipFile(file);
                         break;
                     }
                 }
@@ -242,11 +421,11 @@ export default function TenantSlipsPage() {
 
         window.addEventListener("paste", handlePaste);
         return () => window.removeEventListener("paste", handlePaste);
-    }, [prefix]);
+    }, [prefix, accounts]);
 
     // Handle Verify Submit
-    const handleVerify = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleVerify = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
 
         if (!selectedAccount) {
             showToast({ type: "error", title: "เลือกวอลเล็ท", message: "กรุณาเลือกวอลเล็ทผู้รับเงินในระบบ" });
@@ -262,21 +441,22 @@ export default function TenantSlipsPage() {
             return;
         }
 
-        if (!receiverMobile.trim()) {
+        // Auto-fallback receiver phone if empty
+        const effectiveReceiver = receiverMobile.trim() || (selectedAccount.phoneNumber || "").replace(/\D/g, "");
+        if (!effectiveReceiver) {
             showToast({ type: "error", title: "ข้อมูลไม่ครบ", message: "กรุณาระบุเบอร์ผู้รับเงิน" });
+            setShowManualFields(true);
             return;
         }
 
         const numAmount = parseFloat(amount);
         if (isNaN(numAmount) || numAmount <= 0) {
-            showToast({ type: "error", title: "ข้อมูลไม่ครบ", message: "กรุณากรอกยอดเงินให้ถูกต้อง" });
+            showToast({ type: "error", title: "ข้อมูลไม่ครบ", message: "กรุณากรอกยอดเงินในสลิป (เช่น 150.00)" });
+            setShowManualFields(true);
             return;
         }
 
-        if (!transactionDate.trim()) {
-            showToast({ type: "error", title: "ข้อมูลไม่ครบ", message: "กรุณาระบุวันเวลาทำรายการ (yyyy-mm-dd HH:mm)" });
-            return;
-        }
+        const effectiveDate = transactionDate.trim() || getTodayDateTimeLocal();
 
         setVerifying(true);
         setLatestResult(null);
@@ -291,12 +471,13 @@ export default function TenantSlipsPage() {
                 },
                 body: JSON.stringify({
                     accountId: selectedAccountId || undefined,
-                    receiverMobile: receiverMobile.trim(),
+                    receiverMobile: effectiveReceiver,
                     amount: numAmount,
-                    transactionDate: transactionDate.trim(),
+                    transactionDate: effectiveDate,
                     transactionId: transactionId.trim() || undefined,
                     senderMobile: senderMobile.trim() || undefined,
                     slipImageUrl: slipImageUrl || undefined,
+                    qrPayload: qrPayload || undefined,
                 }),
             });
 
@@ -306,16 +487,18 @@ export default function TenantSlipsPage() {
                 setLatestResult({
                     status: "VALID",
                     message: data.message || "สลิปจริง 100% (ผ่านการตรวจสอบจาก TrueMoney)",
+                    comparison: data.comparison,
                     data: data.data,
                 });
-                showToast({ type: "success", title: "สลิปจริง 100%!", message: data.message });
+                showToast({ type: "success", title: "สลิปจริง 100%!", message: "ข้อมูลตรงกับฐานข้อมูล TrueMoney" });
             } else {
                 setLatestResult({
                     status: "INVALID",
                     message: data.message || "ข้อมูลในสลิปไม่ตรงกับฐานข้อมูล TrueMoney (สลิปปลอม)",
+                    comparison: data.comparison,
                     data: data.data,
                 });
-                showToast({ type: "error", title: "สลิปไม่ถูกต้อง / ปลอมแปลง", message: data.message });
+                showToast({ type: "error", title: "สลิปไม่ผ่าน / ปลอมแปลง", message: data.message });
             }
 
             // Refresh stats and history
@@ -334,31 +517,32 @@ export default function TenantSlipsPage() {
         setTransactionDate(getTodayDateTimeLocal());
         setSenderMobile("");
         setSlipImageUrl("");
+        setQrPayload("");
+        setQrDetected(false);
         setLatestResult(null);
     };
 
-    // Styling constants for crisp Dark Obsidian Fintech look
     const darkInputStyle: React.CSSProperties = {
         width: "100%",
-        height: 40,
+        height: 38,
         background: "#141417",
         border: "1px solid #27272a",
         borderRadius: 8,
-        padding: "0 14px",
+        padding: "0 12px",
         color: "#fafafa",
-        fontSize: "0.88rem",
+        fontSize: "0.86rem",
         outline: "none",
-        transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+        transition: "border-color 0.15s ease",
     };
 
     return (
         <div style={{ maxWidth: 1280, margin: "0 auto", paddingBottom: 60 }}>
             {/* Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 14 }}>
                 <div>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <h1 className="tenant-page-title" style={{ margin: 0, display: "flex", alignItems: "center", gap: 10, fontSize: "1.5rem" }}>
-                            <span>🔍</span> ตรวจสอบสลิป (จริง / ปลอม)
+                        <h1 className="tenant-page-title" style={{ margin: 0, display: "flex", alignItems: "center", gap: 10, fontSize: "1.45rem" }}>
+                            <span>⚡</span> ตรวจสอบสลิปอัจฉริยะ (Smart Slip Verifier)
                         </h1>
                         <span style={{
                             fontSize: "0.72rem",
@@ -368,515 +552,455 @@ export default function TenantSlipsPage() {
                             background: "rgba(16, 185, 129, 0.12)",
                             color: "#10b981",
                             border: "1px solid rgba(16, 185, 129, 0.28)",
-                            letterSpacing: "0.3px",
                         }}>
-                            TrueMoney P2P Validator v1.6
+                            TrueMoney P2P Validate v1.6
                         </span>
                     </div>
-                    <div style={{ color: "var(--theme-text-muted)", fontSize: "0.85rem", marginTop: 6, lineHeight: 1.4 }}>
-                        เช็คความถูกต้องของสลิปโอนเงิน TrueMoney แบบ Real-time ยืนยันได้ทันทีว่าจริงหรือปลอม ชี้ชัดส่วนที่ไม่ตรง และป้องกันสลิปตัดต่อ
+                    <div style={{ color: "var(--theme-text-muted)", fontSize: "0.85rem", marginTop: 4 }}>
+                        เพียงแค่แปะรูปสลิป ระบบจะอ่าน QR Code ดึงข้อมูล และเปรียบเทียบกับข้อมูลจริงจาก TrueMoney ทันที ไม่ต้องพิมพ์เอง
                     </div>
                 </div>
                 <div style={{ display: "flex", gap: 10 }}>
                     <Link
                         href={`/tenant/${prefix}/wallets`}
                         className="tenant-btn tenant-btn-secondary"
-                        style={{ height: 36, fontSize: "0.82rem", display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none" }}
+                        style={{ height: 34, fontSize: "0.8rem", display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none" }}
                     >
                         ⚙️ จัดการวอลเล็ท
                     </Link>
                     <button
                         className="tenant-btn tenant-btn-secondary"
                         onClick={() => { loadAccounts(); loadStats(); loadHistory(); }}
-                        style={{ height: 36, fontSize: "0.82rem", display: "inline-flex", alignItems: "center", gap: 6 }}
+                        style={{ height: 34, fontSize: "0.8rem", display: "inline-flex", alignItems: "center", gap: 6 }}
                     >
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
                         </svg>
-                        รีเฟรชข้อมูล
+                        รีเฟรช
                     </button>
                 </div>
             </div>
 
-            {/* Quick Metrics Ribbon (Compact Dark Obsidian Fintech) */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, marginBottom: 24 }}>
-                {/* 1. ยอดสลิปจริงวันนี้ */}
-                <div style={{
-                    background: "#141417",
-                    border: "1px solid #27272a",
-                    borderRadius: 12,
-                    padding: "16px 18px",
-                    position: "relative",
-                    overflow: "hidden"
-                }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            {/* Quick Metrics Ribbon */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 20 }}>
+                <div style={{ background: "#141417", border: "1px solid #27272a", borderRadius: 10, padding: "14px 16px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                         <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--theme-text-secondary)" }}>ยอดสลิปจริงวันนี้</span>
                         <span style={{ fontSize: "0.68rem", background: "rgba(16, 185, 129, 0.15)", color: "#10b981", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>เงินเข้าจริง</span>
                     </div>
-                    <div style={{ fontFamily: "monospace", fontSize: "1.45rem", fontWeight: 700, color: "#10b981" }}>
+                    <div style={{ fontFamily: "monospace", fontSize: "1.35rem", fontWeight: 700, color: "#10b981" }}>
                         ฿ {stats.todayValidAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                    </div>
-                    <div style={{ fontSize: "0.72rem", color: "var(--theme-text-muted)", marginTop: 4 }}>
-                        ยืนยันยอดเงินสำเร็จวันนี้
                     </div>
                 </div>
 
-                {/* 2. สลิปที่ตรวจทั้งหมด */}
-                <div style={{
-                    background: "#141417",
-                    border: "1px solid #27272a",
-                    borderRadius: 12,
-                    padding: "16px 18px",
-                }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <div style={{ background: "#141417", border: "1px solid #27272a", borderRadius: 10, padding: "14px 16px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                         <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--theme-text-secondary)" }}>ตรวจทั้งหมด</span>
                         <span style={{ fontSize: "0.68rem", background: "rgba(56, 189, 248, 0.12)", color: "#38bdf8", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>Total</span>
                     </div>
-                    <div style={{ fontFamily: "monospace", fontSize: "1.45rem", fontWeight: 700, color: "#fafafa" }}>
-                        {stats.totalCount.toLocaleString()} <span style={{ fontSize: "0.85rem", fontWeight: 400, color: "var(--theme-text-muted)" }}>รายการ</span>
-                    </div>
-                    <div style={{ fontSize: "0.72rem", color: "var(--theme-text-muted)", marginTop: 4 }}>
-                        ประวัติการตรวจสอบในระบบ
+                    <div style={{ fontFamily: "monospace", fontSize: "1.35rem", fontWeight: 700, color: "#fafafa" }}>
+                        {stats.totalCount.toLocaleString()} <span style={{ fontSize: "0.8rem", fontWeight: 400, color: "var(--theme-text-muted)" }}>รายการ</span>
                     </div>
                 </div>
 
-                {/* 3. สลิปจริง (ผ่าน 100%) */}
-                <div style={{
-                    background: "#141417",
-                    border: "1px solid #27272a",
-                    borderRadius: 12,
-                    padding: "16px 18px",
-                }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <div style={{ background: "#141417", border: "1px solid #27272a", borderRadius: 10, padding: "14px 16px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                         <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--theme-text-secondary)" }}>สลิปจริง (ผ่าน 100%)</span>
                         <span style={{ fontSize: "0.68rem", background: "rgba(16, 185, 129, 0.12)", color: "#34d399", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>Verified</span>
                     </div>
-                    <div style={{ fontFamily: "monospace", fontSize: "1.45rem", fontWeight: 700, color: "#34d399" }}>
-                        {stats.validCount.toLocaleString()} <span style={{ fontSize: "0.85rem", fontWeight: 400, color: "var(--theme-text-muted)" }}>รายการ</span>
-                    </div>
-                    <div style={{ fontSize: "0.72rem", color: "var(--theme-text-muted)", marginTop: 4 }}>
-                        ข้อมูลตรงกับระบบ TrueMoney
+                    <div style={{ fontFamily: "monospace", fontSize: "1.35rem", fontWeight: 700, color: "#34d399" }}>
+                        {stats.validCount.toLocaleString()} <span style={{ fontSize: "0.8rem", fontWeight: 400, color: "var(--theme-text-muted)" }}>รายการ</span>
                     </div>
                 </div>
 
-                {/* 4. สลิปไม่ผ่าน / ปลอม */}
-                <div style={{
-                    background: "#141417",
-                    border: "1px solid #27272a",
-                    borderRadius: 12,
-                    padding: "16px 18px",
-                }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <div style={{ background: "#141417", border: "1px solid #27272a", borderRadius: 10, padding: "14px 16px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                         <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--theme-text-secondary)" }}>สลิปไม่ผ่าน / ปลอม</span>
                         <span style={{ fontSize: "0.68rem", background: "rgba(239, 68, 68, 0.12)", color: "#f87171", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>Alert</span>
                     </div>
-                    <div style={{ fontFamily: "monospace", fontSize: "1.45rem", fontWeight: 700, color: "#f87171" }}>
-                        {stats.invalidCount.toLocaleString()} <span style={{ fontSize: "0.85rem", fontWeight: 400, color: "var(--theme-text-muted)" }}>รายการ</span>
-                    </div>
-                    <div style={{ fontSize: "0.72rem", color: "var(--theme-text-muted)", marginTop: 4 }}>
-                        ตรวจพบข้อมูลไม่ตรง / สลิปปลอม
+                    <div style={{ fontFamily: "monospace", fontSize: "1.35rem", fontWeight: 700, color: "#f87171" }}>
+                        {stats.invalidCount.toLocaleString()} <span style={{ fontSize: "0.8rem", fontWeight: 400, color: "var(--theme-text-muted)" }}>รายการ</span>
                     </div>
                 </div>
             </div>
 
-            {/* Main Interactive Checker Grid (Left Form vs Right Real-time Diagnostic) */}
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(330px, 500px) 1fr", gap: 20, marginBottom: 28, alignItems: "stretch" }}>
-                {/* Form Panel */}
+            {/* Smart Checker Workspace (Left: Smart Drop & Action vs Right: Comparison Matrix) */}
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(340px, 490px) 1fr", gap: 18, marginBottom: 26, alignItems: "start" }}>
+                {/* Left Side: Smart Scan Workstation */}
+                <div style={{
+                    background: "#141417",
+                    border: "1px solid #27272a",
+                    borderRadius: 14,
+                    padding: "20px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 16
+                }}>
+                    {/* Receiver Wallet Selector */}
+                    <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                            <label style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--theme-text-secondary)" }}>
+                                วอลเล็ทผู้รับเงินในระบบ *
+                            </label>
+                            {selectedAccount && (
+                                <span style={{
+                                    fontSize: "0.7rem",
+                                    fontWeight: 600,
+                                    padding: "1px 6px",
+                                    borderRadius: 4,
+                                    background: isCurrentAccountReady ? "rgba(16, 185, 129, 0.15)" : "rgba(245, 158, 11, 0.15)",
+                                    color: isCurrentAccountReady ? "#10b981" : "#fbbf24",
+                                    border: `1px solid ${isCurrentAccountReady ? "rgba(16, 185, 129, 0.3)" : "rgba(245, 158, 11, 0.3)"}`,
+                                }}>
+                                    {isCurrentAccountReady ? "พร้อมตรวจสลิป" : "ยังไม่ตั้งค่า Key"}
+                                </span>
+                            )}
+                        </div>
+
+                        <select
+                            className="tenant-select"
+                            value={selectedAccountId}
+                            onChange={(e) => handleAccountChange(e.target.value)}
+                            style={{
+                                ...darkInputStyle,
+                                cursor: "pointer",
+                                borderColor: !isCurrentAccountReady && selectedAccount ? "rgba(245, 158, 11, 0.5)" : "#27272a"
+                            }}
+                        >
+                            {accounts.map((acc) => {
+                                const ready = hasSlipKeyConfigured(acc);
+                                return (
+                                    <option key={acc.id} value={acc.id} style={{ background: "#141417", color: "#fafafa" }}>
+                                        {acc.name} ({acc.phoneNumber || "ไม่ระบุเบอร์"}) — {ready ? "⚡ พร้อมตรวจสลิป" : "⚠️ ยังไม่ผูก Key"}
+                                    </option>
+                                );
+                            })}
+                        </select>
+
+                        {selectedAccount && !isCurrentAccountReady && (
+                            <div style={{
+                                marginTop: 8,
+                                padding: "10px 12px",
+                                borderRadius: 8,
+                                background: "rgba(245, 158, 11, 0.08)",
+                                border: "1px solid rgba(245, 158, 11, 0.28)",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 10
+                            }}>
+                                <span style={{ fontSize: "1.1rem" }}>⚠️</span>
+                                <div style={{ flex: 1, minWidth: 0, fontSize: "0.75rem", color: "#fbbf24", lineHeight: 1.4 }}>
+                                    วอลเล็ทนี้ยังไม่ผูก Key สำหรับตรวจสลิป{" "}
+                                    <Link href={`/tenant/${prefix}/wallets`} style={{ color: "#38bdf8", textDecoration: "underline", fontWeight: 600 }}>
+                                        ไปใส่ Key ที่หน้าจัดการวอลเล็ท
+                                    </Link>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Big Smart Dropzone */}
+                    <div>
+                        <div
+                            onClick={() => fileInputRef.current?.click()}
+                            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                            onDragLeave={() => setIsDragOver(false)}
+                            onDrop={(e) => {
+                                e.preventDefault();
+                                setIsDragOver(false);
+                                const file = e.dataTransfer.files?.[0];
+                                if (file) handleProcessSlipFile(file);
+                            }}
+                            style={{
+                                border: isDragOver ? "2px dashed #10b981" : "2px dashed rgba(255, 255, 255, 0.16)",
+                                borderRadius: 12,
+                                padding: "20px 16px",
+                                textAlign: "center",
+                                background: isDragOver
+                                    ? "rgba(16, 185, 129, 0.08)"
+                                    : (slipImageUrl ? "rgba(0, 0, 0, 0.4)" : "linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%)"),
+                                cursor: "pointer",
+                                position: "relative",
+                                transition: "all 0.2s ease",
+                            }}
+                        >
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                style={{ display: "none" }}
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) handleProcessSlipFile(file);
+                                }}
+                            />
+
+                            {(uploadingImage || scanningQr) ? (
+                                <div style={{ padding: "18px 0", color: "var(--theme-text-secondary)", fontSize: "0.85rem" }}>
+                                    <span className="spinner" style={{ width: 22, height: 22, margin: "0 auto 10px auto", display: "block" }}></span>
+                                    {scanningQr ? "⚡ กำลังสแกน QR Code จากสลิป..." : "กำลังประมวลผลรูปภาพ..."}
+                                </div>
+                            ) : slipImageUrl ? (
+                                <div style={{ position: "relative" }}>
+                                    <img
+                                        src={slipImageUrl}
+                                        alt="สลิปที่อัปโหลด"
+                                        style={{ maxHeight: 180, maxWidth: "100%", borderRadius: 8, margin: "0 auto", display: "block", objectFit: "contain" }}
+                                    />
+                                    <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 12 }}>
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setPreviewImage(slipImageUrl);
+                                            }}
+                                            className="tenant-btn tenant-btn-secondary tenant-btn-sm"
+                                            style={{ fontSize: "0.72rem", padding: "3px 10px" }}
+                                        >
+                                            🔍 ดูรูปสลิปเต็ม
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleResetForm();
+                                            }}
+                                            className="tenant-btn tenant-btn-secondary tenant-btn-sm"
+                                            style={{ fontSize: "0.72rem", padding: "3px 10px", color: "#f87171" }}
+                                        >
+                                            ✕ ล้างรูป
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div>
+                                    <div style={{
+                                        width: 52,
+                                        height: 52,
+                                        borderRadius: "50%",
+                                        background: "rgba(16, 185, 129, 0.1)",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        margin: "0 auto 12px auto",
+                                        color: "#10b981",
+                                        border: "1px solid rgba(16, 185, 129, 0.25)"
+                                    }}>
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                            <circle cx="8.5" cy="8.5" r="1.5" />
+                                            <polyline points="21 15 16 10 5 21" />
+                                        </svg>
+                                    </div>
+                                    <div style={{ fontSize: "0.95rem", color: "#fafafa", fontWeight: 600 }}>
+                                        วางรูปสลิปที่นี่ หรือ กด <span style={{ color: "#38bdf8", background: "rgba(56, 189, 248, 0.12)", padding: "1px 6px", borderRadius: 4 }}>Ctrl + V</span>
+                                    </div>
+                                    <div style={{ fontSize: "0.76rem", color: "var(--theme-text-muted)", marginTop: 6, lineHeight: 1.4 }}>
+                                        ระบบจะ <strong style={{ color: "#10b981" }}>อ่าน QR Code อัตโนมัติ</strong> ดึงยอดเงินและเลขรายการทันทีโดยไม่ต้องพิมพ์เอง
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Smart Detected Badge & Extracted Details */}
+                    {qrDetected && (
+                        <div style={{
+                            padding: "12px 14px",
+                            borderRadius: 10,
+                            background: "rgba(16, 185, 129, 0.08)",
+                            border: "1px solid rgba(16, 185, 129, 0.25)",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 6
+                        }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.78rem", fontWeight: 600, color: "#34d399" }}>
+                                <span>✨</span> อ่านข้อมูลจากสลิปสำเร็จ (Auto-detected):
+                            </div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 2 }}>
+                                {transactionId && (
+                                    <span style={{ fontSize: "0.72rem", background: "rgba(0, 0, 0, 0.4)", padding: "2px 8px", borderRadius: 6, color: "#fafafa", fontFamily: "monospace" }}>
+                                        เลขรายการ: <strong>{transactionId}</strong>
+                                    </span>
+                                )}
+                                {amount && (
+                                    <span style={{ fontSize: "0.72rem", background: "rgba(0, 0, 0, 0.4)", padding: "2px 8px", borderRadius: 6, color: "#34d399", fontFamily: "monospace" }}>
+                                        ยอดเงิน: <strong>฿{parseFloat(amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong>
+                                    </span>
+                                )}
+                                {receiverMobile && (
+                                    <span style={{ fontSize: "0.72rem", background: "rgba(0, 0, 0, 0.4)", padding: "2px 8px", borderRadius: 6, color: "#38bdf8", fontFamily: "monospace" }}>
+                                        เบอร์ผู้รับ: <strong>{receiverMobile}</strong>
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Primary Action Button: One-Click Check */}
+                    <div>
+                        <button
+                            type="button"
+                            onClick={() => handleVerify()}
+                            disabled={verifying || !isCurrentAccountReady}
+                            className="tenant-btn"
+                            style={{
+                                width: "100%",
+                                height: 44,
+                                fontSize: "0.92rem",
+                                fontWeight: 600,
+                                borderRadius: 10,
+                                cursor: (verifying || !isCurrentAccountReady) ? "not-allowed" : "pointer",
+                                background: !isCurrentAccountReady
+                                    ? "rgba(255, 255, 255, 0.05)"
+                                    : "linear-gradient(135deg, #059669 0%, #10b981 100%)",
+                                color: !isCurrentAccountReady ? "var(--theme-text-muted)" : "#ffffff",
+                                border: !isCurrentAccountReady ? "1px solid rgba(255, 255, 255, 0.1)" : "none",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: 8,
+                                boxShadow: isCurrentAccountReady ? "0 4px 16px rgba(16, 185, 129, 0.3)" : "none",
+                                transition: "all 0.15s ease",
+                            }}
+                        >
+                            {verifying ? (
+                                <>
+                                    <span className="spinner" style={{ width: 16, height: 16 }}></span>
+                                    กำลังเปรียบเทียบข้อมูลกับ TrueMoney P2P...
+                                </>
+                            ) : !isCurrentAccountReady ? (
+                                <>
+                                    <span>⚠️</span> กรุณาผูก Key ตรวจสลิปก่อน
+                                </>
+                            ) : (
+                                <>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                        <circle cx="11" cy="11" r="8" />
+                                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                                    </svg>
+                                    ตรวจสอบสลิป (เทียบของจริงกับ TrueMoney ทันที)
+                                </>
+                            )}
+                        </button>
+                    </div>
+
+                    {/* Collapsible Manual Override (Hidden by default to keep page smart & clean) */}
+                    <div style={{ borderTop: "1px solid var(--theme-border-subtle)", paddingTop: 10 }}>
+                        <button
+                            type="button"
+                            onClick={() => setShowManualFields(!showManualFields)}
+                            style={{
+                                background: "transparent",
+                                border: "none",
+                                color: "var(--theme-text-muted)",
+                                fontSize: "0.78rem",
+                                cursor: "pointer",
+                                padding: 0,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                            }}
+                        >
+                            <span>{showManualFields ? "▲" : "▼"}</span>
+                            <span>{showManualFields ? "ซ่อนข้อมูลเพิ่มเติม" : "✏️ ปรับแก้ข้อมูลสลิปด้วยตนเอง (กรณีสลิปไม่มี QR หรือไม่ชัด)"}</span>
+                        </button>
+
+                        {showManualFields && (
+                            <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "0.75rem", color: "var(--theme-text-secondary)", marginBottom: 4 }}>
+                                            ยอดเงินในสลิป (บาท) *
+                                        </label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            placeholder="150.00"
+                                            value={amount}
+                                            onChange={(e) => setAmount(e.target.value)}
+                                            style={darkInputStyle}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "0.75rem", color: "var(--theme-text-secondary)", marginBottom: 4 }}>
+                                            เบอร์ผู้รับ (10 หลัก) *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="08xxxxxxxx"
+                                            value={receiverMobile}
+                                            onChange={(e) => setReceiverMobile(e.target.value)}
+                                            style={darkInputStyle}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label style={{ display: "block", fontSize: "0.75rem", color: "var(--theme-text-secondary)", marginBottom: 4 }}>
+                                        เลขที่รายการ TrueMoney (Transaction ID 14 หลัก)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="เช่น 50027287091246"
+                                        value={transactionId}
+                                        onChange={(e) => setTransactionId(e.target.value)}
+                                        style={darkInputStyle}
+                                    />
+                                </div>
+
+                                <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 10 }}>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "0.75rem", color: "var(--theme-text-secondary)", marginBottom: 4 }}>
+                                            วันเวลาในสลิป (yyyy-mm-dd HH:mm)
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={transactionDate}
+                                            onChange={(e) => setTransactionDate(e.target.value)}
+                                            style={darkInputStyle}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "0.75rem", color: "var(--theme-text-secondary)", marginBottom: 4 }}>
+                                            เบอร์ผู้โอน (ถ้ามี)
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="08xxxxxxxx"
+                                            value={senderMobile}
+                                            onChange={(e) => setSenderMobile(e.target.value)}
+                                            style={darkInputStyle}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Right Side: Real-time Comparison Matrix (เทียบของจริงกับสลิป) */}
                 <div style={{
                     background: "#141417",
                     border: "1px solid #27272a",
                     borderRadius: 14,
                     padding: "22px 24px",
                     display: "flex",
-                    flexDirection: "column"
-                }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                        <div style={{ fontSize: "1rem", fontWeight: 600, color: "#fafafa", display: "flex", alignItems: "center", gap: 8 }}>
-                            <span>📋</span> กรอกข้อมูลหรือวางรูปสลิป
-                        </div>
-                        <span style={{
-                            fontSize: "0.72rem",
-                            background: "rgba(56, 189, 248, 0.1)",
-                            color: "#38bdf8",
-                            border: "1px solid rgba(56, 189, 248, 0.25)",
-                            padding: "2px 8px",
-                            borderRadius: 6,
-                            fontWeight: 500
-                        }}>
-                            กด Ctrl + V แปะรูปได้ทันที
-                        </span>
-                    </div>
-
-                    {/* Image Dropzone / Preview */}
-                    <div
-                        onClick={() => fileInputRef.current?.click()}
-                        onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-                        onDragLeave={() => setIsDragOver(false)}
-                        onDrop={(e) => {
-                            e.preventDefault();
-                            setIsDragOver(false);
-                            const file = e.dataTransfer.files?.[0];
-                            if (file) handleUploadFile(file);
-                        }}
-                        style={{
-                            border: isDragOver ? "2px dashed #10b981" : "1.5px dashed rgba(255, 255, 255, 0.15)",
-                            borderRadius: 10,
-                            padding: "16px",
-                            textAlign: "center",
-                            background: isDragOver ? "rgba(16, 185, 129, 0.05)" : (slipImageUrl ? "rgba(0, 0, 0, 0.4)" : "rgba(255, 255, 255, 0.02)"),
-                            cursor: "pointer",
-                            marginBottom: 18,
-                            position: "relative",
-                            transition: "all 0.2s ease",
-                        }}
-                    >
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="image/*"
-                            style={{ display: "none" }}
-                            onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) handleUploadFile(file);
-                            }}
-                        />
-
-                        {uploadingImage ? (
-                            <div style={{ padding: "16px 0", color: "var(--theme-text-secondary)", fontSize: "0.85rem" }}>
-                                <span className="spinner" style={{ width: 20, height: 20, margin: "0 auto 8px auto", display: "block" }}></span>
-                                กำลังอัปโหลดรูปภาพสลิป...
-                            </div>
-                        ) : slipImageUrl ? (
-                            <div style={{ position: "relative" }}>
-                                <img
-                                    src={slipImageUrl}
-                                    alt="สลิปที่อัปโหลด"
-                                    style={{ maxHeight: 160, maxWidth: "100%", borderRadius: 6, margin: "0 auto", display: "block", objectFit: "contain" }}
-                                />
-                                <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 10 }}>
-                                    <button
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setPreviewImage(slipImageUrl);
-                                        }}
-                                        className="tenant-btn tenant-btn-secondary tenant-btn-sm"
-                                        style={{ fontSize: "0.72rem", padding: "3px 8px" }}
-                                    >
-                                        🔍 ดูรูปเต็ม
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setSlipImageUrl("");
-                                        }}
-                                        className="tenant-btn tenant-btn-secondary tenant-btn-sm"
-                                        style={{ fontSize: "0.72rem", padding: "3px 8px", color: "#f87171" }}
-                                    >
-                                        ✕ ลบรูปสลิป
-                                    </button>
-                                </div>
-                            </div>
-                        ) : (
-                            <div style={{ padding: "10px 0" }}>
-                                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--theme-text-muted)" strokeWidth="1.5" style={{ margin: "0 auto 6px auto", display: "block" }}>
-                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                                    <circle cx="8.5" cy="8.5" r="1.5" />
-                                    <polyline points="21 15 16 10 5 21" />
-                                </svg>
-                                <div style={{ fontSize: "0.84rem", color: "#fafafa", fontWeight: 500 }}>
-                                    คลิกเพื่ออัปโหลดรูป หรือ ลากไฟล์สลิปมาวางที่นี่
-                                </div>
-                                <div style={{ fontSize: "0.74rem", color: "var(--theme-text-muted)", marginTop: 3 }}>
-                                    หรือกดแปะภาพด้วย <strong style={{ color: "#38bdf8" }}>Ctrl + V</strong> (JPG, PNG, WEBP)
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Manual Form */}
-                    <form onSubmit={handleVerify} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                        {/* 1. Select Wallet with Real Config Status */}
-                        <div>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                                <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--theme-text-secondary)" }}>
-                                    วอลเล็ทผู้รับเงินในระบบ *
-                                </label>
-                                {selectedAccount && (
-                                    <span style={{
-                                        fontSize: "0.72rem",
-                                        fontWeight: 600,
-                                        padding: "1px 7px",
-                                        borderRadius: 4,
-                                        background: isCurrentAccountReady ? "rgba(16, 185, 129, 0.15)" : "rgba(245, 158, 11, 0.15)",
-                                        color: isCurrentAccountReady ? "#10b981" : "#fbbf24",
-                                        border: `1px solid ${isCurrentAccountReady ? "rgba(16, 185, 129, 0.3)" : "rgba(245, 158, 11, 0.3)"}`,
-                                    }}>
-                                        {isCurrentAccountReady ? "พร้อมตรวจสลิป" : "ยังไม่ตั้งค่า Key"}
-                                    </span>
-                                )}
-                            </div>
-
-                            <select
-                                className="tenant-select"
-                                value={selectedAccountId}
-                                onChange={(e) => handleAccountChange(e.target.value)}
-                                style={{
-                                    ...darkInputStyle,
-                                    cursor: "pointer",
-                                    borderColor: !isCurrentAccountReady && selectedAccount ? "rgba(245, 158, 11, 0.5)" : "#27272a"
-                                }}
-                            >
-                                {accounts.length === 0 ? (
-                                    <option value="">(ไม่พบวอลเล็ทในระบบ กรุณาเพิ่มวอลเล็ทก่อน)</option>
-                                ) : (
-                                    accounts.map((acc) => {
-                                        const ready = hasSlipKeyConfigured(acc);
-                                        return (
-                                            <option key={acc.id} value={acc.id} style={{ background: "#141417", color: "#fafafa" }}>
-                                                {acc.name} ({acc.phoneNumber || "ไม่ระบุเบอร์"}) — {ready ? "⚡ พร้อมตรวจสลิป" : "⚠️ ยังไม่ได้ผูก Key ตรวจสลิป"}
-                                            </option>
-                                        );
-                                    })
-                                )}
-                            </select>
-
-                            {/* Warning Banner if Account is Missing Slip Verify Token */}
-                            {selectedAccount && !isCurrentAccountReady && (
-                                <div style={{
-                                    marginTop: 8,
-                                    padding: "12px 14px",
-                                    borderRadius: 8,
-                                    background: "rgba(245, 158, 11, 0.08)",
-                                    border: "1px solid rgba(245, 158, 11, 0.28)",
-                                    display: "flex",
-                                    alignItems: "flex-start",
-                                    gap: 10
-                                }}>
-                                    <span style={{ fontSize: "1.1rem", lineHeight: 1.2 }}>⚠️</span>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontSize: "0.82rem", fontWeight: 600, color: "#fbbf24" }}>
-                                            วอลเล็ทนี้ยังไม่ได้ผูก Key ตรวจสอบสลิป
-                                        </div>
-                                        <div style={{ fontSize: "0.75rem", color: "var(--theme-text-secondary)", marginTop: 3, lineHeight: 1.4 }}>
-                                            ระบบจะไม่สามารถตรวจสลิปได้จนกว่าจะนำ Bearer Token จากหน้า <strong>&quot;ตรวจสอบรายการโอนเงินทรูมันนี่&quot;</strong> มากรอกในหน้าจัดการวอลเล็ท
-                                        </div>
-                                        <div style={{ marginTop: 8 }}>
-                                            <Link
-                                                href={`/tenant/${prefix}/wallets`}
-                                                className="tenant-btn tenant-btn-secondary tenant-btn-sm"
-                                                style={{
-                                                    padding: "3px 10px",
-                                                    fontSize: "0.74rem",
-                                                    background: "rgba(245, 158, 11, 0.16)",
-                                                    color: "#fbbf24",
-                                                    border: "1px solid rgba(245, 158, 11, 0.35)",
-                                                    borderRadius: 6,
-                                                    fontWeight: 500,
-                                                    display: "inline-flex",
-                                                    alignItems: "center",
-                                                    gap: 6,
-                                                    textDecoration: "none"
-                                                }}
-                                            >
-                                                ⚙️ ไปที่หน้า จัดการวอลเล็ท เพื่อกรอก Key →
-                                            </Link>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* 2. Receiver Mobile & Amount */}
-                        <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 12 }}>
-                            <div>
-                                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "var(--theme-text-secondary)", marginBottom: 6 }}>
-                                    เบอร์ผู้รับ (10 หรือ 4 ตัวท้าย) *
-                                </label>
-                                <input
-                                    type="text"
-                                    className="tenant-input"
-                                    placeholder="08xxxxxxxx"
-                                    value={receiverMobile}
-                                    onChange={(e) => setReceiverMobile(e.target.value)}
-                                    style={{ ...darkInputStyle, fontFamily: "monospace" }}
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "var(--theme-text-secondary)", marginBottom: 6 }}>
-                                    ยอดเงิน (บาท) *
-                                </label>
-                                <div style={{ position: "relative" }}>
-                                    <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--theme-text-muted)", fontSize: "0.9rem", fontWeight: 600 }}>
-                                        ฿
-                                    </span>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        className="tenant-input"
-                                        placeholder="0.00"
-                                        value={amount}
-                                        onChange={(e) => setAmount(e.target.value)}
-                                        style={{ ...darkInputStyle, paddingLeft: 28, fontFamily: "monospace", fontWeight: 600, color: "#10b981" }}
-                                        required
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 3. Transaction ID */}
-                        <div>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                                <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--theme-text-secondary)" }}>
-                                    เลขที่รายการ TrueMoney (Transaction ID 14 หลัก)
-                                </label>
-                                <span style={{ fontSize: "0.7rem", color: "var(--theme-text-muted)" }}>
-                                    แนะนำเพื่อความแม่นยำ 100%
-                                </span>
-                            </div>
-                            <input
-                                type="text"
-                                className="tenant-input"
-                                placeholder="เช่น 50027287091246"
-                                value={transactionId}
-                                onChange={(e) => setTransactionId(e.target.value)}
-                                style={{ ...darkInputStyle, fontFamily: "monospace", letterSpacing: "0.5px" }}
-                            />
-                        </div>
-
-                        {/* 4. Date & Sender Mobile */}
-                        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 12 }}>
-                            <div>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                                    <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--theme-text-secondary)" }}>
-                                        วันเวลาทำรายการ (yyyy-mm-dd HH:mm) *
-                                    </label>
-                                    <button
-                                        type="button"
-                                        onClick={() => setTransactionDate(getTodayDateTimeLocal())}
-                                        style={{
-                                            background: "transparent",
-                                            border: "none",
-                                            color: "#38bdf8",
-                                            fontSize: "0.7rem",
-                                            cursor: "pointer",
-                                            padding: 0
-                                        }}
-                                        title="ตั้งเป็นวันเวลาปัจจุบัน"
-                                    >
-                                        🕒 ปัจจุบัน
-                                    </button>
-                                </div>
-                                <input
-                                    type="text"
-                                    className="tenant-input"
-                                    placeholder="2026-11-04 14:30"
-                                    value={transactionDate}
-                                    onChange={(e) => setTransactionDate(e.target.value)}
-                                    style={{ ...darkInputStyle, fontFamily: "monospace" }}
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "var(--theme-text-secondary)", marginBottom: 6 }}>
-                                    เบอร์ผู้โอน (ถ้ามี)
-                                </label>
-                                <input
-                                    type="text"
-                                    className="tenant-input"
-                                    placeholder="08xxxxxxxx"
-                                    value={senderMobile}
-                                    onChange={(e) => setSenderMobile(e.target.value)}
-                                    style={{ ...darkInputStyle, fontFamily: "monospace" }}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
-                            <button
-                                type="submit"
-                                disabled={verifying || !isCurrentAccountReady}
-                                className="tenant-btn"
-                                style={{
-                                    flex: 1,
-                                    height: 42,
-                                    fontSize: "0.9rem",
-                                    fontWeight: 600,
-                                    borderRadius: 8,
-                                    cursor: (verifying || !isCurrentAccountReady) ? "not-allowed" : "pointer",
-                                    background: !isCurrentAccountReady
-                                        ? "rgba(255, 255, 255, 0.05)"
-                                        : "linear-gradient(135deg, #059669 0%, #10b981 100%)",
-                                    color: !isCurrentAccountReady ? "var(--theme-text-muted)" : "#ffffff",
-                                    border: !isCurrentAccountReady ? "1px solid rgba(255, 255, 255, 0.1)" : "none",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    gap: 8,
-                                    boxShadow: isCurrentAccountReady ? "0 4px 14px rgba(16, 185, 129, 0.25)" : "none",
-                                    transition: "all 0.15s ease",
-                                }}
-                            >
-                                {verifying ? (
-                                    <>
-                                        <span className="spinner" style={{ width: 16, height: 16 }}></span>
-                                        กำลังตรวจสอบกับ TrueMoney P2P...
-                                    </>
-                                ) : !isCurrentAccountReady ? (
-                                    <>
-                                        <span>⚠️</span> กรุณาตั้งค่า Key ตรวจสอบสลิปก่อน
-                                    </>
-                                ) : (
-                                    <>
-                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                            <circle cx="11" cy="11" r="8" />
-                                            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                                        </svg>
-                                        ตรวจสอบสลิป (TrueMoney P2P)
-                                    </>
-                                )}
-                            </button>
-                            <button
-                                type="button"
-                                className="tenant-btn tenant-btn-secondary"
-                                onClick={handleResetForm}
-                                style={{ height: 42, padding: "0 14px", fontSize: "0.82rem", borderRadius: 8 }}
-                            >
-                                ↺ ล้างฟอร์ม
-                            </button>
-                        </div>
-                    </form>
-                </div>
-
-                {/* Right Panel: Live Diagnostic Card (Real vs Fake) */}
-                <div style={{
-                    background: "#141417",
-                    border: "1px solid #27272a",
-                    borderRadius: 14,
-                    padding: "24px",
-                    display: "flex",
                     flexDirection: "column",
                     minHeight: 460,
                 }}>
                     {latestResult ? (
-                        <div style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            height: "100%",
-                        }}>
-                            {/* Result Header Badge */}
+                        <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+                            {/* Comparison Master Header Badge */}
                             <div style={{
                                 display: "flex",
                                 alignItems: "center",
                                 gap: 14,
                                 padding: "16px 18px",
-                                borderRadius: 10,
+                                borderRadius: 12,
                                 background: latestResult.status === "VALID" ? "rgba(16, 185, 129, 0.12)" : "rgba(239, 68, 68, 0.12)",
                                 border: `1.5px solid ${latestResult.status === "VALID" ? "rgba(16, 185, 129, 0.35)" : "rgba(239, 68, 68, 0.35)"}`,
-                                marginBottom: 20
+                                marginBottom: 18
                             }}>
                                 <div style={{
                                     width: 44,
@@ -901,78 +1025,167 @@ export default function TenantSlipsPage() {
                                         color: latestResult.status === "VALID" ? "#34d399" : "#f87171",
                                     }}>
                                         {latestResult.status === "VALID"
-                                            ? "สลิปจริง 100% (ผ่านการตรวจสอบ)"
-                                            : "สลิปไม่ถูกต้อง / ตรวจพบสลิปปลอม"}
+                                            ? "✅ สลิปจริง 100% (ข้อมูลตรงกับ TrueMoney)"
+                                            : "❌ ตรวจพบสลิปปลอม / ข้อมูลไม่ตรง"}
                                     </div>
-                                    <div style={{ fontSize: "0.85rem", color: "var(--theme-text-secondary)", marginTop: 3, lineHeight: 1.4 }}>
+                                    <div style={{ fontSize: "0.84rem", color: "var(--theme-text-secondary)", marginTop: 2 }}>
                                         {latestResult.message}
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Fintech Verified Certificate / Audit Details */}
+                            {/* Side-by-Side Comparison Matrix Table */}
                             <div style={{
-                                background: "rgba(0, 0, 0, 0.3)",
                                 borderRadius: 10,
-                                padding: "18px 20px",
                                 border: "1px solid var(--theme-border-subtle)",
-                                marginBottom: 16,
+                                overflow: "hidden",
+                                background: "rgba(0, 0, 0, 0.3)",
+                                marginBottom: 16
                             }}>
-                                <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--theme-text-muted)", marginBottom: 12, letterSpacing: "0.5px", textTransform: "uppercase" }}>
-                                    รายละเอียดธุรกรรมที่ตรวจสอบ:
+                                <div style={{
+                                    padding: "10px 16px",
+                                    background: "rgba(255, 255, 255, 0.03)",
+                                    borderBottom: "1px solid var(--theme-border-subtle)",
+                                    fontSize: "0.82rem",
+                                    fontWeight: 700,
+                                    color: "#fafafa",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 6
+                                }}>
+                                    <span>📊</span> ตารางเปรียบเทียบ: ข้อมูลบนสลิป VS ข้อมูลจริงจากระบบ TrueMoney
                                 </div>
 
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, fontSize: "0.85rem" }}>
-                                    <div>
-                                        <div style={{ color: "var(--theme-text-muted)", fontSize: "0.75rem" }}>ยอดเงินโอน:</div>
-                                        <div style={{ fontFamily: "monospace", fontSize: "1.3rem", fontWeight: 700, color: latestResult.status === "VALID" ? "#34d399" : "#f87171", marginTop: 2 }}>
-                                            ฿ {amount ? parseFloat(amount).toLocaleString("th-TH", { minimumFractionDigits: 2 }) : "0.00"}
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <div style={{ color: "var(--theme-text-muted)", fontSize: "0.75rem" }}>สถานะระบบ TrueMoney:</div>
-                                        <div style={{
-                                            fontWeight: 600,
-                                            color: latestResult.status === "VALID" ? "#34d399" : "#f87171",
-                                            marginTop: 4,
-                                            fontSize: "0.88rem"
+                                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+                                    <thead>
+                                        <tr style={{ background: "rgba(255, 255, 255, 0.02)", borderBottom: "1px solid var(--theme-border-subtle)", color: "var(--theme-text-muted)", textAlign: "left" }}>
+                                            <th style={{ padding: "10px 14px", width: "25%" }}>หัวข้อตรวจสอบ</th>
+                                            <th style={{ padding: "10px 14px", width: "35%" }}>📄 ข้อมูลบนสลิป</th>
+                                            <th style={{ padding: "10px 14px", width: "40%" }}>🏦 ข้อมูลจริง TrueMoney</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {/* Row 1: Transaction ID */}
+                                        <tr style={{
+                                            borderBottom: "1px solid var(--theme-border-subtle)",
+                                            background: latestResult.comparison?.transactionId.status === "MISMATCH" ? "rgba(239, 68, 68, 0.08)" : "transparent"
                                         }}>
-                                            {latestResult.status === "VALID" ? "● พบบันทึกโอนเงินจริง" : "● ไม่พบรายการในระบบ"}
-                                        </div>
-                                    </div>
+                                            <td style={{ padding: "10px 14px", fontWeight: 600, color: "var(--theme-text-secondary)" }}>
+                                                เลขที่รายการ
+                                            </td>
+                                            <td style={{ padding: "10px 14px", fontFamily: "monospace", color: "#fafafa" }}>
+                                                {transactionId || "ตรวจตามยอดและเวลา"}
+                                            </td>
+                                            <td style={{ padding: "10px 14px" }}>
+                                                {latestResult.comparison?.transactionId.status === "MATCH" ? (
+                                                    <span style={{ color: "#34d399", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                                                        <span>✓</span> พบในระบบ TrueMoney
+                                                    </span>
+                                                ) : (
+                                                    <span style={{ color: "#f87171", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                                                        <span>✕</span> ไม่พบเลขรายการนี้ (สลิปปลอม)
+                                                    </span>
+                                                )}
+                                            </td>
+                                        </tr>
 
-                                    <div>
-                                        <div style={{ color: "var(--theme-text-muted)", fontSize: "0.75rem" }}>วอลเล็ทผู้รับ:</div>
-                                        <div style={{ fontFamily: "monospace", fontWeight: 600, color: "#fafafa", marginTop: 2 }}>
-                                            {selectedAccount?.name} ({receiverMobile})
-                                        </div>
-                                    </div>
+                                        {/* Row 2: Amount */}
+                                        <tr style={{
+                                            borderBottom: "1px solid var(--theme-border-subtle)",
+                                            background: latestResult.comparison?.amount.status === "MISMATCH" ? "rgba(239, 68, 68, 0.08)" : "transparent"
+                                        }}>
+                                            <td style={{ padding: "10px 14px", fontWeight: 600, color: "var(--theme-text-secondary)" }}>
+                                                ยอดเงินโอน
+                                            </td>
+                                            <td style={{ padding: "10px 14px", fontFamily: "monospace", fontSize: "0.95rem", fontWeight: 700, color: latestResult.status === "VALID" ? "#34d399" : "#f87171" }}>
+                                                ฿ {amount ? parseFloat(amount).toLocaleString("th-TH", { minimumFractionDigits: 2 }) : "0.00"}
+                                            </td>
+                                            <td style={{ padding: "10px 14px" }}>
+                                                {latestResult.comparison?.amount.status === "MATCH" ? (
+                                                    <span style={{ color: "#34d399", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                                                        <span>✓</span> ยอดเงินตรงกับรายการจริง 100%
+                                                    </span>
+                                                ) : (
+                                                    <span style={{ color: "#f87171", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                                                        <span>✕</span> ยอดเงินไม่ตรง (ตรวจพบการตัดต่อตัวเลข!)
+                                                    </span>
+                                                )}
+                                            </td>
+                                        </tr>
 
-                                    <div>
-                                        <div style={{ color: "var(--theme-text-muted)", fontSize: "0.75rem" }}>เบอร์ผู้โอน (ถ้ามี):</div>
-                                        <div style={{ fontFamily: "monospace", fontWeight: 500, color: "#fafafa", marginTop: 2 }}>
-                                            {senderMobile || "ไม่ระบุ"}
-                                        </div>
-                                    </div>
+                                        {/* Row 3: Receiver Wallet */}
+                                        <tr style={{
+                                            borderBottom: "1px solid var(--theme-border-subtle)",
+                                            background: latestResult.comparison?.receiver.status === "MISMATCH" ? "rgba(239, 68, 68, 0.08)" : "transparent"
+                                        }}>
+                                            <td style={{ padding: "10px 14px", fontWeight: 600, color: "var(--theme-text-secondary)" }}>
+                                                บัญชีผู้รับเงิน
+                                            </td>
+                                            <td style={{ padding: "10px 14px", color: "#fafafa" }}>
+                                                {selectedAccount?.name} ({receiverMobile})
+                                            </td>
+                                            <td style={{ padding: "10px 14px" }}>
+                                                {latestResult.comparison?.receiver.status === "MATCH" ? (
+                                                    <span style={{ color: "#34d399", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                                                        <span>✓</span> โอนเข้าบัญชีนี้ถูกต้อง
+                                                    </span>
+                                                ) : (
+                                                    <span style={{ color: "#f87171", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                                                        <span>✕</span> โอนเข้าบัญชีอื่น ไม่ใช่บัญชีนี้
+                                                    </span>
+                                                )}
+                                            </td>
+                                        </tr>
 
-                                    <div>
-                                        <div style={{ color: "var(--theme-text-muted)", fontSize: "0.75rem" }}>เลขที่รายการ TrueMoney:</div>
-                                        <div style={{ fontFamily: "monospace", fontWeight: 500, color: "#fafafa", marginTop: 2 }}>
-                                            {transactionId || "ไม่ระบุ (ตรวจด้วยยอดและเวลา)"}
-                                        </div>
-                                    </div>
+                                        {/* Row 4: Transaction Date */}
+                                        <tr style={{
+                                            borderBottom: "1px solid var(--theme-border-subtle)",
+                                            background: latestResult.comparison?.date.status === "MISMATCH" ? "rgba(239, 68, 68, 0.08)" : "transparent"
+                                        }}>
+                                            <td style={{ padding: "10px 14px", fontWeight: 600, color: "var(--theme-text-secondary)" }}>
+                                                วันเวลาทำรายการ
+                                            </td>
+                                            <td style={{ padding: "10px 14px", fontFamily: "monospace", color: "#fafafa" }}>
+                                                {transactionDate}
+                                            </td>
+                                            <td style={{ padding: "10px 14px" }}>
+                                                {latestResult.comparison?.date.status === "MATCH" ? (
+                                                    <span style={{ color: "#34d399", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                                                        <span>✓</span> ตรงกับเวลาทำรายการจริง
+                                                    </span>
+                                                ) : (
+                                                    <span style={{ color: "#f87171", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                                                        <span>✕</span> เวลาในสลิปถูกดัดแปลง
+                                                    </span>
+                                                )}
+                                            </td>
+                                        </tr>
 
-                                    <div>
-                                        <div style={{ color: "var(--theme-text-muted)", fontSize: "0.75rem" }}>วันเวลาทำรายการ:</div>
-                                        <div style={{ fontFamily: "monospace", fontWeight: 500, color: "#fafafa", marginTop: 2 }}>
-                                            {transactionDate}
-                                        </div>
-                                    </div>
-                                </div>
+                                        {/* Row 5: Financial Webhook Status */}
+                                        <tr>
+                                            <td style={{ padding: "10px 14px", fontWeight: 600, color: "var(--theme-text-secondary)" }}>
+                                                สถานะเงินเข้าบัญชี
+                                            </td>
+                                            <td style={{ padding: "10px 14px", color: "var(--theme-text-muted)" }}>
+                                                ตามหลักฐานสลิป
+                                            </td>
+                                            <td style={{ padding: "10px 14px" }}>
+                                                {latestResult.status === "VALID" ? (
+                                                    <span style={{ color: "#34d399", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                                                        <span>🛡️</span> ยืนยันเงินเข้าจริง 100% (ชัวร์ ปลอดภัย)
+                                                    </span>
+                                                ) : (
+                                                    <span style={{ color: "#f87171", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                                                        <span>🚨</span> ไม่มียอดเงินเข้าบัญชีจริง (ห้ามทำรายการ)
+                                                    </span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
 
-                            {/* Attached Slip Preview (if any) */}
+                            {/* Attached Slip Thumbnail */}
                             {slipImageUrl && (
                                 <div style={{
                                     display: "flex",
@@ -991,10 +1204,10 @@ export default function TenantSlipsPage() {
                                     />
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                         <div style={{ fontSize: "0.8rem", color: "#fafafa", fontWeight: 500 }}>
-                                            มีรูปภาพสลิปแนบในประวัติ
+                                            รูปภาพสลิปที่ใช้ตรวจสอบ
                                         </div>
                                         <div style={{ fontSize: "0.72rem", color: "var(--theme-text-muted)" }}>
-                                            เก็บเป็นหลักฐานการตรวจสอบเรียบร้อย
+                                            {qrDetected ? "อ่านค่าผ่าน QR Code อัตโนมัติ" : "อัปโหลดภาพเรียบร้อย"}
                                         </div>
                                     </div>
                                     <button
@@ -1008,7 +1221,7 @@ export default function TenantSlipsPage() {
                                 </div>
                             )}
 
-                            {/* Footer Certification Note */}
+                            {/* Footer Certification */}
                             <div style={{
                                 marginTop: "auto",
                                 paddingTop: 12,
@@ -1034,28 +1247,27 @@ export default function TenantSlipsPage() {
                             padding: "40px 20px"
                         }}>
                             <div style={{
-                                width: 64,
-                                height: 64,
+                                width: 68,
+                                height: 68,
                                 borderRadius: "50%",
                                 background: "rgba(16, 185, 129, 0.08)",
                                 border: "1px solid rgba(16, 185, 129, 0.2)",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                fontSize: 28,
+                                fontSize: 30,
                                 marginBottom: 16,
                                 color: "#10b981"
                             }}>
-                                🔍
+                                📊
                             </div>
                             <div style={{ fontSize: "1.1rem", fontWeight: 600, color: "#fafafa", marginBottom: 6 }}>
-                                พร้อมตรวจสอบสลิปแบบ Real-time
+                                พร้อมเปรียบเทียบข้อมูลจริงกับสลิป
                             </div>
-                            <div style={{ fontSize: "0.84rem", color: "var(--theme-text-muted)", maxWidth: 380, lineHeight: 1.5, marginBottom: 20 }}>
-                                เมื่อกดปุ่ม &quot;ตรวจสอบสลิป&quot; ระบบจะเชื่อมต่อไปยัง TrueMoney P2P Validate Service v1.6 โดยตรง และแสดงผลลัพธ์ทันที
+                            <div style={{ fontSize: "0.84rem", color: "var(--theme-text-muted)", maxWidth: 390, lineHeight: 1.5, marginBottom: 20 }}>
+                                เพียงวางภาพสลิปด้านซ้ายแล้วกดปุ่มตรวจสอบ ระบบจะแสดงตารางเปรียบเทียบชี้ชัดทีละรายการ (เลขที่รายการ / ยอดเงิน / ผู้รับ / วันเวลา) ทันที
                             </div>
 
-                            {/* Feature list preview */}
                             <div style={{
                                 display: "grid",
                                 gridTemplateColumns: "1fr 1fr",
@@ -1069,16 +1281,16 @@ export default function TenantSlipsPage() {
                                 padding: "14px 16px"
                             }}>
                                 <div style={{ fontSize: "0.78rem", color: "var(--theme-text-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
-                                    <span style={{ color: "#10b981" }}>✓</span> ตรวจสอบเงินเข้าจริง 100%
+                                    <span style={{ color: "#10b981" }}>✓</span> สแกน QR อัตโนมัติใน 0.1 วิ
                                 </div>
                                 <div style={{ fontSize: "0.78rem", color: "var(--theme-text-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
-                                    <span style={{ color: "#10b981" }}>✓</span> ดักจับสลิปตัดต่อ/ปลอม
+                                    <span style={{ color: "#10b981" }}>✓</span> จับพิรุธสลิปตัดต่อยอดเงิน
                                 </div>
                                 <div style={{ fontSize: "0.78rem", color: "var(--theme-text-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
-                                    <span style={{ color: "#10b981" }}>✓</span> ชี้ชัดจุดที่ไม่ตรงทันที
+                                    <span style={{ color: "#10b981" }}>✓</span> ชี้ชัดจุดที่ไม่ตรงในตาราง
                                 </div>
                                 <div style={{ fontSize: "0.78rem", color: "var(--theme-text-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
-                                    <span style={{ color: "#10b981" }}>✓</span> บันทึกประวัติพร้อมรูปสลิป
+                                    <span style={{ color: "#10b981" }}>✓</span> ป้องกันสลิปเวียนสลิปซ้ำ
                                 </div>
                             </div>
                         </div>
@@ -1091,19 +1303,18 @@ export default function TenantSlipsPage() {
                 background: "#141417",
                 border: "1px solid #27272a",
                 borderRadius: 14,
-                padding: "22px 24px",
+                padding: "20px 24px",
             }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
                     <div>
                         <div style={{ fontSize: "1.05rem", fontWeight: 600, color: "#fafafa" }}>
-                            📜 ประวัติการตรวจสอบสลิป
+                            📜 ประวัติการตรวจสอบสลิปย้อนหลัง
                         </div>
                         <div style={{ color: "var(--theme-text-muted)", fontSize: "0.82rem", marginTop: 2 }}>
-                            บันทึกผลการตรวจสอบย้อนหลัง แยกสถานะ สลิปจริง / สลิปไม่ผ่าน พร้อมข้อความวินิจฉัย
+                            บันทึกผลการตรวจสอบสลิปทุกรายการ พร้อมรูปภาพหลักฐานและผลวินิจฉัย
                         </div>
                     </div>
 
-                    {/* Filter Tabs & Search */}
                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                         <div style={{ display: "flex", background: "rgba(255, 255, 255, 0.04)", borderRadius: 8, padding: 3, gap: 2 }}>
                             {[
@@ -1124,7 +1335,6 @@ export default function TenantSlipsPage() {
                                         color: statusFilter === tab.key ? "#ffffff" : "var(--theme-text-muted)",
                                         border: "none",
                                         cursor: "pointer",
-                                        transition: "all 0.15s ease",
                                     }}
                                 >
                                     {tab.label}
@@ -1139,9 +1349,9 @@ export default function TenantSlipsPage() {
                             onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
                             style={{
                                 ...darkInputStyle,
-                                width: 200,
-                                height: 34,
-                                fontSize: "0.8rem",
+                                width: 190,
+                                height: 32,
+                                fontSize: "0.78rem",
                             }}
                         />
                     </div>
@@ -1149,9 +1359,9 @@ export default function TenantSlipsPage() {
 
                 {/* Table */}
                 <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.84rem" }}>
                         <thead>
-                            <tr style={{ borderBottom: "1px solid #27272a", textAlign: "left", color: "var(--theme-text-muted)", fontSize: "0.78rem" }}>
+                            <tr style={{ borderBottom: "1px solid #27272a", textAlign: "left", color: "var(--theme-text-muted)", fontSize: "0.76rem" }}>
                                 <th style={{ padding: "10px 12px" }}>วันเวลาที่ตรวจ</th>
                                 <th style={{ padding: "10px 12px" }}>วอลเล็ทผู้รับ</th>
                                 <th style={{ padding: "10px 12px" }}>เลขที่รายการ TrueMoney</th>
@@ -1164,14 +1374,14 @@ export default function TenantSlipsPage() {
                         <tbody>
                             {historyLoading ? (
                                 <tr>
-                                    <td colSpan={7} style={{ padding: "30px 0", textAlign: "center", color: "var(--theme-text-muted)" }}>
+                                    <td colSpan={7} style={{ padding: "26px 0", textAlign: "center", color: "var(--theme-text-muted)" }}>
                                         <span className="spinner" style={{ width: 18, height: 18, margin: "0 auto 8px auto", display: "block" }}></span>
                                         กำลังโหลดประวัติ...
                                     </td>
                                 </tr>
                             ) : history.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} style={{ padding: "30px 0", textAlign: "center", color: "var(--theme-text-muted)" }}>
+                                    <td colSpan={7} style={{ padding: "26px 0", textAlign: "center", color: "var(--theme-text-muted)" }}>
                                         ยังไม่มีประวัติการตรวจสอบสลิป
                                     </td>
                                 </tr>
@@ -1181,18 +1391,18 @@ export default function TenantSlipsPage() {
 
                                     return (
                                         <tr key={record.id} style={{ borderBottom: "1px solid #27272a" }}>
-                                            <td style={{ padding: "10px 12px", fontFamily: "monospace", fontSize: "0.8rem", color: "var(--theme-text-secondary)" }}>
+                                            <td style={{ padding: "10px 12px", fontFamily: "monospace", fontSize: "0.78rem", color: "var(--theme-text-secondary)" }}>
                                                 {new Date(record.verifiedAt).toLocaleString("th-TH")}
                                             </td>
                                             <td style={{ padding: "10px 12px" }}>
                                                 <div style={{ fontWeight: 500, color: "#fafafa" }}>
                                                     {record.account?.name || "ไม่ระบุ"}
                                                 </div>
-                                                <div style={{ fontSize: "0.75rem", color: "var(--theme-text-muted)", fontFamily: "monospace" }}>
+                                                <div style={{ fontSize: "0.74rem", color: "var(--theme-text-muted)", fontFamily: "monospace" }}>
                                                     {record.receiverMobile}
                                                 </div>
                                             </td>
-                                            <td style={{ padding: "10px 12px", fontFamily: "monospace", fontSize: "0.82rem", color: "#fafafa" }}>
+                                            <td style={{ padding: "10px 12px", fontFamily: "monospace", fontSize: "0.8rem", color: "#fafafa" }}>
                                                 {record.transactionId || "-"}
                                             </td>
                                             <td style={{ padding: "10px 12px", textAlign: "right", fontFamily: "monospace", fontWeight: 700, color: isOk ? "#34d399" : "#f87171" }}>
@@ -1214,7 +1424,7 @@ export default function TenantSlipsPage() {
                                                     {isOk ? "สลิปจริง" : "ไม่ผ่าน"}
                                                 </span>
                                             </td>
-                                            <td style={{ padding: "10px 12px", color: "var(--theme-text-secondary)", fontSize: "0.8rem", maxWidth: 320 }}>
+                                            <td style={{ padding: "10px 12px", color: "var(--theme-text-secondary)", fontSize: "0.78rem", maxWidth: 300 }}>
                                                 {record.resultMessage || "-"}
                                             </td>
                                             <td style={{ padding: "10px 12px", textAlign: "center" }}>
@@ -1223,7 +1433,7 @@ export default function TenantSlipsPage() {
                                                         type="button"
                                                         onClick={() => setPreviewImage(record.slipImageUrl!)}
                                                         className="tenant-btn tenant-btn-secondary tenant-btn-sm"
-                                                        style={{ padding: "2px 8px", fontSize: "0.75rem", height: 26 }}
+                                                        style={{ padding: "2px 8px", fontSize: "0.74rem", height: 26 }}
                                                     >
                                                         ดูรูป
                                                     </button>
@@ -1241,7 +1451,7 @@ export default function TenantSlipsPage() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                    <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, marginTop: 16 }}>
+                    <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, marginTop: 14 }}>
                         <button
                             type="button"
                             className="tenant-btn tenant-btn-secondary tenant-btn-sm"
@@ -1267,7 +1477,7 @@ export default function TenantSlipsPage() {
                 )}
             </div>
 
-            {/* Slip Image Preview Modal */}
+            {/* Slip Image Fullscreen Modal */}
             {previewImage && (
                 <div
                     style={{
