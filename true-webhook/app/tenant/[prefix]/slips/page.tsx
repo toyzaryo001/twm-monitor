@@ -70,19 +70,62 @@ function getTodayDateTimeLocal(): string {
     return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
 
-// Smart Slip QR Parser (TrueMoney P2P & PromptPay EMVCo Standard)
-function parseSlipQrPayload(raw: string): {
+// Thai Bank Code mappings for PromptPay EMVCo Slip Verification
+const THAI_BANK_CODES: Record<string, string> = {
+    "002": "ธนาคารกรุงเทพ (BBL)",
+    "004": "ธนาคารกสิกรไทย (KBank)",
+    "006": "ธนาคารกรุงไทย (KTB)",
+    "011": "ทหารไทยธนชาต (TTB)",
+    "014": "ไทยพาณิชย์ (SCB)",
+    "025": "กรุงศรีอยุธยา (BAY)",
+    "069": "เกียรตินาคินภัทร (KKP)",
+    "022": "ซีไอเอ็มบี ไทย (CIMB)",
+    "030": "ออมสิน (GSB)",
+    "033": "ธ.ก.ส. (BAAC)",
+    "073": "แลนด์ แอนด์ เฮ้าส์ (LH Bank)",
+    "024": "ยูโอบี (UOB)",
+    "067": "ทิสโก้ (TISCO)",
+};
+
+interface ParsedQrSlip {
     transactionId?: string;
     receiverMobile?: string;
     amount?: number;
-} {
-    const result: {
-        transactionId?: string;
-        receiverMobile?: string;
-        amount?: number;
-    } = {};
+    isBankSlip?: boolean;
+    bankName?: string;
+}
+
+// Smart Slip QR Parser (TrueMoney P2P & PromptPay EMVCo Standard)
+function parseSlipQrPayload(raw: string): ParsedQrSlip {
+    const result: ParsedQrSlip = {};
 
     if (!raw) return result;
+
+    // Detect PromptPay Bank Slip (Thai QR Standard containing BOT AID: A000000677010111)
+    const isPromptPayBank = raw.includes("A000000677010111") || (raw.startsWith("000201") && raw.includes("0016A000000677010111"));
+    if (isPromptPayBank) {
+        result.isBankSlip = true;
+        const bankMatch = raw.match(/0103(\d{3})/);
+        if (bankMatch && THAI_BANK_CODES[bankMatch[1]]) {
+            result.bankName = THAI_BANK_CODES[bankMatch[1]];
+        } else {
+            result.bankName = "สลิปธนาคาร (PromptPay)";
+        }
+
+        // EMVCo Amount tag 54
+        const emvAmount = raw.match(/54(\d{2})(\d+(\.\d{2})?)/);
+        if (emvAmount) {
+            const len = parseInt(emvAmount[1], 10);
+            const amtStr = emvAmount[2].slice(0, len);
+            const parsed = parseFloat(amtStr);
+            if (!isNaN(parsed) && parsed > 0) {
+                result.amount = parsed;
+            }
+        }
+
+        // Note: For bank slips, do NOT match internal ref numbers as mobile phone numbers!
+        return result;
+    }
 
     // 1. Check for 14-digit TrueMoney Transaction ID (starting with 500)
     const txMatch = raw.match(/500\d{11}/);
@@ -90,7 +133,7 @@ function parseSlipQrPayload(raw: string): {
         result.transactionId = txMatch[0];
     }
 
-    // 2. Check for Thai Mobile Number (06, 08, 09 followed by 8 digits)
+    // 2. Check for Thai Mobile Number (06, 08, 09 followed by 8 digits) for TrueMoney P2P slips
     const phoneMatch = raw.match(/0[689]\d{8}/);
     if (phoneMatch) {
         result.receiverMobile = phoneMatch[0];
@@ -157,6 +200,7 @@ export default function TenantSlipsPage() {
     // Smart Scanning State
     const [scanningQr, setScanningQr] = useState(false);
     const [qrDetected, setQrDetected] = useState<boolean>(false);
+    const [detectedBank, setDetectedBank] = useState<string | null>(null);
     const [showManualFields, setShowManualFields] = useState(false);
     const [uploadingImage, setUploadingImage] = useState(false);
     const [isDragOver, setIsDragOver] = useState(false);
@@ -340,36 +384,51 @@ export default function TenantSlipsPage() {
                 setQrDetected(true);
                 const parsed = parseSlipQrPayload(scannedQr);
 
-                if (parsed.transactionId) {
-                    setTransactionId(parsed.transactionId);
-                }
-                if (parsed.amount) {
-                    setAmount(parsed.amount.toString());
-                }
-
-                // Auto-match receiver wallet from parsed phone number
-                if (parsed.receiverMobile && accounts.length > 0) {
-                    const cleanPhone = parsed.receiverMobile.replace(/\D/g, "");
-                    const matchedAcc = accounts.find((a) => {
-                        const accPhone = (a.phoneNumber || "").replace(/\D/g, "");
-                        return accPhone === cleanPhone || (cleanPhone.length >= 4 && accPhone.endsWith(cleanPhone));
-                    });
-
-                    if (matchedAcc) {
-                        setSelectedAccountId(matchedAcc.id);
-                        setReceiverMobile(matchedAcc.phoneNumber || cleanPhone);
-                    } else {
-                        setReceiverMobile(parsed.receiverMobile);
+                if (parsed.isBankSlip) {
+                    setDetectedBank(parsed.bankName || "สลิปธนาคาร");
+                    setTransactionId(""); // Bank slip has bank ref, not TrueMoney 14-digit ID
+                    if (parsed.amount) {
+                        setAmount(parsed.amount.toString());
                     }
-                }
+                    showToast({
+                        type: "warning",
+                        title: `⚠️ ตรวจพบ ${parsed.bankName || "สลิปธนาคาร"}`,
+                        message: "สลิปนี้เป็นสลิปธนาคาร (ระบบตรวจสลิปนี้เชื่อมต่อ TrueMoney P2P สำหรับตรวจสลิปทรูมันนี่วอลเล็ทเท่านั้น)",
+                    });
+                } else {
+                    setDetectedBank(null);
+                    if (parsed.transactionId) {
+                        setTransactionId(parsed.transactionId);
+                    }
+                    if (parsed.amount) {
+                        setAmount(parsed.amount.toString());
+                    }
 
-                showToast({
-                    type: "success",
-                    title: "✨ สแกน QR สำเร็จ!",
-                    message: `ดึงเลขที่รายการ ${parsed.transactionId || ""} ${parsed.amount ? `และยอดเงิน ฿${parsed.amount}` : ""} อัตโนมัติแล้ว`,
-                });
+                    // Auto-match receiver wallet from parsed phone number for TrueMoney P2P
+                    if (parsed.receiverMobile && accounts.length > 0) {
+                        const cleanPhone = parsed.receiverMobile.replace(/\D/g, "");
+                        const matchedAcc = accounts.find((a) => {
+                            const accPhone = (a.phoneNumber || "").replace(/\D/g, "");
+                            return accPhone === cleanPhone || (cleanPhone.length >= 4 && accPhone.endsWith(cleanPhone));
+                        });
+
+                        if (matchedAcc) {
+                            setSelectedAccountId(matchedAcc.id);
+                            setReceiverMobile(matchedAcc.phoneNumber || cleanPhone);
+                        } else {
+                            setReceiverMobile(parsed.receiverMobile);
+                        }
+                    }
+
+                    showToast({
+                        type: "success",
+                        title: "✨ สแกน QR สำเร็จ!",
+                        message: `ดึงเลขที่รายการ ${parsed.transactionId || ""} ${parsed.amount ? `และยอดเงิน ฿${parsed.amount}` : ""} อัตโนมัติแล้ว`,
+                    });
+                }
             } else {
                 setQrDetected(false);
+                setDetectedBank(null);
             }
 
             // 2. Upload file to server for archival
@@ -519,6 +578,7 @@ export default function TenantSlipsPage() {
         setSlipImageUrl("");
         setQrPayload("");
         setQrDetected(false);
+        setDetectedBank(null);
         setLatestResult(null);
     };
 
@@ -803,8 +863,33 @@ export default function TenantSlipsPage() {
                         </div>
                     </div>
 
-                    {/* Smart Detected Badge & Extracted Details */}
-                    {qrDetected && (
+                    {/* Bank Slip Warning Alert if Bank Detected */}
+                    {detectedBank && (
+                        <div style={{
+                            padding: "12px 14px",
+                            borderRadius: 10,
+                            background: "rgba(245, 158, 11, 0.12)",
+                            border: "1px solid rgba(245, 158, 11, 0.35)",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 4
+                        }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.82rem", fontWeight: 700, color: "#f59e0b" }}>
+                                <span>⚠️</span> ตรวจพบสลิปธนาคาร: {detectedBank}
+                            </div>
+                            <div style={{ fontSize: "0.75rem", color: "var(--theme-text-secondary)", lineHeight: 1.5 }}>
+                                ระบบนี้เชื่อมต่อกับ <strong>TrueMoney Validate P2P API</strong> (สำหรับตรวจเฉพาะสลิปโอนระหว่างทรูมันนี่วอลเล็ท) — สลิปธนาคารจะไม่สามารถตรวจกับ API ทรูมันนี่ได้ หากกดตรวจสอบ ระบบจะไม่พบรายการเงินเข้า
+                            </div>
+                            {amount && (
+                                <div style={{ fontSize: "0.74rem", color: "#fcd34d", marginTop: 2 }}>
+                                    ยอดเงินในสลิปที่อ่านได้: <strong>฿{parseFloat(amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Smart Detected Badge & Extracted Details (TrueMoney) */}
+                    {qrDetected && !detectedBank && (
                         <div style={{
                             padding: "12px 14px",
                             borderRadius: 10,
@@ -1068,7 +1153,7 @@ export default function TenantSlipsPage() {
                                         {/* Row 1: Transaction ID */}
                                         <tr style={{
                                             borderBottom: "1px solid var(--theme-border-subtle)",
-                                            background: latestResult.comparison?.transactionId.status === "MISMATCH" ? "rgba(239, 68, 68, 0.08)" : "transparent"
+                                            background: (latestResult.status === "VALID" && latestResult.comparison?.transactionId.status === "MATCH") ? "transparent" : "rgba(239, 68, 68, 0.08)"
                                         }}>
                                             <td style={{ padding: "10px 14px", fontWeight: 600, color: "var(--theme-text-secondary)" }}>
                                                 เลขที่รายการ
@@ -1077,13 +1162,13 @@ export default function TenantSlipsPage() {
                                                 {transactionId || "ตรวจตามยอดและเวลา"}
                                             </td>
                                             <td style={{ padding: "10px 14px" }}>
-                                                {latestResult.comparison?.transactionId.status === "MATCH" ? (
+                                                {latestResult.status === "VALID" && latestResult.comparison?.transactionId.status === "MATCH" ? (
                                                     <span style={{ color: "#34d399", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
                                                         <span>✓</span> พบในระบบ TrueMoney
                                                     </span>
                                                 ) : (
                                                     <span style={{ color: "#f87171", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                                                        <span>✕</span> ไม่พบเลขรายการนี้ (สลิปปลอม)
+                                                        <span>✕</span> {latestResult.comparison?.transactionId.realValue || "ไม่พบในระบบ TrueMoney"}
                                                     </span>
                                                 )}
                                             </td>
@@ -1092,7 +1177,7 @@ export default function TenantSlipsPage() {
                                         {/* Row 2: Amount */}
                                         <tr style={{
                                             borderBottom: "1px solid var(--theme-border-subtle)",
-                                            background: latestResult.comparison?.amount.status === "MISMATCH" ? "rgba(239, 68, 68, 0.08)" : "transparent"
+                                            background: (latestResult.status === "VALID" && latestResult.comparison?.amount.status === "MATCH") ? "transparent" : "rgba(239, 68, 68, 0.08)"
                                         }}>
                                             <td style={{ padding: "10px 14px", fontWeight: 600, color: "var(--theme-text-secondary)" }}>
                                                 ยอดเงินโอน
@@ -1101,13 +1186,13 @@ export default function TenantSlipsPage() {
                                                 ฿ {amount ? parseFloat(amount).toLocaleString("th-TH", { minimumFractionDigits: 2 }) : "0.00"}
                                             </td>
                                             <td style={{ padding: "10px 14px" }}>
-                                                {latestResult.comparison?.amount.status === "MATCH" ? (
+                                                {latestResult.status === "VALID" && latestResult.comparison?.amount.status === "MATCH" ? (
                                                     <span style={{ color: "#34d399", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
                                                         <span>✓</span> ยอดเงินตรงกับรายการจริง 100%
                                                     </span>
                                                 ) : (
                                                     <span style={{ color: "#f87171", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                                                        <span>✕</span> ยอดเงินไม่ตรง (ตรวจพบการตัดต่อตัวเลข!)
+                                                        <span>✕</span> {latestResult.comparison?.amount.realValue || "ไม่พบยอดเงินเข้าใน TrueMoney"}
                                                     </span>
                                                 )}
                                             </td>
@@ -1116,7 +1201,7 @@ export default function TenantSlipsPage() {
                                         {/* Row 3: Receiver Wallet */}
                                         <tr style={{
                                             borderBottom: "1px solid var(--theme-border-subtle)",
-                                            background: latestResult.comparison?.receiver.status === "MISMATCH" ? "rgba(239, 68, 68, 0.08)" : "transparent"
+                                            background: (latestResult.status === "VALID" && latestResult.comparison?.receiver.status === "MATCH") ? "transparent" : "rgba(239, 68, 68, 0.08)"
                                         }}>
                                             <td style={{ padding: "10px 14px", fontWeight: 600, color: "var(--theme-text-secondary)" }}>
                                                 บัญชีผู้รับเงิน
@@ -1125,13 +1210,13 @@ export default function TenantSlipsPage() {
                                                 {selectedAccount?.name} ({receiverMobile})
                                             </td>
                                             <td style={{ padding: "10px 14px" }}>
-                                                {latestResult.comparison?.receiver.status === "MATCH" ? (
+                                                {latestResult.status === "VALID" && latestResult.comparison?.receiver.status === "MATCH" ? (
                                                     <span style={{ color: "#34d399", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
                                                         <span>✓</span> โอนเข้าบัญชีนี้ถูกต้อง
                                                     </span>
                                                 ) : (
                                                     <span style={{ color: "#f87171", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                                                        <span>✕</span> โอนเข้าบัญชีอื่น ไม่ใช่บัญชีนี้
+                                                        <span>✕</span> {latestResult.comparison?.receiver.realValue || "ไม่พบการโอนเงินเข้าบัญชีนี้"}
                                                     </span>
                                                 )}
                                             </td>
@@ -1140,7 +1225,7 @@ export default function TenantSlipsPage() {
                                         {/* Row 4: Transaction Date */}
                                         <tr style={{
                                             borderBottom: "1px solid var(--theme-border-subtle)",
-                                            background: latestResult.comparison?.date.status === "MISMATCH" ? "rgba(239, 68, 68, 0.08)" : "transparent"
+                                            background: (latestResult.status === "VALID" && latestResult.comparison?.date.status === "MATCH") ? "transparent" : "rgba(239, 68, 68, 0.08)"
                                         }}>
                                             <td style={{ padding: "10px 14px", fontWeight: 600, color: "var(--theme-text-secondary)" }}>
                                                 วันเวลาทำรายการ
@@ -1149,13 +1234,13 @@ export default function TenantSlipsPage() {
                                                 {transactionDate}
                                             </td>
                                             <td style={{ padding: "10px 14px" }}>
-                                                {latestResult.comparison?.date.status === "MATCH" ? (
+                                                {latestResult.status === "VALID" && latestResult.comparison?.date.status === "MATCH" ? (
                                                     <span style={{ color: "#34d399", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
                                                         <span>✓</span> ตรงกับเวลาทำรายการจริง
                                                     </span>
                                                 ) : (
                                                     <span style={{ color: "#f87171", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                                                        <span>✕</span> เวลาในสลิปถูกดัดแปลง
+                                                        <span>✕</span> {latestResult.comparison?.date.realValue || "ไม่พบประวัติในเวลาดังกล่าว"}
                                                     </span>
                                                 )}
                                             </td>

@@ -145,34 +145,37 @@ router.post("/verify", async (req: Request<{ prefix: string }>, res: Response, n
             // Explain specifically which part is fake or mismatched
             const failMessage = apiResult.error?.thaiExplanation || "ข้อมูลในสลิปไม่ตรงกับฐานข้อมูล TrueMoney (สลิปปลอม)";
 
+            // Check if TrueMoney confirmed transaction exists but flagged a specific mismatch
+            const txExists = rawErrMsg.includes("exists, but invalid");
+
             const comparison = {
                 transactionId: {
                     label: "เลขที่รายการ (Transaction ID)",
                     slipValue: cleanTxId || "(ไม่ระบุ)",
-                    realValue: isTxNotFound ? "ไม่พบในระบบ TrueMoney" : (cleanTxId ? cleanTxId : "ตรวจตามยอดและเวลา"),
-                    status: isTxNotFound ? "MISMATCH" : "MATCH",
-                    detail: isTxNotFound ? "ไม่พบเลขนี้ในระบบ (สลิปปลอม)" : "พบข้อมูลในระบบ TrueMoney"
+                    realValue: txExists ? (cleanTxId || "พบในระบบ") : "ไม่พบในระบบ TrueMoney",
+                    status: (txExists && !isTxNotFound) ? "MATCH" : "MISMATCH",
+                    detail: txExists ? "พบเลขนี้ในระบบ TrueMoney" : "ไม่พบเลขนี้ในระบบ TrueMoney (สลิปปลอม หรือไม่ใช่สลิป TrueMoney)"
                 },
                 amount: {
                     label: "ยอดเงินโอน (บาท)",
                     slipValue: `฿ ${body.amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
-                    realValue: isAmountMismatch ? "ยอดเงินไม่ตรงกับสลิป" : `฿ ${body.amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
-                    status: isAmountMismatch ? "MISMATCH" : "MATCH",
-                    detail: isAmountMismatch ? "สลิปถูกตัดต่อหรือดัดแปลงตัวเลขยอดเงิน!" : "ยอดเงินตรงกับรายการโอนจริง"
+                    realValue: isAmountMismatch ? "ยอดเงินไม่ตรงกับของจริง" : (txExists ? `฿ ${body.amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}` : "ไม่พบยอดเงินเข้าใน TrueMoney"),
+                    status: (txExists && !isAmountMismatch) ? "MATCH" : "MISMATCH",
+                    detail: isAmountMismatch ? "สลิปถูกตัดต่อหรือดัดแปลงตัวเลขยอดเงิน!" : (txExists ? "ยอดเงินตรงกับรายการโอนจริง" : "ไม่พบรายการธุรกรรมนี้ในระบบ TrueMoney")
                 },
                 receiver: {
                     label: "บัญชีผู้รับเงิน",
                     slipValue: `${targetAccount.name} (${cleanReceiver})`,
-                    realValue: isReceiverMismatch ? "โอนเข้าบัญชีอื่น ไม่ใช่บัญชีนี้" : `${targetAccount.name} (${cleanReceiver})`,
-                    status: isReceiverMismatch ? "MISMATCH" : "MATCH",
-                    detail: isReceiverMismatch ? "ไม่ได้โอนเข้าบัญชีนี้ (โอนเข้าเบอร์อื่น)" : "โอนเข้าบัญชีนี้ถูกต้อง"
+                    realValue: isReceiverMismatch ? "โอนเข้าบัญชีอื่น ไม่ใช่บัญชีนี้" : (txExists ? `${targetAccount.name} (${cleanReceiver})` : "ไม่พบการโอนเงินเข้าบัญชีนี้"),
+                    status: (txExists && !isReceiverMismatch) ? "MATCH" : "MISMATCH",
+                    detail: isReceiverMismatch ? "ไม่ได้โอนเข้าบัญชีนี้ (โอนเข้าเบอร์อื่น)" : (txExists ? "โอนเข้าบัญชีนี้ถูกต้อง" : "ไม่พบข้อมูลการโอนเข้าบัญชีนี้")
                 },
                 date: {
                     label: "วันเวลาทำรายการ",
                     slipValue: normalizedDate,
-                    realValue: isDateMismatch ? "วันเวลาไม่ตรงกับรายการโอนจริง" : normalizedDate,
-                    status: isDateMismatch ? "MISMATCH" : "MATCH",
-                    detail: isDateMismatch ? "วันเวลาในสลิปถูกแก้ไขหรือดัดแปลง" : "ตรงกับเวลาที่ทำรายการจริง"
+                    realValue: isDateMismatch ? "วันเวลาไม่ตรงกับเวลาที่โอนจริง" : (txExists ? normalizedDate : "ไม่พบประวัติในเวลาดังกล่าว"),
+                    status: (txExists && !isDateMismatch) ? "MATCH" : "MISMATCH",
+                    detail: isDateMismatch ? "วันเวลาในสลิปถูกแก้ไขหรือดัดแปลง" : (txExists ? "ตรงกับเวลาที่ทำรายการจริง" : "ไม่พบประวัติการทำรายการในวันเวลาดังกล่าว")
                 },
                 moneyInConfirmed: false,
             };
