@@ -19,15 +19,7 @@ interface NetworkInfo {
     notifyMoneyOut: boolean;
     notifyMinAmount: number;
     isAutoReceiveEnabled?: boolean;
-}
-
-interface AccountInfo {
-    id: string;
-    name: string;
-    phoneNumber?: string;
-    isActive: boolean;
-    webhookSecret?: string | null;
-    webhookSecretConfigured?: boolean;
+    currentPackage?: string | null;
 }
 
 interface VersionInfo {
@@ -41,7 +33,6 @@ export default function TenantSettingsPage() {
     const prefix = params.prefix as string;
     const { showToast } = useToast();
     const [network, setNetwork] = useState<NetworkInfo | null>(null);
-    const [accounts, setAccounts] = useState<AccountInfo[]>([]);
     const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -61,11 +52,8 @@ export default function TenantSettingsPage() {
             if (!token) return;
 
             try {
-                const [statsRes, accountsRes, versionRes] = await Promise.all([
+                const [statsRes, versionRes] = await Promise.all([
                     fetch(`/api/tenant/${prefix}/stats`, {
-                        headers: { Authorization: `Bearer ${token}` },
-                    }),
-                    fetch(`/api/tenant/${prefix}/accounts`, {
                         headers: { Authorization: `Bearer ${token}` },
                     }),
                     fetch("/api/version"),
@@ -75,11 +63,6 @@ export default function TenantSettingsPage() {
                 if (statsData.ok && statsData.data.network) {
                     setNetwork(statsData.data.network);
                     setTenantName(statsData.data.network.name || "");
-                }
-
-                const accountsData = await accountsRes.json();
-                if (accountsData.ok) {
-                    setAccounts(accountsData.data);
                 }
 
                 if (versionRes.ok) {
@@ -213,27 +196,6 @@ export default function TenantSettingsPage() {
         setUploadingLogo(false);
     };
 
-    const getWebhookUrl = (account: AccountInfo) => {
-        const origin = typeof window !== "undefined" ? window.location.origin : "";
-        if (account.webhookSecret || account.webhookSecretConfigured) return `${origin}/api/webhook/${prefix}`;
-        return `${origin}/api/webhook/${prefix}?mobile=${account.phoneNumber || "08x..."}`;
-    };
-
-    const maskSecret = (secret?: string | null, configured = false) => {
-        if (!secret) return configured ? "ตั้งค่าแล้ว (จำกัดสิทธิ์การดู)" : "ยังไม่ได้ตั้งค่า";
-        if (secret.length <= 10) return `${secret.slice(0, 2)}••••${secret.slice(-2)}`;
-        return `${secret.slice(0, 6)}••••••••${secret.slice(-6)}`;
-    };
-
-    const copyText = async (value: string, label: string) => {
-        try {
-            await navigator.clipboard.writeText(value);
-            showToast({ type: "success", title: "คัดลอกแล้ว", message: label });
-        } catch {
-            showToast({ type: "error", title: "คัดลอกไม่สำเร็จ", message: "เบราว์เซอร์ไม่อนุญาตให้คัดลอกอัตโนมัติ" });
-        }
-    };
-
     const getIntervalLabel = (ms: number) => {
         if (ms <= 1000) return "ทุก 1 วินาที";
         if (ms <= 2000) return "ทุก 2 วินาที";
@@ -255,53 +217,103 @@ export default function TenantSettingsPage() {
     const initials = (network?.name || prefix).slice(0, 2).toUpperCase();
 
     return (
-        <div>
-            <div className="tenant-page-header">
-                <h1 className="tenant-page-title">ตั้งค่าระบบ</h1>
+        <div style={{ maxWidth: 1000, margin: "0 auto", paddingBottom: 60 }}>
+            {/* Header */}
+            <div className="tenant-page-header" style={{ marginBottom: 24 }}>
+                <h1 className="tenant-page-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span>⚙️</span> ตั้งค่าระบบ
+                </h1>
+                <div style={{ color: "var(--theme-text-muted)", fontSize: "0.85rem", marginTop: 4 }}>
+                    จัดการข้อมูลเครือข่าย, ภาพลักษณ์โลโก้, การตรวจสอบยอดเงิน Real-time และการแจ้งเตือน
+                </div>
             </div>
 
             {/* 1. Tenant Branding & Identity Management */}
-            <div className="tenant-card" style={{ marginBottom: 24 }}>
+            <div className="tenant-card" style={{ marginBottom: 24, padding: "24px 26px" }}>
                 <div className="settings-section">
-                    <div className="settings-section-title">🏢 ข้อมูลและภาพลักษณ์เครือข่าย (Branding)</div>
-                    
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24, marginTop: 12 }}>
-                        {/* Logo Upload Section */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                            <div className="tenant-form-label">โลโก้เครือข่าย (Logo)</div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-                                {currentLogoDisplay ? (
-                                    <img
-                                        src={currentLogoDisplay}
-                                        alt="Network Logo"
-                                        style={{
-                                            width: 72,
-                                            height: 72,
-                                            borderRadius: 10,
-                                            objectFit: "cover",
-                                            border: "1px solid var(--theme-border)",
-                                            background: "var(--theme-surface)",
-                                        }}
-                                    />
-                                ) : (
-                                    <div style={{
-                                        width: 72,
-                                        height: 72,
-                                        borderRadius: 10,
-                                        background: "var(--theme-accent)",
-                                        color: "var(--theme-accent-fg)",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "center",
-                                        fontWeight: 800,
-                                        fontSize: 24,
-                                        boxShadow: "var(--theme-shadow-sm)",
-                                    }}>
-                                        {initials}
-                                    </div>
-                                )}
+                    <div className="settings-section-title" style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: 4 }}>
+                        🏢 ข้อมูลและภาพลักษณ์เครือข่าย (Branding)
+                    </div>
+                    <div style={{ fontSize: "0.8rem", color: "var(--theme-text-muted)", marginBottom: 18 }}>
+                        ตั้งค่าชื่อและโลโก้ที่จะแสดงบนแถบเมนูข้าง (Sidebar) และหน้าเข้าสู่ระบบ รองรับภาพโลโก้ได้ทุกขนาดและทุกอัตราส่วน
+                    </div>
 
-                                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 24 }}>
+                        {/* Logo Upload Section - Multi-aspect Ratio Support (1:1, 4:3, 16:9, 9:16) */}
+                        <div style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 14,
+                            padding: "18px 20px",
+                            borderRadius: 12,
+                            background: "rgba(255, 255, 255, 0.02)",
+                            border: "1px solid var(--theme-border-subtle)"
+                        }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <span className="tenant-form-label" style={{ margin: 0, fontWeight: 600 }}>โลโก้เครือข่าย (Logo)</span>
+                                <span style={{
+                                    fontSize: "0.72rem",
+                                    padding: "2px 8px",
+                                    borderRadius: 6,
+                                    background: "rgba(16, 185, 129, 0.12)",
+                                    color: "#10b981",
+                                    border: "1px solid rgba(16, 185, 129, 0.25)",
+                                    fontWeight: 500
+                                }}>
+                                    รองรับ 1:1, 4:3, 16:9, 9:16
+                                </span>
+                            </div>
+
+                            <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+                                {/* Multi-ratio Logo Preview Canvas */}
+                                <div style={{
+                                    width: 130,
+                                    height: 84,
+                                    borderRadius: 10,
+                                    border: "1px solid var(--theme-border)",
+                                    background: "#141417",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    padding: 6,
+                                    overflow: "hidden",
+                                    boxShadow: "inset 0 1px 3px rgba(0, 0, 0, 0.4)",
+                                    flexShrink: 0
+                                }}>
+                                    {currentLogoDisplay ? (
+                                        <img
+                                            src={currentLogoDisplay}
+                                            alt="Network Logo"
+                                            style={{
+                                                maxWidth: "100%",
+                                                maxHeight: "100%",
+                                                width: "auto",
+                                                height: "auto",
+                                                objectFit: "contain",
+                                                borderRadius: 4,
+                                                display: "block"
+                                            }}
+                                        />
+                                    ) : (
+                                        <div style={{
+                                            width: 48,
+                                            height: 48,
+                                            borderRadius: 8,
+                                            background: "var(--theme-accent)",
+                                            color: "var(--theme-accent-fg)",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            fontWeight: 800,
+                                            fontSize: 20,
+                                        }}>
+                                            {initials}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Controls */}
+                                <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, minWidth: 160 }}>
                                     <input
                                         type="file"
                                         ref={fileInputRef}
@@ -315,8 +327,9 @@ export default function TenantSettingsPage() {
                                             className="tenant-btn tenant-btn-secondary tenant-btn-sm"
                                             onClick={() => fileInputRef.current?.click()}
                                             disabled={uploadingLogo}
+                                            style={{ height: 32, fontSize: "0.8rem" }}
                                         >
-                                            เลือกรูปภาพ...
+                                            📁 เลือกรูปภาพ...
                                         </button>
 
                                         {logoFile && (
@@ -325,8 +338,9 @@ export default function TenantSettingsPage() {
                                                 className="tenant-btn tenant-btn-primary tenant-btn-sm"
                                                 onClick={handleUploadLogo}
                                                 disabled={uploadingLogo}
+                                                style={{ height: 32, fontSize: "0.8rem" }}
                                             >
-                                                {uploadingLogo ? "กำลังอัปโหลด..." : "บันทึกโลโก้"}
+                                                {uploadingLogo ? "กำลังอัปโหลด..." : "💾 บันทึกโลโก้"}
                                             </button>
                                         )}
 
@@ -334,7 +348,7 @@ export default function TenantSettingsPage() {
                                             <button
                                                 type="button"
                                                 className="tenant-btn tenant-btn-secondary tenant-btn-sm"
-                                                style={{ color: "var(--theme-error)", borderColor: "var(--theme-error-border)" }}
+                                                style={{ color: "#f87171", borderColor: "rgba(239, 68, 68, 0.3)", height: 32, fontSize: "0.8rem" }}
                                                 onClick={handleDeleteLogo}
                                                 disabled={uploadingLogo}
                                             >
@@ -342,60 +356,122 @@ export default function TenantSettingsPage() {
                                             </button>
                                         )}
                                     </div>
-                                    <span style={{ fontSize: 11, color: "var(--theme-text-muted)" }}>
-                                        รองรับ JPG, PNG, WEBP, SVG ขนาดไม่เกิน 5MB
+                                    <span style={{ fontSize: "0.72rem", color: "var(--theme-text-muted)", lineHeight: 1.4 }}>
+                                        รองรับภาพทุกสัดส่วน (1:1 จัตุรัส, 4:3 แนวนอน, 16:9 แบนเนอร์, 9:16 แนวตั้ง) ระบบจะคงสัดส่วนเดิมไว้ 100% ไม่ถูกตัดขอบ (JPG, PNG, WEBP, SVG สูงสุด 5MB)
                                     </span>
+                                </div>
+                            </div>
+
+                            {/* Live Sidebar Preview */}
+                            <div style={{
+                                marginTop: 4,
+                                padding: "10px 14px",
+                                borderRadius: 8,
+                                background: "rgba(0, 0, 0, 0.25)",
+                                border: "1px dashed var(--theme-border-subtle)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: 12
+                            }}>
+                                <span style={{ fontSize: "0.75rem", color: "var(--theme-text-muted)" }}>
+                                    ตัวอย่างการแสดงผลบนแถบเมนูด้านซ้าย (Sidebar):
+                                </span>
+                                <div style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 10,
+                                    padding: "6px 12px",
+                                    background: "#09090b",
+                                    border: "1px solid var(--theme-border)",
+                                    borderRadius: 8
+                                }}>
+                                    <div className="tenant-logo-container" style={{ width: 44, height: 38 }}>
+                                        {currentLogoDisplay ? (
+                                            <img
+                                                src={currentLogoDisplay}
+                                                alt="Preview"
+                                                className="tenant-logo-img"
+                                            />
+                                        ) : (
+                                            <div className="tenant-logo-placeholder" style={{ width: 34, height: 34, fontSize: 13 }}>
+                                                {initials}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                                        <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#fafafa", lineHeight: 1.2 }}>
+                                            {tenantName || network?.name || prefix.toUpperCase()}
+                                        </span>
+                                        <span style={{ fontSize: "0.68rem", color: "#10b981", fontWeight: 600 }}>
+                                            {network?.currentPackage ? network.currentPackage.toUpperCase() : "PRO"}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
                         {/* Tenant Name Section */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                            <div className="tenant-form-label">ชื่อเครือข่าย (Tenant Name)</div>
-                            <div style={{ display: "flex", gap: 10 }}>
-                                <input
-                                    type="text"
-                                    className="tenant-form-input"
-                                    value={tenantName}
-                                    onChange={(e) => setTenantName(e.target.value)}
-                                    placeholder="เช่น JGA88, Auto Monitor..."
-                                    maxLength={50}
-                                />
-                                <button
-                                    type="button"
-                                    className="tenant-btn tenant-btn-primary"
-                                    onClick={handleSaveName}
-                                    disabled={savingName || tenantName.trim() === network?.name}
-                                    style={{ whiteSpace: "nowrap" }}
-                                >
-                                    {savingName ? "กำลังบันทึก..." : "บันทึกชื่อ"}
-                                </button>
+                        <div style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            justifyContent: "space-between",
+                            gap: 14,
+                            padding: "18px 20px",
+                            borderRadius: 12,
+                            background: "rgba(255, 255, 255, 0.02)",
+                            border: "1px solid var(--theme-border-subtle)"
+                        }}>
+                            <div>
+                                <div className="tenant-form-label" style={{ fontWeight: 600, marginBottom: 6 }}>ชื่อเครือข่าย (Tenant Name)</div>
+                                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                                    <input
+                                        type="text"
+                                        className="tenant-input"
+                                        value={tenantName}
+                                        onChange={(e) => setTenantName(e.target.value)}
+                                        placeholder="เช่น JGA88, Auto Monitor..."
+                                        maxLength={50}
+                                        style={{ height: 40 }}
+                                    />
+                                    <button
+                                        type="button"
+                                        className="tenant-btn tenant-btn-primary"
+                                        onClick={handleSaveName}
+                                        disabled={savingName || tenantName.trim() === network?.name}
+                                        style={{ whiteSpace: "nowrap", height: 40, padding: "0 18px", fontSize: "0.85rem" }}
+                                    >
+                                        {savingName ? "กำลังบันทึก..." : "บันทึกชื่อ"}
+                                    </button>
+                                </div>
+                                <span style={{ fontSize: "0.72rem", color: "var(--theme-text-muted)" }}>
+                                    ชื่อนี้จะแสดงบนแถบเมนูด้านซ้ายและส่วนหัวของระบบ
+                                </span>
                             </div>
-                            <span style={{ fontSize: 11, color: "var(--theme-text-muted)" }}>
-                                ชื่อนี้จะแสดงบนแถบเมนูด้านซ้ายและส่วนหัวของระบบ
-                            </span>
-                        </div>
-                    </div>
 
-                    <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--theme-border)" }}>
-                        <div className="settings-row">
-                            <span className="settings-label">Prefix สำหรับเข้าสู่ระบบ</span>
-                            <span className="settings-value" style={{ fontFamily: "monospace" }}>{prefix}</span>
-                        </div>
-                        <div className="settings-row">
-                            <span className="settings-label">สถานะเครือข่าย</span>
-                            <span className={`badge ${network?.isActive ? "badge-success" : "badge-error"}`}>
-                                {network?.isActive ? "เปิดใช้งานปกติ" : "ปิดใช้งาน"}
-                            </span>
+                            <div style={{ paddingTop: 12, borderTop: "1px solid var(--theme-border-subtle)" }}>
+                                <div className="settings-row" style={{ padding: "6px 0" }}>
+                                    <span className="settings-label" style={{ fontSize: "0.82rem" }}>Prefix สำหรับเข้าสู่ระบบ</span>
+                                    <span className="settings-value" style={{ fontFamily: "monospace", fontSize: "0.85rem" }}>{prefix}</span>
+                                </div>
+                                <div className="settings-row" style={{ padding: "6px 0" }}>
+                                    <span className="settings-label" style={{ fontSize: "0.82rem" }}>สถานะเครือข่าย</span>
+                                    <span className={`badge ${network?.isActive ? "badge-success" : "badge-error"}`} style={{ fontSize: "0.75rem" }}>
+                                        {network?.isActive ? "เปิดใช้งานปกติ" : "ปิดใช้งาน"}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* 2. Real-time Monitoring Settings */}
-            <div className="tenant-card" style={{ marginBottom: 24 }}>
+            <div className="tenant-card" style={{ marginBottom: 24, padding: "20px 24px" }}>
                 <div className="settings-section">
-                    <div className="settings-section-title">⚡ การตรวจสอบยอดเงิน Real-time</div>
+                    <div className="settings-section-title" style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: 12 }}>
+                        ⚡ การตรวจสอบยอดเงิน Real-time
+                    </div>
                     <div className="settings-row">
                         <span className="settings-label">สถานะการเช็คยอดอัตโนมัติ</span>
                         <span className={`badge ${network?.realtimeEnabled ? "badge-success" : "badge-error"}`}>
@@ -411,87 +487,12 @@ export default function TenantSettingsPage() {
                 </div>
             </div>
 
-            {/* 3. Webhook Integration */}
-            {(network?.isAutoReceiveEnabled !== false) && (
-                <div className="tenant-card" style={{ marginBottom: 24 }}>
-                    <div className="settings-section">
-                        <div className="settings-section-title">🔗 Webhook Endpoint สำหรับเชื่อมต่อ TrueMoney</div>
-                        <div className="webhook-guide">
-                            <div>
-                                <div className="webhook-guide-title">คำแนะนำการตั้งค่าในระบบ TrueMoney</div>
-                                <div className="webhook-guide-text">
-                                    นำ Endpoint URL ด้านล่างไปกรอกในระบบ Webhook ของ TrueMoney โดยระบุ Header Name เป็น <code>Authorization</code> และใส่ Header Key ของแต่ละวอลเล็ท
-                                </div>
-                            </div>
-                            <a className="tenant-btn tenant-btn-secondary tenant-btn-sm" href={`/tenant/${prefix}/wallets`}>
-                                จัดการวอลเล็ท
-                            </a>
-                        </div>
-
-                        {accounts.length === 0 ? (
-                            <div style={{ textAlign: "center", padding: "24px 0", color: "var(--theme-text-muted)", fontSize: 13 }}>
-                                ยังไม่มีบัญชีวอลเล็ทในเครือข่ายนี้ กรุณาเพิ่มวอลเล็ทก่อนสร้าง Webhook
-                            </div>
-                        ) : (
-                            <div>
-                                {accounts.map((account) => {
-                                    const url = getWebhookUrl(account);
-                                    const hasSecret = Boolean(account.webhookSecret || account.webhookSecretConfigured);
-                                    return (
-                                        <div className="webhook-account-card" key={account.id}>
-                                            <div className="webhook-account-head">
-                                                <div>
-                                                    <div className="webhook-account-name">{account.name}</div>
-                                                    <div className="webhook-account-phone">{account.phoneNumber || "ไม่ระบุเบอร์"}</div>
-                                                </div>
-                                                <span className={`badge ${hasSecret ? "badge-success" : "badge-warning"}`}>
-                                                    {hasSecret ? "พร้อมรับ Authorization" : "ยังไม่ได้ตั้ง Header Key"}
-                                                </span>
-                                            </div>
-
-                                            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
-                                                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--theme-text-secondary)" }}>Endpoint URL</span>
-                                                <div className="webhook-code-row">
-                                                    <code>{url}</code>
-                                                    <button type="button" onClick={() => copyText(url, "Endpoint URL")}>คัดลอก</button>
-                                                </div>
-                                            </div>
-
-                                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
-                                                <div>
-                                                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--theme-text-secondary)" }}>Header Name</span>
-                                                    <div className="webhook-code-row">
-                                                        <code>Authorization</code>
-                                                        <button type="button" onClick={() => copyText("Authorization", "Header Name")}>คัดลอก</button>
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--theme-text-secondary)" }}>Header Key</span>
-                                                    <div className="webhook-code-row">
-                                                        <code>{maskSecret(account.webhookSecret, account.webhookSecretConfigured)}</code>
-                                                        <button
-                                                            type="button"
-                                                            disabled={!account.webhookSecret}
-                                                            onClick={() => account.webhookSecret && copyText(account.webhookSecret, "Header Key")}
-                                                        >
-                                                            คัดลอก
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
-
-            {/* 4. Telegram Notifications */}
-            <div className="tenant-card" style={{ marginBottom: 24 }}>
+            {/* 3. Telegram Notifications */}
+            <div className="tenant-card" style={{ marginBottom: 24, padding: "20px 24px" }}>
                 <div className="settings-section">
-                    <div className="settings-section-title">🔔 การแจ้งเตือน Telegram Bot</div>
+                    <div className="settings-section-title" style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: 12 }}>
+                        🔔 การแจ้งเตือน Telegram Bot
+                    </div>
                     <div className="settings-row">
                         <span className="settings-label">สถานะการแจ้งเตือน</span>
                         <span className={`badge ${network?.telegramEnabled ? "badge-success" : "badge-neutral"}`}>
@@ -534,10 +535,10 @@ export default function TenantSettingsPage() {
                         </>
                     ) : (
                         <div style={{
-                            padding: "20px",
+                            padding: "16px",
                             textAlign: "center",
                             color: "var(--theme-text-muted)",
-                            fontSize: 13
+                            fontSize: "0.85rem"
                         }}>
                             หากต้องการเปิดใช้งานการแจ้งเตือนผ่าน Telegram กรุณาติดต่อผู้ดูแลระบบ (Master Admin)
                         </div>
@@ -545,10 +546,12 @@ export default function TenantSettingsPage() {
                 </div>
             </div>
 
-            {/* 5. System Details */}
-            <div className="tenant-card">
+            {/* 4. System Details */}
+            <div className="tenant-card" style={{ padding: "20px 24px" }}>
                 <div className="settings-section">
-                    <div className="settings-section-title">ℹ️ ข้อมูลระบบและการเชื่อมต่อ</div>
+                    <div className="settings-section-title" style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: 12 }}>
+                        ℹ️ ข้อมูลระบบและการเชื่อมต่อ
+                    </div>
                     <div className="settings-row">
                         <span className="settings-label">เวอร์ชันระบบ</span>
                         <span className="settings-value">{versionInfo?.version || "1.0.1"}</span>

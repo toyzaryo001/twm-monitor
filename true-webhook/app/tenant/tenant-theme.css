@@ -192,13 +192,29 @@
     gap: 12px;
 }
 
-.tenant-logo-img {
-    width: 42px;
-    height: 42px;
+.tenant-logo-container {
+    height: 44px;
+    min-width: 44px;
+    max-width: 64px;
     border-radius: 8px;
-    object-fit: cover;
     border: 1px solid var(--theme-border);
-    background: var(--theme-card);
+    background: var(--theme-surface, #141417);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding: 2px 4px;
+    flex-shrink: 0;
+}
+
+.tenant-logo-img {
+    max-width: 60px;
+    max-height: 44px;
+    width: auto;
+    height: auto;
+    border-radius: 6px;
+    object-fit: contain;
+    display: block;
 }
 
 .tenant-logo-placeholder {

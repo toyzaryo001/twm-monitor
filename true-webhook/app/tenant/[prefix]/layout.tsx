@@ -291,11 +291,13 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
                         {/* Tenant Brand / Logo Header */}
                         <div className="tenant-sidebar-brand">
                             {network?.logoUrl ? (
-                                <img
-                                    src={network.logoUrl}
-                                    alt={networkDisplayName}
-                                    className="tenant-logo-img"
-                                />
+                                <div className="tenant-logo-container">
+                                    <img
+                                        src={network.logoUrl}
+                                        alt={networkDisplayName}
+                                        className="tenant-logo-img"
+                                    />
+                                </div>
                             ) : (
                                 <div className="tenant-logo-placeholder">
                                     {initials}
