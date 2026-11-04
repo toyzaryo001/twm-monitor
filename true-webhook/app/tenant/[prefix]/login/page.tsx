@@ -9,8 +9,10 @@ export default function TenantLoginPage() {
     const prefixFromUrl = params.prefix as string;
 
     const [networkName, setNetworkName] = useState<string>("");
+    const [networkLogo, setNetworkLogo] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState("");
     const [form, setForm] = useState({
         prefix: prefixFromUrl || "",
@@ -22,6 +24,7 @@ export default function TenantLoginPage() {
     const checkNetwork = async (prefix: string) => {
         if (!prefix) {
             setNetworkName("");
+            setNetworkLogo(null);
             return;
         }
 
@@ -31,15 +34,18 @@ export default function TenantLoginPage() {
 
             if (!data.ok) {
                 setNetworkName("");
+                setNetworkLogo(null);
                 setError("เครือข่ายนี้ไม่มีในระบบ");
             } else if (!data.data.isActive) {
                 setNetworkName("");
+                setNetworkLogo(null);
                 setError("เครือข่ายนี้ถูกปิดใช้งาน");
             } else {
                 setNetworkName(data.data.name);
+                setNetworkLogo(data.data.logoUrl || null);
                 setError("");
             }
-        } catch (e) {
+        } catch {
             setError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
         }
     };
@@ -56,15 +62,16 @@ export default function TenantLoginPage() {
         setLoading(false);
     }, [router]);
 
-    // Debounce prefix check - always check when user types
+    // Debounce prefix check
     useEffect(() => {
         if (form.prefix) {
             const timer = setTimeout(() => {
                 checkNetwork(form.prefix);
-            }, 500);
+            }, 300);
             return () => clearTimeout(timer);
         } else {
             setNetworkName("");
+            setNetworkLogo(null);
             setError("");
         }
     }, [form.prefix]);
@@ -100,7 +107,7 @@ export default function TenantLoginPage() {
                 } else if (data.error === "NETWORK_NOT_FOUND") {
                     setError("ไม่พบเครือข่ายนี้");
                 } else {
-                    setError(data.error || "เกิดข้อผิดพลาด");
+                    setError(data.error || "เกิดข้อผิดพลาดในการเข้าสู่ระบบ");
                 }
                 setSubmitting(false);
                 return;
@@ -112,7 +119,7 @@ export default function TenantLoginPage() {
             localStorage.setItem("tenantPrefix", form.prefix);
 
             router.push(`/tenant/${form.prefix}/dashboard`);
-        } catch (e) {
+        } catch {
             setError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
             setSubmitting(false);
         }
@@ -122,12 +129,12 @@ export default function TenantLoginPage() {
         return (
             <div style={{
                 minHeight: "100vh",
-                background: "#020617",
+                background: "#09090b",
                 display: "flex",
                 justifyContent: "center",
                 alignItems: "center"
             }}>
-                <div className="spinner" style={{ width: 50, height: 50, borderWidth: 4 }} />
+                <div className="spinner" style={{ width: 40, height: 40, borderWidth: 3, borderTopColor: "#10b981" }} />
             </div>
         );
     }
@@ -135,223 +142,290 @@ export default function TenantLoginPage() {
     return (
         <div style={{
             minHeight: "100vh",
-            background: "radial-gradient(circle at top right, #1e293b, #020617)",
+            background: "#09090b",
+            backgroundImage: "radial-gradient(ellipse 70% 50% at 50% -10%, rgba(16, 185, 129, 0.12), transparent 70%), radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px)",
+            backgroundSize: "100% 100%, 24px 24px",
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
-            padding: 20,
-            overflow: "hidden",
+            padding: 24,
             position: "relative"
         }}>
-            {/* Background Effects */}
-            <div style={{
-                position: "absolute",
-                top: "-20%",
-                right: "-10%",
-                width: "600px",
-                height: "600px",
-                background: "radial-gradient(circle, rgba(6,182,212,0.15) 0%, rgba(0,0,0,0) 70%)",
-                borderRadius: "50%",
-                filter: "blur(60px)",
-                animation: "float 10s infinite ease-in-out"
-            }} />
-            <div style={{
-                position: "absolute",
-                bottom: "-10%",
-                left: "-10%",
-                width: "500px",
-                height: "500px",
-                background: "radial-gradient(circle, rgba(59,130,246,0.1) 0%, rgba(0,0,0,0) 70%)",
-                borderRadius: "50%",
-                filter: "blur(60px)",
-                animation: "float 15s infinite ease-in-out reverse"
-            }} />
+            <div
+                style={{
+                    background: "#141417",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    borderRadius: 18,
+                    padding: "36px 32px",
+                    width: "100%",
+                    maxWidth: 420,
+                    boxShadow: "0 20px 45px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04)",
+                    position: "relative",
+                    overflow: "hidden"
+                }}
+            >
+                {/* Top Subtle Emerald Accent Line */}
+                <div style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: 2,
+                    background: "linear-gradient(90deg, transparent, #10b981, transparent)"
+                }} />
 
-            <style jsx>{`
-                @keyframes float {
-                    0% { transform: translate(0, 0); }
-                    50% { transform: translate(20px, -20px); }
-                    100% { transform: translate(0, 0); }
-                }
-                @keyframes slideUp {
-                    from { transform: translateY(40px); opacity: 0; }
-                    to { transform: translateY(0); opacity: 1; }
-                }
-                @keyframes fadeIn {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
-                }
-                .glass-card {
-                    background: rgba(30, 41, 59, 0.4);
-                    backdrop-filter: blur(16px);
-                    -webkit-backdrop-filter: blur(16px);
-                    border: 1px solid rgba(255, 255, 255, 0.05);
-                    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-                    border-radius: 24px;
-                    padding: 40px;
-                    width: 100%;
-                    max-width: 420px;
-                    animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-                    position: relative;
-                    overflow: hidden;
-                }
-                .glass-card::before {
-                    content: '';
-                    position: absolute;
-                    top: 0; left: 0; right: 0; height: 1px;
-                    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-                }
-                .input-modern {
-                    background: rgba(15, 23, 42, 0.6);
-                    border: 1px solid rgba(255, 255, 255, 0.1);
-                    color: white;
-                    padding: 14px 16px;
-                    border-radius: 12px;
-                    width: 100%;
-                    font-size: 1rem;
-                    transition: all 0.2s;
-                    backdrop-filter: blur(4px);
-                }
-                .input-modern:focus {
-                    background: rgba(15, 23, 42, 0.8);
-                    border-color: #06b6d4;
-                    box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2);
-                    outline: none;
-                    transform: translateY(-1px);
-                }
-                .btn-modern {
-                    background: linear-gradient(135deg, #06b6d4, #3b82f6);
-                    color: white;
-                    border: none;
-                    border-radius: 12px;
-                    padding: 14px;
-                    font-weight: 600;
-                    font-size: 1rem;
-                    width: 100%;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                    position: relative;
-                    overflow: hidden;
-                }
-                .btn-modern:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 10px 20px -5px rgba(6, 182, 212, 0.4);
-                    filter: brightness(1.1);
-                }
-                .btn-modern:active {
-                    transform: translateY(0);
-                }
-                .brand-glow {
-                    font-size: 2.5rem;
-                    font-weight: 800;
-                    background: linear-gradient(135deg, #22d3ee, #3b82f6);
-                    -webkit-background-clip: text;
-                    background-clip: text;
-                    -webkit-text-fill-color: transparent;
-                    text-shadow: 0 0 30px rgba(6, 182, 212, 0.3);
-                    margin-bottom: 8px;
-                    text-align: center;
-                }
-            `}</style>
-
-            <div className="glass-card">
-                <div style={{ textAlign: "center", marginBottom: 32 }}>
-                    <div style={{ fontSize: 48, marginBottom: 16, animation: "float 6s infinite ease-in-out" }}>💎</div>
-                    <h1 className="brand-glow">
-                        {networkName || "Panel Access"}
-                    </h1>
-                    <p style={{ color: "#94a3b8", fontSize: "0.95rem" }}>
-                        เข้าสู่ระบบเพื่อจัดการวอลเล็ท
-                    </p>
-                </div>
-
-                <form onSubmit={handleSubmit} style={{ display: "grid", gap: 20 }}>
-                    {error && (
+                {/* Brand / Logo Header */}
+                <div style={{ textAlign: "center", marginBottom: 28 }}>
+                    {networkLogo ? (
+                        <div style={{ marginBottom: 14 }}>
+                            <img
+                                src={networkLogo}
+                                alt={networkName || "Logo"}
+                                style={{ maxHeight: 52, maxWidth: 180, margin: "0 auto", display: "block", objectFit: "contain" }}
+                            />
+                        </div>
+                    ) : (
                         <div style={{
-                            background: "rgba(239, 68, 68, 0.1)",
-                            border: "1px solid rgba(239, 68, 68, 0.2)",
-                            color: "#f87171",
-                            padding: "12px",
-                            borderRadius: "10px",
-                            fontSize: "0.9rem",
-                            textAlign: "center",
-                            animation: "fadeIn 0.3s"
+                            width: 52,
+                            height: 52,
+                            borderRadius: 14,
+                            background: "rgba(16, 185, 129, 0.12)",
+                            border: "1px solid rgba(16, 185, 129, 0.25)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            margin: "0 auto 14px auto",
+                            color: "#10b981",
+                            boxShadow: "0 8px 24px rgba(16, 185, 129, 0.15)"
                         }}>
-                            ⚠️ {error}
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="2" y="5" width="20" height="14" rx="2" />
+                                <line x1="2" y1="10" x2="22" y2="10" />
+                            </svg>
                         </div>
                     )}
 
+                    <h1 style={{
+                        fontSize: "1.45rem",
+                        fontWeight: 700,
+                        color: "#fafafa",
+                        letterSpacing: "-0.02em",
+                        margin: 0,
+                        lineHeight: 1.2
+                    }}>
+                        {networkName || (prefixFromUrl ? prefixFromUrl.toUpperCase() : "เข้าสู่ระบบ")}
+                    </h1>
+                    <p style={{ color: "#71717a", fontSize: "0.85rem", marginTop: 6, marginBottom: 0 }}>
+                        เข้าสู่ระบบเพื่อจัดการวอลเล็ทและตรวจสอบรายการ
+                    </p>
+                </div>
+
+                {/* Form */}
+                <form onSubmit={handleSubmit} style={{ display: "grid", gap: 16 }}>
+                    {error && (
+                        <div style={{
+                            background: "rgba(239, 68, 68, 0.1)",
+                            border: "1px solid rgba(239, 68, 68, 0.25)",
+                            color: "#f87171",
+                            padding: "10px 14px",
+                            borderRadius: 10,
+                            fontSize: "0.85rem",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8
+                        }}>
+                            <span>⚠️</span>
+                            <span>{error}</span>
+                        </div>
+                    )}
+
+                    {/* Prefix field */}
                     <div>
+                        <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#a1a1aa", marginBottom: 6 }}>
+                            Prefix เครือข่าย
+                        </label>
                         <input
                             type="text"
-                            className="input-modern"
                             value={form.prefix}
                             onChange={(e) => setForm({ ...form, prefix: e.target.value.toLowerCase() })}
-                            placeholder="Prefix เครือข่าย"
+                            placeholder="เช่น jga88"
                             required
                             autoComplete="off"
-                            style={{ fontFamily: "'Prompt', monospace", letterSpacing: "0.05em" }}
+                            style={{
+                                width: "100%",
+                                height: 42,
+                                padding: "0 14px",
+                                background: "#18181b",
+                                border: "1px solid #27272a",
+                                borderRadius: 10,
+                                color: "#fafafa",
+                                fontSize: "0.92rem",
+                                fontFamily: "monospace",
+                                outline: "none",
+                                transition: "border-color 0.2s, box-shadow 0.2s"
+                            }}
+                            onFocus={(e) => {
+                                e.target.style.borderColor = "#10b981";
+                                e.target.style.boxShadow = "0 0 0 2px rgba(16, 185, 129, 0.2)";
+                            }}
+                            onBlur={(e) => {
+                                e.target.style.borderColor = "#27272a";
+                                e.target.style.boxShadow = "none";
+                            }}
                         />
                         {networkName && (
                             <div style={{
-                                fontSize: 12,
+                                fontSize: "0.78rem",
                                 color: "#34d399",
-                                marginTop: 8,
+                                marginTop: 6,
                                 display: "flex",
                                 alignItems: "center",
                                 gap: 6,
-                                paddingLeft: 4,
-                                animation: "fadeIn 0.3s"
+                                paddingLeft: 2
                             }}>
-                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor" }} />
-                                พบเครือข่าย: {networkName}
+                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981" }} />
+                                พบเครือข่าย: <strong>{networkName}</strong>
                             </div>
                         )}
                     </div>
 
+                    {/* Username field */}
                     <div>
+                        <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#a1a1aa", marginBottom: 6 }}>
+                            ชื่อผู้ใช้
+                        </label>
                         <input
                             type="text"
-                            className="input-modern"
                             value={form.username}
                             onChange={(e) => setForm({ ...form, username: e.target.value })}
-                            placeholder="ชื่อผู้ใช้"
+                            placeholder="ระบุชื่อผู้ใช้"
                             required
                             autoComplete="username"
+                            style={{
+                                width: "100%",
+                                height: 42,
+                                padding: "0 14px",
+                                background: "#18181b",
+                                border: "1px solid #27272a",
+                                borderRadius: 10,
+                                color: "#fafafa",
+                                fontSize: "0.92rem",
+                                outline: "none",
+                                transition: "border-color 0.2s, box-shadow 0.2s"
+                            }}
+                            onFocus={(e) => {
+                                e.target.style.borderColor = "#10b981";
+                                e.target.style.boxShadow = "0 0 0 2px rgba(16, 185, 129, 0.2)";
+                            }}
+                            onBlur={(e) => {
+                                e.target.style.borderColor = "#27272a";
+                                e.target.style.boxShadow = "none";
+                            }}
                         />
                     </div>
 
+                    {/* Password field */}
                     <div>
-                        <input
-                            type="password"
-                            className="input-modern"
-                            value={form.password}
-                            onChange={(e) => setForm({ ...form, password: e.target.value })}
-                            placeholder="รหัสผ่าน"
-                            required
-                            autoComplete="current-password"
-                        />
+                        <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#a1a1aa", marginBottom: 6 }}>
+                            รหัสผ่าน
+                        </label>
+                        <div style={{ position: "relative" }}>
+                            <input
+                                type={showPassword ? "text" : "password"}
+                                value={form.password}
+                                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                                placeholder="ระบุรหัสผ่าน"
+                                required
+                                autoComplete="current-password"
+                                style={{
+                                    width: "100%",
+                                    height: 42,
+                                    padding: "0 40px 0 14px",
+                                    background: "#18181b",
+                                    border: "1px solid #27272a",
+                                    borderRadius: 10,
+                                    color: "#fafafa",
+                                    fontSize: "0.92rem",
+                                    outline: "none",
+                                    transition: "border-color 0.2s, box-shadow 0.2s"
+                                }}
+                                onFocus={(e) => {
+                                    e.target.style.borderColor = "#10b981";
+                                    e.target.style.boxShadow = "0 0 0 2px rgba(16, 185, 129, 0.2)";
+                                }}
+                                onBlur={(e) => {
+                                    e.target.style.borderColor = "#27272a";
+                                    e.target.style.boxShadow = "none";
+                                }}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                style={{
+                                    position: "absolute",
+                                    right: 10,
+                                    top: "50%",
+                                    transform: "translateY(-50%)",
+                                    background: "transparent",
+                                    border: "none",
+                                    color: "#71717a",
+                                    cursor: "pointer",
+                                    padding: 4,
+                                    fontSize: "0.9rem"
+                                }}
+                                title={showPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                            >
+                                {showPassword ? "🙈" : "👁️"}
+                            </button>
+                        </div>
                     </div>
 
+                    {/* Submit Button */}
                     <button
                         type="submit"
-                        className="btn-modern"
                         disabled={submitting || !networkName}
-                        style={{ marginTop: 12 }}
+                        style={{
+                            marginTop: 8,
+                            height: 44,
+                            background: !networkName ? "#27272a" : "#10b981",
+                            color: !networkName ? "#71717a" : "#09090b",
+                            border: "none",
+                            borderRadius: 10,
+                            fontWeight: 600,
+                            fontSize: "0.95rem",
+                            cursor: !networkName ? "not-allowed" : "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 8,
+                            transition: "all 0.2s ease",
+                            boxShadow: networkName ? "0 4px 16px rgba(16, 185, 129, 0.25)" : "none"
+                        }}
                     >
                         {submitting ? (
-                            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                                <span className="spinner" style={{ width: 16, height: 16, borderTopColor: "white", borderWidth: 2 }} />
-                                กำลังตรวจสอบ...
-                            </span>
+                            <>
+                                <span className="spinner" style={{ width: 16, height: 16, borderWidth: 2, borderTopColor: "#09090b" }} />
+                                กำลังเข้าสู่ระบบ...
+                            </>
                         ) : (
-                            "เข้าสู่ระบบ →"
+                            <>เข้าสู่ระบบ →</>
                         )}
                     </button>
 
-                    <div style={{ textAlign: "center", marginTop: 12 }}>
-                        <a href="/master/login" style={{ color: "#64748b", fontSize: "0.85rem", textDecoration: "none", transition: "color 0.2s" }} onMouseOver={e => e.currentTarget.style.color = "#94a3b8"} onMouseOut={e => e.currentTarget.style.color = "#64748b"}>
-                            สำหรับผู้ดูและระบบ (Master)
+                    {/* Master Login Link */}
+                    <div style={{ textAlign: "center", marginTop: 10 }}>
+                        <a
+                            href="/master/login"
+                            style={{
+                                color: "#71717a",
+                                fontSize: "0.82rem",
+                                textDecoration: "none",
+                                transition: "color 0.2s ease"
+                            }}
+                            onMouseOver={(e) => (e.currentTarget.style.color = "#a1a1aa")}
+                            onMouseOut={(e) => (e.currentTarget.style.color = "#71717a")}
+                        >
+                            สำหรับผู้ดูแลระบบส่วนกลาง (Master)
                         </a>
                     </div>
                 </form>
