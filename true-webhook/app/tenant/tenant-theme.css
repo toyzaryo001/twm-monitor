@@ -802,25 +802,31 @@
     color: var(--theme-text-primary);
 }
 
+.tenant-input,
+.tenant-select,
+.tenant-textarea,
 .tenant-form-input,
 .tenant-form-select,
 .tenant-form-textarea {
     width: 100%;
     padding: 9px 13px;
-    border-radius: 6px;
+    border-radius: 8px;
     border: 1px solid var(--theme-border);
-    background: var(--theme-surface);
-    color: var(--theme-text-primary);
+    background: var(--theme-surface, #141417);
+    color: var(--theme-text-primary, #fafafa);
     font-size: 13.5px;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
     outline: none;
 }
 
+.tenant-input:focus,
+.tenant-select:focus,
+.tenant-textarea:focus,
 .tenant-form-input:focus,
 .tenant-form-select:focus,
 .tenant-form-textarea:focus {
-    border-color: var(--theme-border-strong);
-    box-shadow: 0 0 0 2px var(--theme-accent-subtle);
+    border-color: #10b981;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
 }
 
 /* Settings Row */

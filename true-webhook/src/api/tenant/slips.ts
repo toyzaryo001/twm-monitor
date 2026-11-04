@@ -116,13 +116,13 @@ router.post("/verify", async (req: Request<{ prefix: string }>, res: Response, n
             });
         }
 
-        const slipToken = targetAccount.slipVerifyToken || targetAccount.walletBearerToken;
+        const slipToken = targetAccount.slipVerifyToken;
 
         if (!slipToken) {
             return res.status(400).json({
                 ok: false,
                 status: "NO_TOKEN",
-                message: `วอลเล็ท "${targetAccount.name}" ยังไม่ได้ผูก Key ตรวจสอบสลิป (กรุณากรอก Key ในหน้าจัดการวอลเล็ท ในหัวข้อ "ตรวจสอบสลิป")`,
+                message: `วอลเล็ท "${targetAccount.name}" ยังไม่ได้ผูก Key ตรวจสอบสลิป กรุณาไปที่หน้า จัดการวอลเล็ท > แก้ไข > หัวข้อ ตรวจสอบสลิป เพื่อนำ Bearer Token จากหน้า "ตรวจสอบรายการโอนเงินทรูมันนี่" มาใส่`,
             });
         }
 
